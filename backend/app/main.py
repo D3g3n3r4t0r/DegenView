@@ -4233,11 +4233,16 @@ async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends
         if not sym and norm_sym:
             sym = norm_sym
     if not custom_url and chain not in wallet_clusters.CHAINS:
+        from app.trading.onchain import auto_chain_pr
+        try:
+            await auto_chain_pr.ensure_auto_pr(chain, token, url=custom_url, error=f"unsupported chain: {chain}")
+        except Exception:  # noqa: BLE001
+            pass
         raise HTTPException(status_code=400, detail=f"chain: one of {', '.join(wallet_clusters.CHAINS)}")
     if not custom_url and not sync_watch._ok(token, chain):
         raise HTTPException(status_code=400, detail="token: not an address of that chain")
     wallet_clusters.account_take(str(user.id))
-    started = wallet_clusters.start_manual(chain, token, sym)
+    started = wallet_clusters.start_manual(chain, token, sym, force=bool(custom_url or chain == 'layer'))
     return {"queued": started, "started": started, "chain": chain, "token": token, "symbol": sym, **wallet_clusters.token_status(chain, token)}
 
 
@@ -4255,7 +4260,7 @@ async def onchain_coordinated_check_status(chain: str, token: str, user: User = 
         token, _ = layer_clusters.resolve_layer_token(token)
     if (chain or "").lower() not in wallet_clusters.CHAINS and not layer_clusters.get_custom_url(chain, token):
         raise HTTPException(status_code=400, detail="chain not covered")
-    return wallet_clusters.token_status(chain, token)
+    return {"chain": chain, "token": token, **wallet_clusters.token_status(chain, token)}
 
 
 @app.get("/api/onchain/clusters/queue")
@@ -4265,6 +4270,15 @@ async def onchain_clusters_queue(since: float = 0, user: User = Depends(auth.get
     if not (_full_score(user) or _next_for(user)):
         raise HTTPException(status_code=404, detail="Not found.")
     return wallet_clusters.queue_view(since)
+
+
+@app.get("/api/onchain/clusters/auto-prs")
+async def onchain_clusters_auto_prs(user: User = Depends(auth.get_current_user)) -> dict:
+    """Automatic self-healing PRs opened or queued for newly discovered/unsupported chains."""
+    from app.trading.onchain import auto_chain_pr
+    if not (_full_score(user) or _next_for(user)):
+        raise HTTPException(status_code=404, detail="Not found.")
+    return {"items": auto_chain_pr.list_auto_prs()}
 
 
 @app.delete("/api/onchain/coordinated-sells/watch")

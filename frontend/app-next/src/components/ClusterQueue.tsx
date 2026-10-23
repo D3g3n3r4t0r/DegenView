@@ -4,7 +4,7 @@ import type { QueueItem, QueueLog } from "../lib/api";
 import { STEPS } from "./CheckProgress";
 import { t } from "../lib/i18n";
 
-const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
+const short = (a: string) => (a.length > 12 ? `${a.slice(0, 4)}…${a.slice(-4)}` : a);
 const name = (x: { symbol?: string; token?: string }) => x.symbol || (x.token ? short(x.token) : "—");
 const clock = (ts: number) => new Date(ts * 1000).toLocaleTimeString("en-GB", { hour12: false });
 const TONE: Record<string, string> = { done: "text-up", failed: "text-down", start: "text-amber", phase: "text-[#aeb7a9]", queued: "text-[#7f8a7a]", pruned: "text-[#7f8a7a]" };
@@ -42,7 +42,7 @@ export function ClusterQueue({ onOpen }: { onOpen: (chain: string, token: string
     const step = STEPS.findIndex(([k]) => k === x.phase);
     return (
       <li key={`${x.chain}:${x.token}`}>
-        <button type="button" onClick={() => onOpen(x.chain, x.token, x.symbol)} className="flex w-full items-center gap-2.5 rounded-[12px] px-2 py-2 text-left active:bg-pill">
+        <button type="button" onClick={() => onOpen(x.chain, x.token, x.symbol)} className="flex w-full items-center gap-2.5 rounded-[12px] px-2 py-2 text-left transition-colors hover:bg-pill/60 active:bg-pill">
           {now ? <i className="cp-spin h-3.5 w-3.5 flex-none rounded-full border-2 border-amber border-t-transparent" aria-hidden="true" />
             : <span className="num w-5 flex-none text-right text-[12px] text-text-3">{i + 1}</span>}
           <span className="min-w-0 flex-1">
@@ -52,7 +52,7 @@ export function ClusterQueue({ onOpen }: { onOpen: (chain: string, token: string
           {x.manual && <span className="rounded-full bg-ink px-2 py-0.5 text-[11px] font-semibold text-on-ink">{t("manual")}</span>}
           {x.section && <span className="rounded-full bg-pill px-2 py-0.5 text-[11px] capitalize text-text-2">{t(x.section)}</span>}
           {now && step >= 0 && (
-            <span className="relative h-1 w-12 flex-none overflow-hidden rounded-full bg-pill" aria-hidden="true">
+            <span className="relative h-1.5 w-14 flex-none overflow-hidden rounded-full bg-pill" aria-hidden="true">
               <i className="absolute inset-0 origin-left rounded-full bg-ink transition-transform duration-500" style={{ transform: `scaleX(${(step + (x.progress ?? 0.5)) / STEPS.length})` }} />
             </span>
           )}

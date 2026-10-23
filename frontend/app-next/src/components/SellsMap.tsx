@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "motion/react";
 import type { ClusterLive, SellsReport } from "../lib/api";
 import { CheckProgress, useClusterCheck } from "./CheckProgress";
 import { t, locale } from "../lib/i18n";
@@ -27,8 +28,12 @@ function fromLive(chain: string, token: string, l: ClusterLive): SellsReport {
   const top = (l.holders ?? []).filter((h) => !inside.has(h.address));
   return { chain, token, clusters: top.length ? [...clusters, { id: "top", wallets: top }] : clusters, events: [...(l.events ?? [])].sort((a, b) => b.ts - a.ts) };
 }
-const tone = (s?: number | null) => (s == null ? "text-text-3" : s >= 70 ? "text-down" : s >= 40 ? "text-amber" : "text-up");
-
+const riskBadgeTone = (s?: number | null) =>
+  s == null ? "bg-pill text-text-3" : s >= 60 ? "bg-down/15 text-down" : s >= 30 ? "bg-amber/15 text-amber" : "bg-up/15 text-up";
+const riskBarTone = (s?: number | null) =>
+  s == null ? "bg-text-3" : s >= 60 ? "bg-down" : s >= 30 ? "bg-amber" : "bg-up";
+const riskLabel = (s?: number | null) =>
+  s == null ? "—" : s >= 60 ? t("High") : s >= 30 ? t("Medium") : t("Low");
 
 /** Coordinated sells of one token: its wallet clusters as bubbles and the
  *  waves they sold in; without a report, where its check stands. */
@@ -41,6 +46,7 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
   const last = useRef<SellsReport | null>(null);
   const rep = useMemo(() => done ?? (last.current = check?.live ? fromLive(chain, token, check.live) : last.current), [done, sig]);
   const [pick, setPick] = useState<Pick>(null);
+  const [copied, setCopied] = useState(false);
   const [lit, setLit] = useState<number | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const map = useRef<MapApi | null>(null);
@@ -71,6 +77,16 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
   const real = rep.clusters.filter((c) => c.id !== "top");
   const name = (id: string) => (id === "top" ? t("Top holders") : `Cluster ${real.findIndex((c) => c.id === id) + 1}`);
   const waves = rep.events.slice(0, 6);
+  const score = rep.risk?.score;
+  const pickedCluster = pick ? rep.clusters.find((c) => c.id === pick.cluster.id) : null;
+
+  const copyAddr = (addr: string) => {
+    navigator.clipboard?.writeText(addr).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    }).catch(() => {});
+  };
+
   const light = (i: number) => {
     const next = lit === i ? null : i;
     setLit(next);
@@ -81,28 +97,110 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
 
   return (
     <section className={bare ? "" : "mt-5"}>
-      <h3 className="mb-2 flex items-baseline justify-between text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">
-        {t("Coordinated sells")}<b className={`num text-[13px] font-semibold normal-case tracking-normal ${tone(rep.risk?.score)}`}>{done ? (rep.risk?.score == null ? t("risk {n}", { n: "—" }) : t("risk {n}/100 · {level}", { n: Math.round(rep.risk.score), level: t(rep.risk.score >= 60 ? "high" : rep.risk.score >= 30 ? "medium" : "low") })) : t("live")}</b>
-      </h3>
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">
+          {t("Coordinated sells")}
+        </h3>
+        <div className="flex items-center gap-2">
+          {done && score != null && (
+            <div className="flex items-center gap-1.5" aria-label={t("Risk gauge")}>
+              <span className="relative h-1.5 w-16 overflow-hidden rounded-full bg-pill">
+                <i
+                  className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${riskBarTone(score)}`}
+                  style={{ width: `${Math.min(100, Math.max(4, Math.round(score)))}%` }}
+                />
+              </span>
+            </div>
+          )}
+          <span className={`num inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${done ? riskBadgeTone(score) : "bg-amber/15 text-amber"}`}>
+            {done
+              ? score == null
+                ? t("risk {n}", { n: "—" })
+                : `${Math.round(score)}/100 · ${riskLabel(score)}`
+              : t("live")}
+          </span>
+        </div>
+      </div>
+
       {!done && <div className="mb-3"><CheckProgress check={check} chain={chain} token={token} onStarted={() => setBump((b) => b + 1)} /></div>}
       <div ref={host} className="overflow-hidden rounded-[16px] bg-card" aria-label={t("Wallet bubble map")} />
-      <p className="mt-1 min-h-[1.4em] text-[12.5px] text-text-3">
-        {pick ? (pick.label ? `${t("{n} smaller holders, no link found", { n: pick.others ?? 0 })} · ${t("{p} of supply", { p: pct(pick.share) })}` : `${short(pick.address)} · ${t("{p} of supply", { p: pct(pick.share) })} · ${pick.cluster.id === "top" ? t("top holder, no link found") : name(pick.cluster.id)}`)
-          : t("Bubble size = share of supply. Tap a bubble or a sell.")}
-      </p>
+
+      {pick ? (
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-[14px] bg-card px-3.5 py-2.5 shadow-[inset_0_0_0_1px_var(--c-line)]">
+          {pick.label ? (
+            <div className="min-w-0 flex-1">
+              <b className="block text-[13.5px] font-semibold text-ink">
+                {t("{n} smaller holders, no link found", { n: pick.others ?? 0 })}
+              </b>
+              <small className="text-[12px] text-text-3">
+                {t("{p} of supply", { p: pct(pick.share) })}
+              </small>
+            </div>
+          ) : (
+            <>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <b className="font-mono text-[13.5px] font-semibold text-ink">{short(pick.address)}</b>
+                  <span className="rounded-full bg-pill px-2 py-0.5 text-[11px] font-medium text-text-2">
+                    {pick.cluster.id === "top" ? t("top holder, no link found") : name(pick.cluster.id)}
+                  </span>
+                </div>
+                <small className="mt-0.5 block text-[12px] text-text-3">
+                  {t("Wallet holds {p} of supply", { p: pct(pick.share) })}
+                  {pickedCluster && pick.cluster.id !== "top" && pickedCluster.share != null
+                    ? ` · ${t("Cluster share {p}", { p: pct(pickedCluster.share) })}`
+                    : ""}
+                </small>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => copyAddr(pick.address)}
+                  className="rounded-full bg-pill px-2.5 py-1 text-[11.5px] font-medium text-ink transition-colors hover:bg-ink hover:text-on-ink"
+                >
+                  {copied ? t("Copied ✓") : t("Copy address")}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <p className="mt-1.5 min-h-[1.4em] text-[12.5px] text-text-3">
+          {t("Bubble size = share of supply. Tap a bubble or a sell.")}
+        </p>
+      )}
+
       {waves.length > 0 && (
-        <ol className="mt-1">
+        <ol className="mt-2.5 space-y-1.5">
           {waves.map((e, i) => (
-            <li key={e.id}>
-              <button type="button" onClick={() => light(i)} aria-pressed={lit === i}
-                className={`flex w-full items-baseline gap-3 py-2 text-left transition-opacity ${lit != null && lit !== i ? "opacity-45" : ""}`}>
+            <motion.li
+              key={e.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, delay: i * 0.03 }}
+            >
+              <button
+                type="button"
+                onClick={() => light(i)}
+                aria-pressed={lit === i}
+                className={`flex w-full items-baseline gap-3 rounded-[14px] bg-card px-3.5 py-2.5 text-left transition-all ${
+                  lit === i
+                    ? "shadow-[inset_0_0_0_1.5px_var(--c-ink)]"
+                    : lit != null
+                      ? "opacity-45"
+                      : "hover:bg-pill/60"
+                }`}
+              >
                 <span className="min-w-0 flex-1">
-                  <b className="block text-[14px] font-medium">{t("{who} sold {p}", { who: name(e.cluster), p: pct(e.share_sold) })}</b>
-                  <small className="text-[12.5px] text-text-3">{t("{n} wallets", { n: e.sellers?.length || e.wallets })}{e.window_s ? ` ${t("in")} ${e.window_s >= 60 ? `${Math.round(e.window_s / 60)} min` : `${Math.round(e.window_s)} s`}` : ""}</small>
+                  <b className="block text-[14px] font-semibold">{t("{who} sold {p}", { who: name(e.cluster), p: pct(e.share_sold) })}</b>
+                  <small className="text-[12.5px] text-text-3">
+                    {t("{n} wallets", { n: e.sellers?.length || e.wallets })}
+                    {e.window_s ? ` ${t("in")} ${e.window_s >= 60 ? `${Math.round(e.window_s / 60)} min` : `${Math.round(e.window_s)} s`}` : ""}
+                  </small>
                 </span>
-                <time className="text-[12.5px] text-text-3">{when(e.ts)}</time>
+                <time className="num text-[12px] font-medium text-text-3">{when(e.ts)}</time>
               </button>
-            </li>
+            </motion.li>
           ))}
         </ol>
       )}

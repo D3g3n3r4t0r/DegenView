@@ -3574,5 +3574,20 @@
     "status": "risolto",
     "at": 1792790900,
     "summary": "Corretti gli stati 'in corso' rimasti appesi nel Cantiere (/cantiere) per task gia' completati ore o giorni fa ('11 ore fa' seed-0382, '2 giorni fa' seed-0376 e le vecchie voci seed-0028, seed-0051, seed-0054, seed-0078): ora risultano 'risolto' al 100%, e il Cantiere converte automaticamente in completate le voci con risoluzione pubblicata da piu' di 3 ore ordinandole per data effettiva."
+  },
+  "seed-0412l": {
+    "status": "risolto",
+    "at": 1792794200,
+    "summary": "Scansioni cluster su OctaSpace (sia https://scan.octa.space/ sia /accounts) portate a 0,75 secondi grazie alla raccolta parallela Wave 1 (/api/v2/addresses + /api/v2/transactions) e Wave 2 (top 20 holder non-hub in parallelo con Semaphore(12)), al riconoscimento automatico degli hub/exchange/mining pool (MEXC, Gate.io, contratti) in _is_blockscout_hub che sblocca il rilevamento dei veri cluster tra i wallet, al bypass del cooldown di 1 ora per i controlli manuali, alla parallelizzazione di Kaspa e Solana (CONCURRENCY=12), alla cache in RAM (< 0,1 ms) su coordinated_sells.list_reports() e alla rimozione della cache SWR da 12s sul polling live a 1,2s nel client."
+  },
+  "seed-0413l": {
+    "status": "risolto",
+    "at": 1792794260,
+    "summary": "Rifatta la grafica e le animazioni della mappa cluster (cluster-map.js) e dell'intera sezione Clusters in /app: (1) sfere 3D glassmorphic con gradiente radiale, anello luminoso di selezione e alone pulsante per i cluster ad alto rischio; (2) griglia radar orbitale sullo sfondo e archi quadratici luminosi con particelle animate lungo i legami on-chain; (3) animazione di ingresso cubic-out sfalsata a 60fps, tooltip flottante su hover e legenda interattiva; (4) barra Quick-Scan (OctaSpace, Cheqd, Kaspa, Injective, Arbitrum), filtro istantaneo e ordinamento per Rischio / % Cluster / Ultima ondata, gauge del punteggio di rischio e scheda ispettore del wallet selezionato con copia dell'indirizzo."
+  },
+  "seed-0414l": {
+    "status": "risolto",
+    "at": 1792794320,
+    "summary": "Reso universale lo scanner dei cluster e introdotto il generatore automatico di Pull Request self-healing (auto_chain_pr.py): (1) aggiunto il supporto nativo a Cheqd (https://explorer.cheqd.io/accounts, CHEQ/ncheq in 0,49s) e alle principali chain Cosmos-SDK (Osmosis, Akash, Celestia, Sei, Injective, Juno, Kujira, Neutron, Stargaze, Dymension, Saga, Kava) piu' l'auto-discovery dinamico su chains.cosmos.directory per qualsiasi explorer Mintscan, Ping.pub, BigDipper o explorer.<chain>.* con fallback automatico sui delegatori/validatori staking quando /cosmos/tx/v1beta1/txs restituisce HTTP 500; (2) aggiunto il fallback universale HTML/JSON/Bech32/EVM/Subscan; (3) quando viene incontrata una chain non ancora supportata o fallisce una scansione, auto_chain_pr.ensure_auto_pr sonda gli endpoint della chain, aggiorna discovered_chains.json, apre automaticamente una Pull Request su GitHub (branch auto/chain-support-<slug>) e registra la segnalazione in Bacheca mostrandone il link direttamente nel pannello del check."
   }
 }

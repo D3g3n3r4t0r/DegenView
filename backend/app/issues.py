@@ -165,6 +165,15 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0414l", "Scanner universale (explorer.cheqd.io) e creazione automatica di Pull Request per nuove chain",
+     "Lorenzo, 24/10: 'Ho provato con il link di un\\'altra chain (https://explorer.cheqd.io/accounts) e dice Failed... dobbiamo rendere lo scan quasi compatibile con tutto e tutti, se una chain non e\\' compatibile deve crearsi automaticamente una pull request per essere aggiornato e introdotto il supporto'.",
+     "alta"),
+    ("seed-0413l", "Nuova grafica interattiva della mappa cluster, animazioni e sezione Clusters potenziata",
+     "Lorenzo, 24/10: 'rifai la grafica dei cluster, le animazioni; e rendilo moderno e bello da vedere' e 'migliora tutta la sezione ad esso dedicata con nuove funzioni'.",
+     "media"),
+    ("seed-0412l", "Velocizzazione scansioni su scan.octa.space (anche URL radice) e motore cluster multi-chain",
+     "Lorenzo, 24/10: 'ma https://scan.octa.space/ ? i cluster non li scansiona pero\\'', 'velocizza le scansioni su octa.space', 'in generale migliora la velocita\\' delle ricerche per i cluster'.",
+     "alta"),
     ("seed-0411l", "Spiegazioni scritte in inglese invece che in italiano",
      "Lorenzo, 23/10: 'Scrivi sempre in italiano le spiegazioni', poi 'Scrivi in italiano, salvalo in memoria!!'. Alcune risposte (agli avvisi automatici) e le domande con le opzioni erano in inglese.",
      "media"),

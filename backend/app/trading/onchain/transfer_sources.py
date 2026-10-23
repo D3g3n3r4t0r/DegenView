@@ -41,7 +41,9 @@ SOURCES = {
 }
 PAGE = 5000            # Blockscout returns up to 10k; Routescan pages of 10k max
 MAX_PAGES = 30         # 150k transfers
-PAUSE_S = 0.6
+PAUSE_S = 0.05         # Minimal inter-page pause to avoid stalling multi-page scans
+HTTP_TIMEOUT_S = 8.0   # Fail fast on dead/rate-limited explorer endpoints
+RETRY_DELAY_S = 0.25
 _UA = {"user-agent": "Mozilla/5.0 (compatible; liquidityengine/1.0)", "accept": "application/json"}
 
 
@@ -56,7 +58,7 @@ def _row(r: dict, i: int) -> dict | None:
 
 async def _get(client: httpx.AsyncClient, base: str, params: dict) -> list[dict] | None:
     """One page; None when the source refuses (the caller tries the next)."""
-    for i in range(4):
+    for i in range(2):
         try:
             r = await client.get(base, params=params)
         except httpx.HTTPError:
@@ -69,20 +71,45 @@ async def _get(client: httpx.AsyncClient, base: str, params: dict) -> list[dict]
             res = d.get("result")
             if isinstance(res, list):
                 return res
-            if "no transactions" in str(d.get("message", "")).lower():
+            msg = str(d.get("message", "")).lower()
+            if "no transactions" in msg:
                 return []
-            if "rate" not in str(d).lower() and "too many" not in str(d).lower():
+            body_l = str(d).lower()
+            if "rate" not in body_l and "too many" not in body_l:
                 return None
         elif r is not None and r.status_code not in (429, 502, 503, 504):
             return None
-        await asyncio.sleep(2 ** (i + 1))
+        if i == 0:
+            await asyncio.sleep(RETRY_DELAY_S)
     return None
+
+
+async def _get_ranges(
+    client: httpx.AsyncClient,
+    base: str,
+    token: str,
+    ranges: list[tuple[int, int]],
+) -> list[list[dict] | None]:
+    """Fetch multiple (startblock, endblock) transfer windows concurrently."""
+    return await asyncio.gather(*(
+        _get(client, base, {
+            "module": "account",
+            "action": "tokentx",
+            "contractaddress": token,
+            "startblock": lo,
+            "endblock": hi,
+            "page": 1,
+            "offset": PAGE,
+            "sort": "asc",
+        })
+        for lo, hi in ranges
+    ))
 
 
 async def transfers(chain: str, token: str, client: httpx.AsyncClient | None = None) -> tuple[list[dict], bool, str]:
     """(transfers in order, partial, source). Raises when no source answers."""
     own = client is None
-    client = client or httpx.AsyncClient(timeout=40.0, headers=_UA)
+    client = client or httpx.AsyncClient(timeout=HTTP_TIMEOUT_S, headers=_UA)
     try:
         for base in SOURCES.get(chain, []):
             out, seen, start, partial, ok = [], set(), 0, False, True
@@ -107,7 +134,8 @@ async def transfers(chain: str, token: str, client: httpx.AsyncClient | None = N
                 start = nxt if nxt > start else nxt + 1
                 if page == MAX_PAGES - 1:
                     partial = True
-                await asyncio.sleep(PAUSE_S)
+                elif PAUSE_S > 0:
+                    await asyncio.sleep(PAUSE_S)
             if ok and out:
                 out.sort(key=lambda t: (t["block"], t["log_index"]))
                 return out, partial, base.split("/")[2]

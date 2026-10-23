@@ -110,28 +110,28 @@ export type SellsReport = {
   events: { id: string; cluster: string; ts: number; window_s?: number | null; wallets: number; share_sold?: number | null; sellers?: string[] }[];
 };
 export type ClusterCheck = { state: "unsupported" | "running" | "queued" | "failed" | "built" | "none"; place?: number; clusters?: number;
-  phase?: string | null; progress?: number | null; started_at?: number | null; live?: ClusterLive | null };
+  phase?: string | null; progress?: number | null; started_at?: number | null; live?: ClusterLive | null; error?: string | null; auto_pr?: Record<string, any> | null; chain?: string; token?: string };
 // What a running check has read so far (wallet_clusters): holders, then clusters and links, then sell waves.
 export type ClusterLive = { holders?: { address: string; share?: number | null }[]; clusters?: { id: string; wallets: string[]; edges?: [string, string][]; links?: string[] }[];
   events?: SellsReport["events"]; risk?: number | null; counts?: { holders?: number; transfers?: number; clusters?: number; waves?: number } };
-type CheckRaw = { position?: number | null; busy?: boolean; running?: boolean; built_at?: number | null; clusters?: number; error?: string | null;
-  phase?: string | null; progress?: number | null; started_at?: number | null; live?: ClusterLive | null };
+type CheckRaw = { position?: number | null; busy?: boolean; running?: boolean; built_at?: number | null; clusters?: number;
+  phase?: string | null; progress?: number | null; started_at?: number | null; live?: ClusterLive | null; error?: string | null; auto_pr?: Record<string, any> | null; chain?: string; token?: string };
 // GET /check (wallet_clusters): its fields read as one state for the token page.
 export const getClusterCheck = (chain: string, token: string): Promise<ClusterCheck> =>
-  get<CheckRaw>(`/api/onchain/coordinated-sells/check?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`, 15000).then((r) => {
-    const live = { phase: r.phase ?? null, progress: r.progress ?? null, started_at: r.started_at ?? null, live: r.live ?? null };
+  fetchDedup<CheckRaw>(`/api/onchain/coordinated-sells/check?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`, 15000).then((r) => {
+    const live = { phase: r.phase ?? null, progress: r.progress ?? null, started_at: r.started_at ?? null, live: r.live ?? null, error: (r as any).error ?? null, auto_pr: (r as any).auto_pr ?? null, chain: (r as any).chain ?? chain, token: (r as any).token ?? token };
     // Running (wallet_clusters #674): phase "waiting" while two manual checks are ahead.
     return (r.running && r.phase === "waiting" ? { state: "queued", ...live }
       : r.running ? { state: "running", ...live }
       : r.position != null ? { state: "queued", place: r.position }
-      : r.built_at ? { state: "built", clusters: r.clusters ?? 0 }
-      : r.error ? { state: "failed" } : { state: "none" }) as ClusterCheck;
+      : r.built_at ? { state: "built", clusters: r.clusters ?? 0, ...live }
+      : r.error ? { state: "failed", ...live } : { state: "none", ...live }) as ClusterCheck;
   },
   (e: { status?: number }) => { if (e?.status === 400) return { state: "unsupported" } as ClusterCheck; throw e; });
 // A cluster check on demand for a pasted address (wallet_clusters, first in line).
 export const askClusterCheck = (chain: string, token: string, url?: string) =>
   post<{ queued?: boolean; position?: number | null; error?: string | null; manual_left?: number; chain?: string; token?: string; symbol?: string }>("/api/onchain/coordinated-sells/check", url ? { chain, token, url } : { chain, token });
-export const getCoordinatedSells = () => get<{ sample?: boolean; reports?: SellsReport[] }>("/api/onchain/coordinated-sells", 20000);
+export const getCoordinatedSells = () => fetchDedup<{ sample?: boolean; reports?: SellsReport[] }>("/api/onchain/coordinated-sells", 20000);
 
 // The scanner (sheets.js openScan): a server job streamed as NDJSON; if the
 // phone drops the stream the job goes on and its result is collected by id.
@@ -201,7 +201,7 @@ export type QueueItem = { chain: string; token: string; symbol?: string; section
   phase?: string | null; progress?: number | null; started_at?: number | null };
 export type QueueLog = { ts: number; kind: string; chain?: string; token?: string; symbol?: string; msg?: string };
 export type ClusterQueue = { running: QueueItem[]; queue: QueueItem[]; queued: number; built_today: number; max_per_day: number; log: QueueLog[]; now: number };
-export const getClusterQueue = (since: number) => get<ClusterQueue>(`/api/onchain/clusters/queue?since=${since}`, 15000);
+export const getClusterQueue = (since: number) => fetchDedup<ClusterQueue>(`/api/onchain/clusters/queue?since=${since}`, 15000);
 
 export type DevEvent = { id: string; ts: number; kind: "fee" | "claim" | "sell" | "limit_sell" | "buy" | "transfer_out" | "transfer_in"; sol?: number; amount?: number; wallet?: string; to?: string; other?: string; tx?: string };
 export type DevClaimer = { address: string; claimed_sol: number; holding: number | null; sold: number; sold_sol: number; sells: number; last_sell: number | null; bought: number; sent_out: number; transfers_out: number; in_orders: number; limit_sells: number };

@@ -17,13 +17,14 @@
 
 // Red is kept for wallets that sold together ("non vengono connessi i wallet che hanno agito insieme").
 const SOLD = "--c-down";
-const PALETTE = ["--k-amber,--c-amber", "#3b82f6", "#a855f7", "#14b8a6", "#ec4899", "#f97316"];
-const FALLBACK = ["#eab308"];
+const PALETTE = ["--k-amber,--c-amber", "#3b82f6", "#8b5cf6", "#10b981", "#ec4899", "#06b6d4", "#f97316"];
+const FALLBACK = ["#f59e0b", "#3b82f6", "#8b5cf6", "#10b981", "#ec4899", "#06b6d4", "#f97316"];
 const NEUTRAL = "--c-text-3,--c-text";   // holders with no link found
 const TOP_N = 24;                         // grey holders drawn one by one
 const FILL = 0.26;                        // share of the frame the bubbles cover
 const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const pct = (x) => `${(x * 100).toFixed(x < 0.01 ? 2 : 1)}%`;
+const easeOutCubic = (t) => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
 
 function colour(el, token, i, fb) {
   if (!token.startsWith("--")) return token;
@@ -31,6 +32,39 @@ function colour(el, token, i, fb) {
   const css = getComputedStyle(el);
   for (const t of token.split(",")) { const v = css.getPropertyValue(t).trim(); if (v) return v; }
   return fb || FALLBACK[i] || "#888";
+}
+
+function toRgba(col, a) {
+  if (!col) return `rgba(148,163,184,${a})`;
+  const s = String(col).trim();
+  if (s.startsWith("#")) {
+    const hex = s.slice(1);
+    const full = hex.length === 3 ? hex.split("").map((ch) => ch + ch).join("") : hex;
+    const n = parseInt(full.slice(0, 6), 16);
+    if (!Number.isNaN(n)) return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+  const m = s.match(/rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i);
+  if (m) return `rgba(${m[1]},${m[2]},${m[3]},${a})`;
+  return s;
+}
+
+function roundPill(ctx, x, y, w, h, r) {
+  const rad = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(x, y, w, h, rad);
+    return;
+  }
+  ctx.moveTo(x + rad, y);
+  ctx.lineTo(x + w - rad, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rad);
+  ctx.lineTo(x + w, y + h - rad);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rad, y + h);
+  ctx.lineTo(x + rad, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rad);
+  ctx.lineTo(x, y + rad);
+  ctx.quadraticCurveTo(x, y, x + rad, y);
+  ctx.closePath();
 }
 
 const WORDS = { cluster: "Cluster", wallets: "wallets", nolink: "No link found", none: "No linked wallets among the top holders.",
@@ -44,22 +78,25 @@ export function clusterMap(host, report, { onPick, words } = {}) {
   canvas.setAttribute("role", "img");
   const legend = document.createElement("ul");
   legend.className = "cs-map-legend";
-  legend.style.cssText = "display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:10px 14px 12px;list-style:none;font-size:12px;line-height:1.3;opacity:.85";
+  legend.style.cssText = "display:flex;flex-wrap:wrap;gap:6px 10px;margin:0;padding:10px 14px 12px;list-style:none;font-size:12px;line-height:1.3;opacity:.92";
   host.replaceChildren(canvas, legend);
   const ctx = canvas.getContext("2d");
 
   let real = [], top = null, list = [], edges = [], groups = [], together = [], teams = [];
+  let hovered = null, selected = null, activeLegend = null;
   const nodes = new Map();
   const sync = (rep) => {
     real = rep.clusters.filter((c) => c.id !== "top" && c.wallets.length);
     top = rep.clusters.find((c) => c.id === "top") || null;
     const seen = new Set();
+    let order = 0;
     const put = (id, share, cluster, extra) => {
       seen.add(id);
       const n = nodes.get(id);
+      const idx = order++;
       // A wallet already drawn keeps its place and drifts to its (new) cluster.
-      if (n) Object.assign(n, { share, cluster }, extra);
-      else nodes.set(id, { id, share, cluster, x: NaN, y: 0, vx: 0, vy: 0, a: 1, ta: 1, grow: 0, ...extra });
+      if (n) Object.assign(n, { share, cluster, idx }, extra);
+      else nodes.set(id, { id, share, cluster, idx, x: NaN, y: 0, vx: 0, vy: 0, a: 1, ta: 1, grow: 0, ...extra });
     };
     real.forEach((c) => c.wallets.forEach((w) => { if (!seen.has(w.address)) put(w.address, w.share ?? 0, c); }));
     // Who sold in the same wave, and how many times each pair did.
@@ -129,7 +166,7 @@ export function clusterMap(host, report, { onPick, words } = {}) {
       const t = around.length === 1 ? 0 : Math.PI + (i / around.length) * Math.PI * 2;
       anchors.set(c, { x: W / 2 + Math.cos(t) * ring * Math.min(1.5, W / H), y: H / 2 + Math.sin(t) * ring });
     });
-    real.forEach((c, i) => colours.set(c, colour(canvas, PALETTE[i % PALETTE.length], i)));
+    real.forEach((c, i) => colours.set(c, colour(canvas, PALETTE[i % PALETTE.length], i, FALLBACK[i % FALLBACK.length])));
     if (top) { anchors.set(top, { x: W / 2, y: H / 2 }); colours.set(top, colour(canvas, NEUTRAL, -1)); }
     colours.set("sold", colour(canvas, SOLD, -1, "#ef4444"));
     drawLegend();
@@ -137,12 +174,39 @@ export function clusterMap(host, report, { onPick, words } = {}) {
   const radius = (n) => Math.max(n.cluster === top ? 2.5 : 5, Math.sqrt(n.share) * unit);
 
   function drawLegend() {
-    const item = (c, label) => `<li style="display:flex;align-items:center;gap:6px"><i style="inline-size:10px;block-size:10px;border-radius:50%;background:${colours.get(c)};opacity:${c === top ? .45 : .85}"></i>${label}</li>`;
-    legend.innerHTML = real.map((c, i) => item(c, `<b>${w.cluster} ${i + 1}</b>&nbsp;${c.wallets.length} ${w.wallets} · ${pct(shareOf(c))}`)).join("")
-      + (top && groups.includes(top) ? item(top, w.nolink) : "")
-      + (together.length ? `<li style="display:flex;align-items:center;gap:6px"><i style="inline-size:16px;block-size:3px;border-radius:2px;background:${colours.get("sold")}"></i><b>${w.together}</b>&nbsp;${teams.reduce((s, g) => s + g.length, 0)} ${w.wallets} · ${w.thicker}</li>` : "")
+    const pillStyle = (key, col) => {
+      const isAct = activeLegend === key;
+      const border = isAct ? toRgba(col, 0.75) : "rgba(148,163,184,0.18)";
+      const bg = isAct ? toRgba(col, 0.16) : "rgba(148,163,184,0.07)";
+      return `display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:${bg};border:1px solid ${border};cursor:pointer;user-select:none;transition:background .15s ease,border-color .15s ease,transform .15s ease`;
+    };
+    const item = (c, label, key) => `<li data-legend-key="${key}" style="${pillStyle(key, colours.get(c))}"><i style="inline-size:10px;block-size:10px;border-radius:50%;background:${colours.get(c)};box-shadow:0 0 8px ${toRgba(colours.get(c), c === top ? 0.2 : 0.65)};opacity:${c === top ? .55 : .95}"></i>${label}</li>`;
+    legend.innerHTML = real.map((c, i) => item(c, `<b>${w.cluster} ${i + 1}</b>&nbsp;${c.wallets.length} ${w.wallets} · ${pct(shareOf(c))}`, `cluster-${i}`)).join("")
+      + (top && groups.includes(top) ? item(top, w.nolink, "top") : "")
+      + (together.length ? `<li data-legend-key="sold" style="${pillStyle("sold", colours.get("sold"))}"><i style="inline-size:16px;block-size:3px;border-radius:2px;background:${colours.get("sold")};box-shadow:0 0 8px ${toRgba(colours.get("sold"), 0.65)}"></i><b>${w.together}</b>&nbsp;${teams.reduce((s, g) => s + g.length, 0)} ${w.wallets} · ${w.thicker}</li>` : "")
       + (real.length || together.length ? "" : `<li>${w.none}</li>`);
   }
+
+  legend.addEventListener("click", (event) => {
+    const li = event.target.closest?.("li[data-legend-key]");
+    if (!li) return;
+    const key = li.getAttribute("data-legend-key");
+    if (activeLegend === key) {
+      activeLegend = null;
+      applyHighlight(null);
+    } else {
+      activeLegend = key;
+      if (key.startsWith("cluster-")) {
+        const c = real[Number(key.slice(8))];
+        if (c) applyHighlight(new Set(c.wallets.map((w) => w.address)));
+      } else if (key === "top" && top) {
+        applyHighlight(new Set(top.wallets.map((w) => w.address)));
+      } else if (key === "sold") {
+        applyHighlight(new Set(teams.flat().map((n) => n.id)));
+      }
+    }
+    drawLegend();
+  });
 
   function seed() {
     list.forEach((n, i) => {
@@ -157,7 +221,7 @@ export function clusterMap(host, report, { onPick, words } = {}) {
   function step() {
     for (const n of list) {
       const a = anchors.get(n.group);
-      const k = n.group === top ? 0.02 : 0.03;
+      const k = n.group === top ? 0.022 : 0.032;
       n.vx += (a.x - n.x) * k; n.vy += (a.y - n.y) * k;
     }
     for (const [p, q, wt] of [...edges, ...together]) {
@@ -177,7 +241,7 @@ export function clusterMap(host, report, { onPick, words } = {}) {
       const p = list[i], rp = radius(p);
       for (let j = i + 1; j < list.length; j++) {
         // Different groups keep a wider gap, so each cluster reads as one.
-        const q = list[j], gap = p.group === q.group ? 1.5 : 6;
+        const q = list[j], gap = p.group === q.group ? 1.8 : 6.5;
         const dx = q.x - p.x, dy = q.y - p.y, min = rp + radius(q) + gap;
         const d2 = dx * dx + dy * dy;
         if (d2 >= min * min) continue;
@@ -192,54 +256,198 @@ export function clusterMap(host, report, { onPick, words } = {}) {
     return energy;
   }
 
+  function drawRadarGrid() {
+    const cx = W / 2, cy = H / 2;
+    const maxR = Math.min(W, H) * 0.45;
+    if (maxR <= 10) return;
+    if (typeof ctx.createRadialGradient === "function") {
+      const bg = ctx.createRadialGradient(cx, cy, 4, cx, cy, maxR * 1.1);
+      bg.addColorStop(0, "rgba(59,130,246,0.045)");
+      bg.addColorStop(0.6, "rgba(139,92,246,0.02)");
+      bg.addColorStop(1, "rgba(15,23,42,0)");
+      ctx.fillStyle = bg;
+      ctx.beginPath(); ctx.arc(cx, cy, maxR * 1.1, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.save();
+    ctx.strokeStyle = "rgba(148,163,184,0.16)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 6]);
+    for (const frac of [0.34, 0.67, 0.98]) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, maxR * frac, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    // Faint orbital axis ticks around the outer ring and center crosshairs
+    ctx.strokeStyle = "rgba(148,163,184,0.11)";
+    ctx.beginPath();
+    ctx.moveTo(cx - maxR * 1.02, cy); ctx.lineTo(cx - maxR * 0.92, cy);
+    ctx.moveTo(cx + maxR * 0.92, cy); ctx.lineTo(cx + maxR * 1.02, cy);
+    ctx.moveTo(cx, cy - maxR * 1.02); ctx.lineTo(cx, cy - maxR * 0.92);
+    ctx.moveTo(cx, cy + maxR * 0.92); ctx.lineTo(cx, cy + maxR * 1.02);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawLink(p, q, col, baseAlpha, width, idx, isSold) {
+    const grow = Math.min(easeOutCubic(p.grow), easeOutCubic(q.grow));
+    const alpha = baseAlpha * Math.min(p.a, q.a) * grow;
+    if (alpha <= 0.01) return;
+    const dx = q.x - p.x, dy = q.y - p.y, dist = Math.hypot(dx, dy) || 1;
+    const bend = Math.min(18, dist * 0.12) * (idx % 2 === 0 ? 1 : -1);
+    const cx = (p.x + q.x) / 2 - (dy / dist) * bend;
+    const cy = (p.y + q.y) / 2 + (dx / dist) * bend;
+
+    // Soft outer glow
+    ctx.globalAlpha = alpha * 0.28;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = width * 2.6;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    if (typeof ctx.quadraticCurveTo === "function") ctx.quadraticCurveTo(cx, cy, q.x, q.y);
+    else ctx.lineTo(q.x, q.y);
+    ctx.stroke();
+
+    // Core link line
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    if (typeof ctx.quadraticCurveTo === "function") ctx.quadraticCurveTo(cx, cy, q.x, q.y);
+    else ctx.lineTo(q.x, q.y);
+    ctx.stroke();
+
+    // Animated flow pulse particle traveling along the link when not reduced-motion
+    if (!still() && grow > 0.6) {
+      const t = (performance.now() * 0.0006 + idx * 0.23) % 1;
+      const mt = 1 - t;
+      const px = mt * mt * p.x + 2 * mt * t * cx + t * t * q.x;
+      const py = mt * mt * p.y + 2 * mt * t * cy + t * t * q.y;
+      const pr = isSold ? Math.min(3.4, 1.8 + width * 0.25) : 2.1;
+      ctx.globalAlpha = alpha * 0.35;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(px, py, pr * 2.2, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = Math.min(1, alpha * 1.15);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(px, py, pr * 0.85, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawTooltip(n) {
+    const r = radius(n) * easeOutCubic(n.grow);
+    const addr = n.others ? `+${n.others} others` : (n.id && n.id.length > 12 ? `${n.id.slice(0, 6)}…${n.id.slice(-4)}` : n.id);
+    const cIdx = real.indexOf(n.cluster);
+    const groupName = cIdx >= 0 ? `${w.cluster} ${cIdx + 1}` : w.nolink;
+    const text = `${addr} · ${pct(n.share)} · ${groupName}`;
+    ctx.save();
+    ctx.font = "600 11px system-ui, -apple-system, sans-serif";
+    const tw = ctx.measureText ? ctx.measureText(text).width : text.length * 6.2;
+    const pw = tw + 18, ph = 24;
+    const px = Math.min(W - pw - 6, Math.max(6, n.x - pw / 2));
+    const py = n.y - r - ph - 8 >= 4 ? n.y - r - ph - 8 : Math.min(H - ph - 4, n.y + r + 8);
+    ctx.globalAlpha = 0.96;
+    ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+    roundPill(ctx, px, py, pw, ph, 12);
+    ctx.fill();
+    ctx.strokeStyle = toRgba(colours.get(n.cluster), 0.75);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = "#f8fafc";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, px + pw / 2, py + ph / 2 + 0.5);
+    ctx.restore();
+  }
+
   function draw() {
     ctx.clearRect(0, 0, W, H);
+    drawRadarGrid();
     // One halo around each linked cluster and each group that sold together.
     const halo = (ns, c, dashed) => {
       const live = ns.filter((n) => n.grow > 0.3);
       if (live.length < 2) return;
       const x = live.reduce((s, n) => s + n.x, 0) / live.length, y = live.reduce((s, n) => s + n.y, 0) / live.length;
-      const r = Math.max(...live.map((n) => Math.hypot(n.x - x, n.y - y) + radius(n))) + 7;
-      ctx.globalAlpha = 0.07 * Math.max(...live.map((n) => n.a));
-      ctx.fillStyle = c;
+      const r = Math.max(...live.map((n) => Math.hypot(n.x - x, n.y - y) + radius(n))) + 9;
+      const maxA = Math.max(...live.map((n) => n.a));
+      ctx.globalAlpha = 0.11 * maxA;
+      if (typeof ctx.createRadialGradient === "function") {
+        const hg = ctx.createRadialGradient(x, y, r * 0.15, x, y, r);
+        hg.addColorStop(0, toRgba(c, 0.85));
+        hg.addColorStop(0.7, toRgba(c, 0.35));
+        hg.addColorStop(1, toRgba(c, 0.04));
+        ctx.fillStyle = hg;
+      } else {
+        ctx.fillStyle = c;
+      }
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 0.45 * Math.max(...live.map((n) => n.a));
-      ctx.strokeStyle = c; ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 0.5 * maxA;
+      ctx.strokeStyle = c; ctx.lineWidth = 1.3;
       if (dashed) ctx.setLineDash([4, 4]);
       ctx.stroke(); ctx.setLineDash([]);
     };
     real.forEach((c) => halo(list.filter((n) => n.cluster === c), colours.get(c), false));
     teams.forEach((g) => halo(g, colours.get("sold"), true));
-    ctx.lineWidth = 1.5;
-    for (const [p, q] of edges) {
-      ctx.globalAlpha = 0.6 * Math.min(p.a, q.a) * Math.min(p.grow, q.grow);
-      ctx.strokeStyle = colours.get(p.cluster);
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
-    }
-    ctx.strokeStyle = colours.get("sold");
+
     ctx.lineCap = "round";
-    for (const [p, q, wt] of together) {
-      ctx.globalAlpha = 0.75 * Math.min(p.a, q.a) * Math.min(p.grow, q.grow);
-      ctx.lineWidth = Math.min(6, 1.5 + 1.2 * (wt - 1));
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
-    }
+    edges.forEach(([p, q], idx) => {
+      drawLink(p, q, colours.get(p.cluster), 0.65, 1.6, idx, false);
+    });
+    const soldCol = colours.get("sold");
+    together.forEach(([p, q, wt], idx) => {
+      drawLink(p, q, soldCol, 0.82, Math.min(6, 1.6 + 1.2 * (wt - 1)), idx + edges.length, true);
+    });
+
     for (const n of list) {
-      const r = radius(n) * n.grow, c = colours.get(n.cluster);
+      const g = easeOutCubic(n.grow);
+      const isHot = n === hovered || n.ring;
+      const r = radius(n) * g * (isHot ? 1.08 : 1);
+      const c = colours.get(n.cluster);
       if (r <= 0) continue;
       const grey = n.cluster === top;
-      ctx.globalAlpha = (grey ? 0.16 : 0.62) * n.a;
-      ctx.fillStyle = c;
-      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
-      // A grey holder that sold in a wave gets a red ring.
       const seller = grey && n.sold && !n.others;
-      ctx.globalAlpha = (grey && !seller ? 0.35 : 0.95) * n.a;
-      ctx.strokeStyle = seller ? colours.get("sold") : c;
-      ctx.lineWidth = n.ring ? 2.5 : seller ? 1.8 : 1;
+
+      // Outer ambient halo for linked cluster bubbles or hovered/selected bubble
+      if ((!grey || isHot || seller) && r > 4) {
+        ctx.globalAlpha = (isHot ? 0.32 : 0.16) * n.a;
+        ctx.fillStyle = seller ? soldCol : c;
+        ctx.beginPath(); ctx.arc(n.x, n.y, r + (isHot ? 4.5 : 2.5), 0, Math.PI * 2); ctx.fill();
+      }
+
+      // 3D glassmorphic radial gradient fill
+      ctx.globalAlpha = (grey ? 0.34 : 0.92) * n.a;
+      if (typeof ctx.createRadialGradient === "function") {
+        const grad = ctx.createRadialGradient(n.x - 0.3 * r, n.y - 0.3 * r, r * 0.08, n.x, n.y, r);
+        grad.addColorStop(0, toRgba("#ffffff", grey ? 0.42 : 0.82));
+        grad.addColorStop(0.36, toRgba(c, grey ? 0.45 : 0.88));
+        grad.addColorStop(0.82, toRgba(c, grey ? 0.25 : 0.56));
+        grad.addColorStop(1, toRgba(c, grey ? 0.38 : 0.9));
+        ctx.fillStyle = grad;
+      } else {
+        ctx.fillStyle = c;
+      }
+      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
+
+      // Crisp border ring (a grey holder that sold in a wave gets a red ring)
+      ctx.globalAlpha = (grey && !seller && !isHot ? 0.42 : 0.96) * n.a;
+      ctx.strokeStyle = seller ? soldCol : c;
+      ctx.lineWidth = isHot ? 2.6 : seller ? 1.9 : 1.15;
       if (n.others) ctx.setLineDash([3, 3]);
       ctx.stroke();
       ctx.setLineDash([]);
+
+      // Specular inner rim highlight
+      if (r > 6 && ! n.others) {
+        ctx.globalAlpha = (grey ? 0.18 : 0.42) * n.a;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = Math.min(1.4, r * 0.11);
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, Math.max(1, r - 1.4), -Math.PI * 0.82, -Math.PI * 0.18);
+        ctx.stroke();
+      }
+
       if (n.others && r > 12) {
-        ctx.globalAlpha = 0.8 * n.a;
+        ctx.globalAlpha = 0.88 * n.a;
         ctx.fillStyle = c;
         ctx.font = "600 11px system-ui, sans-serif";
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -258,6 +466,7 @@ export function clusterMap(host, report, { onPick, words } = {}) {
       ctx.fillStyle = colours.get(c);
       ctx.fillText(`${w.cluster} ${i + 1} · ${pct(shareOf(c))}`, Math.min(W - 50, Math.max(50, x)), Math.max(13, y - 4));
     });
+    if (hovered || selected) drawTooltip(hovered || selected);
     ctx.globalAlpha = 1;
   }
 
@@ -266,7 +475,9 @@ export function clusterMap(host, report, { onPick, words } = {}) {
     ticks++;
     let moving = false;
     for (const n of list) {
-      if (n.grow < 1) { n.grow = Math.min(1, n.grow + 0.06); moving = true; }
+      const delay = Math.min(14, (n.idx ?? 0) * 0.45);
+      if (ticks >= delay && n.grow < 1) { n.grow = Math.min(1, n.grow + 0.065); moving = true; }
+      else if (n.grow < 1) moving = true;
       if (Math.abs(n.ta - n.a) > 0.01) { n.a += (n.ta - n.a) * 0.18; moving = true; } else n.a = n.ta;
     }
     draw();
@@ -280,6 +491,11 @@ export function clusterMap(host, report, { onPick, words } = {}) {
     draw();
   }
 
+  function applyHighlight(addresses) {
+    list.forEach((n) => { n.ta = !addresses || addresses.has(n.id) || n.members?.some((m) => addresses.has(m)) ? 1 : 0.12; });
+    if (still()) { list.forEach((n) => { n.a = n.ta; }); draw(); } else kick();
+  }
+
   measure(); seed();
   if (still()) settleNow(); else kick();
 
@@ -291,10 +507,34 @@ export function clusterMap(host, report, { onPick, words } = {}) {
   });
   ro.observe(host);
 
-  canvas.addEventListener("click", (event) => {
+  const hitAt = (event) => {
     const box = canvas.getBoundingClientRect();
     const x = event.clientX - box.left, y = event.clientY - box.top;
-    const hit = list.find((n) => Math.hypot(n.x - x, n.y - y) <= Math.max(8, radius(n)));
+    return list.find((n) => Math.hypot(n.x - x, n.y - y) <= Math.max(8, radius(n)));
+  };
+
+  canvas.addEventListener("mousemove", (event) => {
+    const hit = hitAt(event) || null;
+    canvas.style.cursor = hit ? "pointer" : "default";
+    if (hit !== hovered) {
+      hovered = hit;
+      if (still()) draw(); else { draw(); kick(); }
+    } else if (hit && !still()) {
+      draw();
+    }
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    canvas.style.cursor = "default";
+    if (hovered) {
+      hovered = null;
+      if (still()) draw(); else { draw(); kick(); }
+    }
+  });
+
+  canvas.addEventListener("click", (event) => {
+    const hit = hitAt(event) || null;
+    selected = hit;
     list.forEach((n) => { n.ring = n === hit; });
     onPick?.(hit ? { address: hit.id, share: hit.share, cluster: hit.cluster,
       others: hit.others ?? 0, label: hit.others ? `${hit.others} smaller holders, no link found` : null } : null);
@@ -304,8 +544,9 @@ export function clusterMap(host, report, { onPick, words } = {}) {
   return {
     /** Light up these wallets (a Set of addresses), or every one with null. */
     highlight(addresses) {
-      list.forEach((n) => { n.ta = !addresses || addresses.has(n.id) || n.members?.some((m) => addresses.has(m)) ? 1 : 0.12; });
-      if (still()) { list.forEach((n) => { n.a = n.ta; }); draw(); } else kick();
+      activeLegend = null;
+      drawLegend();
+      applyHighlight(addresses);
     },
     colourOf: (cluster) => colours.get(cluster),
     /** A newer report of the same token (a check filling live): new wallets

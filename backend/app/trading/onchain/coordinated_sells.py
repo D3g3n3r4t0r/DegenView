@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -165,27 +166,40 @@ def from_analysis(a: dict, chain: str, token: str, wallets: list[str], symbol: s
 
 
 _report_cache: dict[str, tuple[int, int, dict | None]] = {}
+_reports_list_cache: tuple[str, tuple[tuple[str, int, int], ...], list[dict], bool] | None = None
 
 
 def write(report: dict) -> Path:
     """Where the engine saves a report: the view and the alert read it."""
+    global _reports_list_cache
     path = _dir() / f"{report['chain']}-{report['token'].lower()}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_text_atomic(path, fast_json.dumps(report))
-    _report_cache.pop(str(path), None)
+    raw_bytes = fast_json.dumps(report)
+    write_text_atomic(path, raw_bytes)
+    try:
+        st = path.stat()
+        _report_cache[str(path)] = (st.st_mtime_ns, st.st_size, clean(report))
+    except OSError:
+        _report_cache.pop(str(path), None)
+    _reports_list_cache = None
     return path
 
 
-def _read(path: Path) -> dict | None:
+def _read(path: Path, st: os.stat_result | None = None, quiet_missing: bool = False) -> dict | None:
     key = str(path)
     try:
-        st = path.stat()
+        st = st or path.stat()
         hit = _report_cache.get(key)
         if hit is not None and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
             return hit[2]
         cleaned = clean(fast_json.loads(path.read_bytes()))
         _report_cache[key] = (st.st_mtime_ns, st.st_size, cleaned)
         return cleaned
+    except FileNotFoundError:
+        _report_cache.pop(key, None)
+        if not quiet_missing:
+            logger.warning("coordinated sells: unreadable report %s", path.name)
+        return None
     except (OSError, ValueError):
         logger.warning("coordinated sells: unreadable report %s", path.name)
         return None
@@ -193,13 +207,45 @@ def _read(path: Path) -> dict | None:
 
 def reports() -> tuple[list[dict], bool]:
     """Every token's report, newest first, and whether they are the sample
-    (the engine has written nothing yet)."""
+    (the engine has written nothing yet).
+
+    Uses os.scandir() (which carries stat metadata in DirEntry on Windows/POSIX
+    without per-file stat syscalls) and caches the sorted list across polls when
+    no file mtime/size changed.
+    """
+    global _reports_list_cache
     d = _dir()
-    found = [r for p in sorted(d.glob("*.json")) if (r := _read(p))] if d.is_dir() else []
-    if found:
-        return sorted(found, key=lambda r: -(r["updated_at"] or 0)), False
-    sample = _read(SAMPLE)
-    return ([sample] if sample else []), True
+    d_str = str(d)
+    entries: list[tuple[str, str, os.stat_result]] = []
+    try:
+        with os.scandir(d) as it:
+            for e in it:
+                if e.name.endswith(".json") and e.is_file():
+                    st = e.stat()
+                    entries.append((e.name, e.path, st))
+    except FileNotFoundError:
+        entries = []
+    except OSError:
+        entries = []
+
+    if entries:
+        entries.sort(key=lambda x: x[0])
+        sig = tuple((name, st.st_mtime_ns, st.st_size) for name, _, st in entries)
+        cached = _reports_list_cache
+        if cached is not None and cached[0] == d_str and cached[1] == sig and not cached[3]:
+            return list(cached[2]), False
+        found = [r for _, fpath, st in entries if (r := _read(Path(fpath), st))]
+        if found:
+            found.sort(key=lambda r: -(r["updated_at"] or 0))
+            _reports_list_cache = (d_str, sig, found, False)
+            return list(found), False
+
+    sample = _read(SAMPLE, quiet_missing=True)
+    res = [sample] if sample else []
+    return res, True
+
+
+all_reports = reports
 
 
 # Lorenzo, 23/10 ("Applica A e C"): the "top" group (the 50 biggest holders,
@@ -304,7 +350,10 @@ _excl_cache: tuple[float, dict[str, int]] = (0.0, {})
 def report_for(chain: str, token: str) -> dict | None:
     from app.trading.onchain import sync_sells
     path = sync_sells.report_path((chain or "").lower(), token or "")
-    return _read(path) if path.is_file() else None
+    return _read(path, quiet_missing=True)
+
+
+get_report = report_for
 
 
 def fresh_report(chain: str, token: str, now: float | None = None) -> dict | None:
@@ -364,12 +413,12 @@ def exclusion(chain: str, token: str, now: float | None = None) -> str:
     now = now if now is not None else time.time()
     if now - _excl_cache[0] > 60:
         risky = {}
-        d = _dir()
-        for p in d.glob("*.json") if d.is_dir() else []:
-            rep = _read(p)
-            score = ((rep or {}).get("risk") or {}).get("score") or 0
-            if rep and score >= EXCLUDE_RISK and now - (rep.get("updated_at") or 0) <= EXCLUDE_MAX_AGE_S:
-                risky[f"{rep['chain']}:{rep['token']}"] = round(score)
+        found, is_sample = reports()
+        if not is_sample:
+            for rep in found:
+                score = ((rep or {}).get("risk") or {}).get("score") or 0
+                if score >= EXCLUDE_RISK and now - (rep.get("updated_at") or 0) <= EXCLUDE_MAX_AGE_S:
+                    risky[f"{rep['chain']}:{rep['token']}"] = round(score)
         _excl_cache = (now, risky)
     score = _excl_cache[1].get(f"{(chain or '').lower()}:{_norm(token or '')}")
     return f"coordinated sells: risk {score}" if score else ""

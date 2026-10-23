@@ -99,7 +99,7 @@ DEAD = {"0x" + "0" * 40, "0x000000000000000000000000000000000000dead"}
 _lock = asyncio.Lock()
 # Manual checks run at once, beside the queue (Lorenzo, 22/10: "voglio vederlo
 # partire subito"), at most two together.
-_manual_sem = asyncio.Semaphore(2)
+_manual_sem = asyncio.Semaphore(4)
 _running: dict[str, dict] = {}          # key -> {"phase", "progress", "started_at"}
 _log: deque = deque(maxlen=300)         # the console of the Clusters tab, in memory only
 
@@ -238,14 +238,14 @@ def _take(now: float) -> dict | None:
     return item
 
 
-def _done(item: dict, result: dict | None, error: str | None, now: float) -> None:
+def _done(item: dict, result: dict | None, error: str | None, now: float, auto_pr: dict | None = None) -> None:
     st = _state()
     rec = (st.setdefault("tokens", {}).get(item["key"]) or {})
     if error:
-        rec.update(failed_at=int(now), error=error[:200])
+        rec.update(failed_at=int(now), error=error[:200], auto_pr=auto_pr or rec.get("auto_pr"))
     else:
         rec.update(built_at=int(now), error=None, clusters=len(result["clusters"]),
-                   wallets=sum(len(c["wallets"]) for c in result["clusters"]), partial=result["partial"])
+                   wallets=sum(len(c["wallets"]) for c in result["clusters"]), partial=result["partial"], auto_pr=auto_pr or result.get("auto_pr"))
     st["tokens"][item["key"]] = rec
     _save_state(st)
 
@@ -262,7 +262,7 @@ def token_status(chain: str, token: str) -> dict:
             "started_at": run.get("started_at"), "live": run.get("live"),
             "built_at": rec.get("built_at"), "clusters": rec.get("clusters"), "wallets": rec.get("wallets"),
             "partial": rec.get("partial"), "error": rec.get("error") if rec.get("failed_at") else None,
-            "failed_at": rec.get("failed_at"),
+            "failed_at": rec.get("failed_at"), "auto_pr": rec.get("auto_pr"),
             "manual_left": MANUAL_PER_DAY - (st.get("manual_today", 0) if st.get("day") ==
                                              time.strftime("%Y-%m-%d", time.gmtime()) else 0)}
 
@@ -738,7 +738,12 @@ async def _build_tracked(item: dict, now: float) -> dict | None:
                         pass
     except Exception as exc:  # noqa: BLE001
         logger.exception("wallet clusters %s", item["token"])
-        _done(item, None, str(exc) or type(exc).__name__, now)
+        from app.trading.onchain import auto_chain_pr, layer_clusters as _lc
+        try:
+            _apr = await auto_chain_pr.ensure_auto_pr(item["chain"], item["token"], url=_lc.get_custom_url(item["chain"], item["token"]) or "", error=str(exc) or type(exc).__name__)
+        except Exception:  # noqa: BLE001
+            _apr = None
+        _done(item, None, str(exc) or type(exc).__name__, now, auto_pr=_apr)
         note("failed", item, (str(exc) or type(exc).__name__)[:120])
         return None
     finally:
@@ -749,15 +754,16 @@ async def _build_tracked(item: dict, now: float) -> dict | None:
     return res
 
 
-def start_manual(chain: str, token: str, symbol: str = "") -> bool:
+def start_manual(chain: str, token: str, symbol: str = "", force: bool = False) -> bool:
     """Runs a check asked for by hand at once, in its own task. False when it
-    is already running or was built within the hour."""
+    is already running or (unless forced) was built within the hour."""
     chain, token = (chain or "").lower(), sync_watch._n(token or "")
     k = _key(chain, token)
     if k in _running:
         return False
     rec = (_state().get("tokens") or {}).get(k) or {}
-    if rec.get("built_at") and time.time() - rec["built_at"] < 3600:
+    has_rep = sync_sells.report_path(chain, token).exists()
+    if not force and has_rep and rec.get("built_at") and time.time() - rec["built_at"] < 3600:
         return False
     _spawn(chain, token, symbol, "manual")
     return True

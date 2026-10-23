@@ -42,7 +42,10 @@ HISTORY_PER_WALLET = 20  # first run of a watch: each holder's latest txs, so pa
 HELIUS_HOLDERS = 100     # biggest wallets read with a Helius key
 HELIUS_PAGES = 5         # x1000 token accounts from DAS
 AIRDROP_MIN = 20         # a sender feeding this many holders is an airdrop, not a link
-_SEM = asyncio.Semaphore(2)
+CONCURRENCY = 12         # concurrent holder history / transaction RPC requests
+RPC_TIMEOUT_S = 8.0      # per-request RPC timeout so slow Solana nodes fail fast
+REPORT_TIMEOUT_S = 10.0
+_SEM = asyncio.Semaphore(CONCURRENCY)
 
 
 def helius_key() -> str:
@@ -55,7 +58,7 @@ def helius_key() -> str:
 
 async def _helius(method: str, params, key: str):
     try:
-        async with httpx.AsyncClient(timeout=25.0) as c:
+        async with httpx.AsyncClient(timeout=RPC_TIMEOUT_S) as c:
             r = await c.post(f"https://mainnet.helius-rpc.com/?api-key={key}",
                              json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
     except httpx.HTTPError as exc:
@@ -72,16 +75,16 @@ async def _helius(method: str, params, key: str):
 
 async def _rpc(method: str, params):
     key = helius_key()
-    for i in range(5):
+    for i in range(3):
         try:
             async with _SEM:
                 if key:
                     return await _helius(method, params, key)
-                return await rpc_client.call_rpc("solana", method, params, timeout=25.0)
+                return await rpc_client.call_rpc("solana", method, params, timeout=RPC_TIMEOUT_S)
         except RuntimeError as exc:
-            if i == 4 or not any(s in str(exc).lower() for s in ("429", "rate", "failed", "too many")):
+            if i == 2 or not any(s in str(exc).lower() for s in ("429", "rate", "failed", "too many")):
                 raise
-            await asyncio.sleep(2 ** (i + 1))
+            await asyncio.sleep(0.4 * (i + 1))
 
 
 async def signatures(account: str, until: str | None = None) -> list[dict]:
@@ -102,7 +105,7 @@ async def signatures(account: str, until: str | None = None) -> list[dict]:
 
 
 async def report(mint: str) -> dict:
-    async with httpx.AsyncClient(timeout=30.0) as c:
+    async with httpx.AsyncClient(timeout=REPORT_TIMEOUT_S) as c:
         r = await c.get(legit.RUGCHECK_REPORT.format(mint=mint))
         r.raise_for_status()
         return r.json()
@@ -246,13 +249,16 @@ async def build(mint: str) -> dict:
     pairs = same_slot_links(first)
     why_of = {p: "same_slot" for p in pairs}
     if key:
-        # Each holder's first receipt: who sent it (only with complete lists).
+        # Each holder's first receipt: who sent it (only with complete lists), fetched concurrently.
         senders = {}
-        for h, ss in zip(hs, sigs):
-            if ss and h["owner"] in first:
-                tx = await _rpc("getTransaction", [ss[-1]["signature"], {"encoding": "jsonParsed",
-                                                                         "maxSupportedTransactionVersion": 1}])
-                senders[h["owner"]] = _first_sender(tx or {}, mint, h["owner"])
+        first_targets = [(h["owner"], ss[-1]["signature"]) for h, ss in zip(hs, sigs) if ss and h["owner"] in first]
+        if first_targets:
+            txs = await asyncio.gather(*(
+                _rpc("getTransaction", [sig, {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 1}])
+                for _, sig in first_targets
+            ))
+            for (owner, _), tx in zip(first_targets, txs):
+                senders[owner] = _first_sender(tx or {}, mint, owner)
         # One sender feeding many holders in one go is an airdrop or a
         # distribution: receiving it in the same slot links nobody.
         pairs = [(a, b) for a, b in pairs if not same_airdrop(senders, a, b)]
@@ -312,21 +318,27 @@ def _moves(tx: dict, mint: str, owner: str) -> list[dict]:
 async def new_sells(cfg: dict) -> tuple[list[dict], dict]:
     """The watched accounts' moves since the last run, and the new cursors."""
     accounts, cursors = cfg.get("accounts") or {}, dict((cfg.get("state") or {}).get("last_sig") or {})
+    prev_cursors = (cfg.get("state") or {}).get("last_sig", {})
     out, budget = [], HELIUS_TX_PER_RUN if helius_key() else MAX_TX_PER_RUN
-    for owner in cfg["wallets"]:
-        acc = accounts.get(owner)
-        if not acc:
-            continue
-        ss = await signatures(acc, until=cursors.get(acc))
+    watched_pairs = [(owner, accounts[owner]) for owner in cfg["wallets"] if accounts.get(owner)]
+    if not watched_pairs:
+        return out, cursors
+    sig_lists = await asyncio.gather(*(signatures(acc, until=cursors.get(acc)) for _, acc in watched_pairs))
+    tx_jobs: list[tuple[str, str]] = []
+    for (owner, acc), ss in zip(watched_pairs, sig_lists):
         if ss:
             cursors[acc] = ss[0]["signature"]
-        if acc not in (cfg.get("state") or {}).get("last_sig", {}):
+        if acc not in prev_cursors:
             ss = ss[:HISTORY_PER_WALLET]
         for s in ss[:budget]:
-            tx = await _rpc("getTransaction", [s["signature"], {"encoding": "jsonParsed",
-                                                                "maxSupportedTransactionVersion": 1}])
+            tx_jobs.append((owner, s["signature"]))
+        budget -= min(budget, len(ss))
+    if tx_jobs:
+        txs = await asyncio.gather(*(
+            _rpc("getTransaction", [sig, {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 1}])
+            for _, sig in tx_jobs
+        ))
+        for (owner, _), tx in zip(tx_jobs, txs):
             if tx:
                 out += _moves(tx, cfg["token"], owner)
-        budget -= min(budget, len(ss))
     return out, cursors
-
