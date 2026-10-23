@@ -119,6 +119,7 @@ from app.trading.onchain import sectors as onchain_sectors
 from app.trading.onchain import gem_hold as onchain_gem_hold
 from app.trading.onchain import quality_picks as onchain_quality_picks
 from app.trading.onchain import execute as onchain_execute
+from app.trading.onchain import copytrade as onchain_copytrade
 from app.trading.onchain import send as onchain_send
 from app.trading.onchain import jito as onchain_jito
 from app.trading.onchain import keys as onchain_keys
@@ -1570,6 +1571,7 @@ async def lifespan(app: FastAPI):
     background.append(asyncio.create_task(_telegram_chat_loop()))
     background.append(asyncio.create_task(_deepseek_recap_loop()))
     background.append(asyncio.create_task(_coordinated_sells_loop()))
+    background.append(asyncio.create_task(onchain_copytrade.loop()))
     if settings.onchain_radar_enabled:
         # Wallet clusters of the candidates, built by the server (22/10).
         from app.trading.onchain import wallet_clusters
@@ -1612,7 +1614,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
 app.include_router(quant_router(auth.get_current_user))
 # Route groups split out of this file (app/routes/), same paths as before.
-for _name in ("issues", "price_alerts", "drawings", "jobs", "push", "guest_links", "auth_routes"):
+for _name in ("issues", "price_alerts", "drawings", "jobs", "push", "guest_links", "auth_routes", "copytrade"):
     app.include_router(importlib.import_module(f"app.routes.{_name}").router)
 
 # ── Cancello di autenticazione ────────────────────────────────────────────

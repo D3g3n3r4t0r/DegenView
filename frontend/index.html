@@ -977,6 +977,96 @@
               </div>
             </details>
 
+            <!-- Copy trading (22/10): follow a Solana wallet and copy its
+                 swaps seconds later. Engine: app/trading/onchain/copytrade.py;
+                 page: static/copytrade.js, loaded at the first opening. -->
+            <details class="opera-sub" id="copytrade-details">
+              <summary>Copy trading · Solana <span class="trading-auto-badge">⚠️ Real money</span></summary>
+              <div class="trading-auto-section ct">
+                <p class="panel-hint">Paste a Solana wallet: its buys and sells are copied a few seconds later. Start in Simulated: real quotes, nothing sent.</p>
+                <div class="ct-status" id="ct-status"></div>
+
+                <form class="ct-form" id="ct-form" autocomplete="off">
+                  <div class="mo-row">
+                    <div class="mo-field mo-field-grow">
+                      <label class="mo-label" for="ct-address">Wallet to copy</label>
+                      <input id="ct-address" class="mo-input ct-mono" placeholder="Solana address" required minlength="32" maxlength="44" />
+                    </div>
+                    <div class="mo-field">
+                      <label class="mo-label" for="ct-label">Wallet name</label>
+                      <input id="ct-label" class="mo-input" placeholder="optional" maxlength="40" />
+                    </div>
+                  </div>
+                  <div class="ct-grid">
+                    <fieldset class="ct-seg">
+                      <legend class="mo-label">What to copy</legend>
+                      <label><input type="radio" name="ct-copy" value="both" checked /> Entries and exits</label>
+                      <label><input type="radio" name="ct-copy" value="entry" /> Entries only</label>
+                    </fieldset>
+                    <fieldset class="ct-seg">
+                      <legend class="mo-label">How much</legend>
+                      <label><input type="radio" name="ct-sizing" value="pct" checked /> % of his trade</label>
+                      <label><input type="radio" name="ct-sizing" value="fixed" /> Fixed $ per new position</label>
+                    </fieldset>
+                    <div class="mo-field">
+                      <label class="mo-label" for="ct-size" id="ct-size-label">% of his trade</label>
+                      <input id="ct-size" class="mo-input" type="number" min="0.1" step="0.1" value="10" required />
+                    </div>
+                    <div class="mo-field">
+                      <label class="mo-label" for="ct-mode">Copy mode</label>
+                      <select id="ct-mode" class="mo-select">
+                        <option value="sim">Simulated</option>
+                        <option value="real">Real</option>
+                        <option value="off">Paused</option>
+                      </select>
+                    </div>
+                  </div>
+                  <details class="ct-adv">
+                    <summary>Protections</summary>
+                    <div class="ct-grid">
+                      <div class="mo-field">
+                        <label class="mo-label" for="ct-chase">Max price above his (%)</label>
+                        <input id="ct-chase" class="mo-input" type="number" min="1" max="500" step="1" value="15" />
+                      </div>
+                      <div class="mo-field">
+                        <label class="mo-label" for="ct-slip">Slippage (%)</label>
+                        <input id="ct-slip" class="mo-input" type="number" min="0.1" max="50" step="0.1" value="5" />
+                      </div>
+                    </div>
+                    <p class="panel-hint">Always on: no token with a live freeze or mint authority, none that Jupiter can't sell back, no buy moving the price more than 8%, no trade seen more than 90 s late, nothing under $5.</p>
+                  </details>
+                  <div class="ct-actions">
+                    <button type="submit" class="ct-primary" id="ct-save">Follow</button>
+                    <span class="ct-msg" id="ct-msg" role="status"></span>
+                  </div>
+                </form>
+
+                <div class="section-title-row"><span class="section-eyebrow">Followed wallets</span></div>
+                <ul class="ct-list" id="ct-follows"></ul>
+
+                <div class="section-title-row"><span class="section-eyebrow">Open copied positions</span></div>
+                <ul class="ct-list" id="ct-positions"></ul>
+
+                <div class="section-title-row">
+                  <span class="section-eyebrow">Copy log</span>
+                  <span class="section-count" id="ct-stats"></span>
+                </div>
+                <ul class="ct-list ct-log" id="ct-log"></ul>
+
+                <details class="ct-adv">
+                  <summary>Account limits and real money</summary>
+                  <div class="ct-grid">
+                    <div class="mo-field"><label class="mo-label" for="ct-max-trade">Max per trade ($)</label><input id="ct-max-trade" class="mo-input" type="number" min="1" step="1" /></div>
+                    <div class="mo-field"><label class="mo-label" for="ct-max-day">Max per day ($)</label><input id="ct-max-day" class="mo-input" type="number" min="1" step="1" /></div>
+                    <div class="mo-field"><label class="mo-label" for="ct-max-open">Max open positions</label><input id="ct-max-open" class="mo-input" type="number" min="1" step="1" /></div>
+                  </div>
+                  <div class="ct-actions"><button type="button" class="section-action-btn" id="ct-limits-save">Save limits</button></div>
+                  <p class="panel-hint">Real copies sign with this account's on-chain Solana wallet (Trading → On-chain wallet) and pay in SOL; 0.02 SOL always stays for fees.</p>
+                  <label class="ct-real"><input type="checkbox" id="ct-real-ok" /> I accept that Real mode trades my wallet's money automatically, without asking each time.</label>
+                </details>
+              </div>
+            </details>
+
             <!-- Wallet on-chain: fusione vera (Fase 5), non piu' solo un
                  link. Il pannello e' lo stesso markup di onchain-app.html
                  (stessi id, stessi moduli ES importati con lo stesso import
@@ -1503,5 +1593,6 @@
   <script src="/static/app.js"></script>
   <script src="/static/simple-mode.js" defer></script>
   <script src="/static/diagnostics.js" defer></script>
+  <script src="/static/copytrade.js" defer></script>
 </body>
 </html>

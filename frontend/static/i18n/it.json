@@ -818,7 +818,81 @@
   "Counter-trend: RSI divergences at swing lows and highs, range breakouts and bounces off the range support. Holds until the opposite signal.": "Contro-trend: divergenze RSI su minimi e massimi, rotture di range e rimbalzi sul supporto del range. Tiene la posizione fino al segnale opposto.",
   "Trend follower for minute candles of on-chain tokens.": "Trend follower per le candele al minuto dei token on-chain.",
   "★ Use recommended settings": "★ Usa le impostazioni consigliate",
-  "✓ Recommended settings applied": "✓ Impostazioni consigliate applicate"
+  "✓ Recommended settings applied": "✓ Impostazioni consigliate applicate",
+  "Copy trading · Solana": "Copy trading · Solana",
+  "Paste a Solana wallet: its buys and sells are copied a few seconds later. Start in Simulated: real quotes, nothing sent.": "Incolla un wallet Solana: i suoi acquisti e vendite vengono copiati pochi secondi dopo. Parti da Simulato: prezzi veri, niente inviato.",
+  "Wallet to copy": "Wallet da copiare",
+  "Solana address": "Indirizzo Solana",
+  "optional": "facoltativo",
+  "Entries and exits": "Ingressi e uscite",
+  "Entries only": "Solo ingressi",
+  "% of his trade": "% del suo trade",
+  "Fixed $ per new position": "$ fissi per posizione nuova",
+  "Simulated": "Simulato",
+  "Real": "Reale",
+  "Protections": "Protezioni",
+  "Max price above his (%)": "Prezzo massimo sopra il suo (%)",
+  "Slippage (%)": "Slippage (%)",
+  "Always on: no token with a live freeze or mint authority, none that Jupiter can't sell back, no buy moving the price more than 8%, no trade seen more than 90 s late, nothing under $5.": "Sempre attive: niente token con freeze o mint authority ancora attive, niente token che Jupiter non sa rivendere, nessun acquisto che muove il prezzo piu' dell'8%, nessun trade visto con piu' di 90 s di ritardo, niente sotto i $5.",
+  "Follow": "Segui",
+  "Followed wallets": "Wallet seguiti",
+  "Open copied positions": "Posizioni copiate aperte",
+  "Copy log": "Registro copie",
+  "Account limits and real money": "Limiti dell'account e soldi veri",
+  "Max per trade ($)": "Massimo per trade ($)",
+  "Max per day ($)": "Massimo al giorno ($)",
+  "Max open positions": "Massimo posizioni aperte",
+  "Save limits": "Salva limiti",
+  "Real copies sign with this account's on-chain Solana wallet (Trading → On-chain wallet) and pay in SOL; 0.02 SOL always stays for fees.": "Le copie reali firmano con il wallet Solana on-chain di questo account (Trading → On-chain wallet) e pagano in SOL; 0,02 SOL restano sempre per le commissioni.",
+  "I accept that Real mode trades my wallet's money automatically, without asking each time.": "Accetto che la modalità Reale usi i soldi del mio wallet in automatico, senza chiedere ogni volta.",
+  "Watching live": "In ascolto dal vivo",
+  "Reconnecting": "Riconnessione",
+  "Nothing to watch": "Nessun wallet da seguire",
+  "Public node (slower)": "Nodo pubblico (piu' lento)",
+  "No Solana wallet: create it in On-chain wallet below": "Nessun wallet Solana: crealo in On-chain wallet qui sotto",
+  "Spent today": "Speso oggi",
+  "No wallet followed yet.": "Nessun wallet seguito.",
+  "Pause": "Pausa",
+  "Resume": "Riprendi",
+  "Remove": "Rimuovi",
+  "No open position.": "Nessuna posizione aperta.",
+  "Sell all": "Vendi tutto",
+  "Nothing copied yet: the first trade of a followed wallet shows up here.": "Ancora nessuna copia: il primo trade di un wallet seguito comparira' qui.",
+  "by hand": "a mano",
+  "Sent": "Inviato",
+  "Failed": "Fallito",
+  "Skipped": "Saltato",
+  "Saved.": "Salvato.",
+  "Following.": "Lo stai seguendo.",
+  "Sold.": "Venduto.",
+  "Not sold.": "Non venduto.",
+  "Limits saved.": "Limiti salvati.",
+  "Real mode: this wallet's trades will be copied with real money, automatically. Continue?": "Modalità Reale: i trade di questo wallet verranno copiati con soldi veri, in automatico. Continuare?",
+  "Stop following this wallet? Open copied positions stay, and can be sold from the list.": "Smettere di seguire questo wallet? Le posizioni copiate aperte restano e si possono vendere dalla lista.",
+  "Sell all of this copied position now?": "Vendere adesso tutta questa posizione copiata?",
+  "Allow Real mode on this account? Copies will spend the Solana wallet's money without asking each time.": "Consentire la modalità Reale su questo account? Le copie useranno i soldi del wallet Solana senza chiedere ogni volta.",
+  "real execution is switched off on the server": "l'esecuzione reale e' spenta sul server",
+  "real money not confirmed for this account": "soldi veri non confermati per questo account",
+  "no Solana wallet on this account": "nessun wallet Solana su questo account",
+  "not enough SOL in the wallet": "SOL insufficienti nel wallet",
+  "no way to sell it back (possible honeypot)": "impossibile rivenderlo (possibile honeypot)",
+  "freeze authority still active": "freeze authority ancora attiva",
+  "mint authority still active": "mint authority ancora attiva",
+  "exits are not copied (entry only)": "le uscite non si copiano (solo ingressi)",
+  "already holding: re-buys are not copied with a fixed amount": "gia' in portafoglio: con l'importo fisso le ricompre non si copiano",
+  "nothing left to sell": "niente da vendere",
+  "Not a Solana wallet address.": "Non e' un indirizzo di wallet Solana.",
+  "Confirm real money for this account first.": "Prima conferma i soldi veri per questo account.",
+  "Wallet name": "Nome del wallet",
+  "What to copy": "Cosa copiare",
+  "How much": "Quanto investire",
+  "Copy mode": "Modalità di copia",
+  "Paused": "In pausa",
+  "Real execution switched on on the server": "Esecuzione reale accesa sul server",
+  "Real execution switched off on the server": "Esecuzione reale spenta sul server",
+  "Copy wallet": "Wallet delle copie",
+  "his trade": "suo trade",
+  "our copy": "nostra copia"
  },
  "patterns": [
   [
@@ -896,6 +970,38 @@
   [
    "^BTC below its Bull Market Band since (\\S+): RSI\\+BB BTC band needs both conditions\\.$",
    "BTC sotto la sua Bull Market Band dal $1: la RSI+BB BTC band chiede entrambe le condizioni."
+  ],
+  [
+   "^(\\d+) copied · (\\d+) skipped · (.+)$",
+   "$1 copiati · $2 saltati · $3"
+  ],
+  [
+   "^price already (\\d+)% above his$",
+   "prezzo gia' $1% sopra il suo"
+  ],
+  [
+   "^price impact ([\\d.]+)%$",
+   "impatto sul prezzo $1%"
+  ],
+  [
+   "^seen (\\d+)s late$",
+   "visto con $1 s di ritardo"
+  ],
+  [
+   "^(\\d+) positions already open$",
+   "gia' $1 posizioni aperte"
+  ],
+  [
+   "^daily cap \\$(\\d+) reached$",
+   "raggiunto il tetto giornaliero di $$$1"
+  ],
+  [
+   "^\\$([\\d.]+) is under the \\$5 minimum$",
+   "$$$1 e' sotto il minimo di $$5"
+  ],
+  [
+   "^(\\$[\\d.,]+) / position$",
+   "$1 / posizione"
   ]
  ]
 }
