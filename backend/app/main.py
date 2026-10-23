@@ -4163,7 +4163,6 @@ async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends
             token = parsed["token"]
         layer_clusters.set_custom_url(chain, token, custom_url)
     elif chain == "layer":
-        from app.trading.onchain import layer_clusters
         token, _ = layer_clusters.resolve_layer_token(token, str(body.get("symbol") or ""))
     if not custom_url and chain not in wallet_clusters.CHAINS:
         raise HTTPException(status_code=400, detail=f"chain: one of {', '.join(wallet_clusters.CHAINS)}")
