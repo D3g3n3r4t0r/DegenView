@@ -1,3 +1,14 @@
+# 2026-10-24 — Modalità Scura Automatica al Calare del Sole e Tasto Rapido Scuro/Chiaro Ovunque — `seed-0417l`
+
+Lorenzo, 24/10: "l’app va in modalità dark automaticamente al calare del sole", "in ogni caso inserisci un tasto per passare da modalità scura a chiara".
+- **Transizione automatica al tramonto (`solarSchedule` / `solarBounds` / `isSolarNight`):**
+  - Calcolo astronomico locale di alba e tramonto in base al giorno dell'anno e al fuso orario / ora legale (`DST`), attivo prima del primo paint (`frontend/app-next/index.html`, `frontend/onchain-app.html`, `frontend/static/app.js`) e ricontrollato automaticamente ogni `60s` (`setInterval`), al ritorno sulla scheda (`visibilitychange`) e al cambio di preferenza del sistema operativo (`prefers-color-scheme: dark`).
+  - In `/app` e `/onchain-app.html` la modalità predefinita è `Auto` (passa automaticamente a `dark` dopo il tramonto e torna a `light` dopo l'alba; nella sezione `Profile → Appearance` viene mostrato anche l'orario calcolato `Automatic dark mode at sunset · HH:MM → HH:MM`). Sul terminale principale `/` (`app.js`), anche chi aveva selezionato il tema chiaro di giorno passa automaticamente in modalità scura non appena scende il sole (`afterTodaySunset`).
+- **Tasto rapido `☀` / `☾` sempre visibile per passare tra modalità scura e chiara:**
+  - **`/app` (`frontend/app-next/src/App.tsx`, `Sidebar.tsx`, `views/Profile.tsx`):** pulsante `<ThemeSwitch />` nell'header superiore (sia mobile che desktop) e `<ThemePill />` nella barra laterale desktop accanto al selettore lingua `IT / EN`, sincronizzati in tempo reale tramite l'evento `lae:theme-change` con il selettore `Light / Dark / Auto` in `Profile`.
+  - **Terminale `/` (`frontend/index.html`, `frontend/static/app.js`):** pulsante `#theme-toggle-btn` nella barra superiore desktop e nuovo pulsante `#mobile-strip-theme-btn` nella barra strumenti mobile.
+  - **Vista On-Chain `/onchain-app.html` (`frontend/onchain-app.html`, `frontend/static/onchain/theme.js`):** pulsante `#theme-toggle-onchain` nella topbar accanto al campanello notifiche.
+
 # 2026-10-23 — Redditivita' dei wallet EVM (Trading → Copy trading) — `seed-0415l`
 
 Lorenzo, 23/10: "nella sottosezione Profittabilita' del Wallet, aggiungi la possibilita' di fare check anche su wallet che fanno parte degli EVM, ovvero tutte le reti che sono state integrate nel wallet EVM".

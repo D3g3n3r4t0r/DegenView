@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0417l", "Modalita' scura automatica al calare del sole e tasto rapido per passare tra tema scuro e chiaro",
+     "Lorenzo, 24/10: 'l\\'app va in modalita\\' dark automaticamente al calare del sole' e 'in ogni caso inserisci un tasto per passare da modalita\\' scura a chiara'.",
+     "alta"),
     ("seed-0416l", "Redditivita' dei wallet EVM: massimo gli ultimi 7 giorni, per la lentezza",
      "Lorenzo, 23/10: 'per il check del wallet EVM si puo' impostare anche solamente 7 giorni massimo, gli ultimi 7 giorni massimo, visti i problemi di lentezza per rintracciare le transazioni e trade piu' vecchi'.",
      "media"),

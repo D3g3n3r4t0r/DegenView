@@ -3600,5 +3600,10 @@
     "status": "risolto",
     "at": 1792794320,
     "summary": "Reso universale lo scanner dei cluster e introdotto il generatore automatico di Pull Request self-healing (auto_chain_pr.py): (1) aggiunto il supporto nativo a Cheqd (https://explorer.cheqd.io/accounts, CHEQ/ncheq in 0,49s) e alle principali chain Cosmos-SDK (Osmosis, Akash, Celestia, Sei, Injective, Juno, Kujira, Neutron, Stargaze, Dymension, Saga, Kava) piu' l'auto-discovery dinamico su chains.cosmos.directory per qualsiasi explorer Mintscan, Ping.pub, BigDipper o explorer.<chain>.* con fallback automatico sui delegatori/validatori staking quando /cosmos/tx/v1beta1/txs restituisce HTTP 500; (2) aggiunto il fallback universale HTML/JSON/Bech32/EVM/Subscan; (3) quando viene incontrata una chain non ancora supportata o fallisce una scansione, auto_chain_pr.ensure_auto_pr sonda gli endpoint della chain, aggiorna discovered_chains.json, apre automaticamente una Pull Request su GitHub (branch auto/chain-support-<slug>) e registra la segnalazione in Bacheca mostrandone il link direttamente nel pannello del check."
+  },
+  "seed-0417l": {
+    "status": "risolto",
+    "at": 1792795500,
+    "summary": "Introdotta la modalita' scura automatica al calare del sole (calcolo astronomico di alba e tramonto per il giorno dell'anno con correzione ora legale e verifica automatica ogni 60 secondi) e aggiunto il tasto rapido ☀ / ☾ per passare istantaneamente tra tema scuro e tema chiaro in tutte le viste dell'app: nell'header e nella sidebar desktop di /app (App.tsx, Sidebar.tsx, Profile.tsx), nella topbar e nella barra mobile del terminale principale / (app.js, index.html) e nella barra superiore di /onchain-app.html (theme.js)."
   }
 }

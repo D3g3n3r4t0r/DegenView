@@ -20,7 +20,7 @@ import { Scout } from "./views/Scout";
 import { Watch } from "./views/Watch";
 import { Search } from "./views/Search";
 import { TokenSheet } from "./views/TokenSheet";
-import { Profile } from "./views/Profile";
+import { Profile, syncAutoTheme, useDarkTheme } from "./views/Profile";
 import { Clusters, appKey } from "./views/Clusters";
 import { Sidebar } from "./components/Sidebar";
 import { useDesk } from "./lib/desk";
@@ -80,6 +80,15 @@ export function App() {
   }, [narr]);
 
   useEffect(() => { load(); const t = setInterval(() => document.visibilityState === "visible" && load(), POLL_MS); return () => clearInterval(t); }, [load]);
+  useEffect(() => {
+    syncAutoTheme();
+    const id = window.setInterval(syncAutoTheme, 60_000);
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onVis = () => { if (document.visibilityState === "visible") syncAutoTheme(); };
+    document.addEventListener("visibilitychange", onVis);
+    mq.addEventListener?.("change", syncAutoTheme);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVis); mq.removeEventListener?.("change", syncAutoTheme); };
+  }, []);
   const wantSec = view === "today" || view === "sectors";
   useEffect(() => {
     if (!wantSec) return;
@@ -148,7 +157,7 @@ export function App() {
         {(view !== "search" || desk) && (
           <header className="mb-3 flex items-center justify-between gap-3 desk:mb-5">
             <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.03em] desk:text-[34px]">{t(view === "gems" && desk ? (sub === "database" ? "Database" : "Arenas") : LABEL[view])}</h1>
-            <span className="ml-auto desk:hidden"><LangSwitch /></span>
+            <span className="ml-auto flex items-center gap-1.5"><ThemeSwitch /><span className="desk:hidden"><LangSwitch /></span></span>
             <button type="button" onClick={() => setMore(true)} aria-label={t("Profile and more")}
               className="grid h-9 w-9 flex-none place-items-center rounded-full bg-ink text-[14px] font-semibold text-on-ink desk:hidden">{initial}</button>
             {inGems && desk && !split && <div className="w-[min(520px,50%)]"><Top3 list={podium} onOpen={openWith((e) => `Top 25 · ${t("score {n}", { n: sc(e) })}`)} /></div>}
@@ -251,6 +260,21 @@ function LangSwitch() {
           className={`h-7 w-8 rounded-full uppercase ${lang === l ? "bg-card text-text shadow-[0_1px_2px_rgb(0_0_0/.06)]" : "text-text-3"}`}>{l}</button>
       ))}
     </div>
+  );
+}
+
+function ThemeSwitch() {
+  const [dark, toggle] = useDarkTheme();
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={dark ? t("Switch to light theme") : t("Switch to dark theme")}
+      title={dark ? t("Switch to light theme") : t("Switch to dark theme")}
+      className="grid h-8 w-8 flex-none place-items-center rounded-full bg-pill text-[15px] text-text transition-colors hover:bg-ink hover:text-on-ink active:scale-95"
+    >
+      {dark ? "☀" : "☾"}
+    </button>
   );
 }
 

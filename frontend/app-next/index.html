@@ -8,8 +8,13 @@
     <script>
       // The theme picked in Profile (theme.js, "lae:theme"), before the first paint.
       try {
-        var t = localStorage.getItem("lae:theme");
-        if (t === "dark" || (t === "auto" && matchMedia("(prefers-color-scheme: dark)").matches)) {
+        var t = localStorage.getItem("lae:theme:mode") || "auto"; localStorage.setItem("lae:theme", t);
+        var d = new Date(), doy = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5);
+        var dst = d.getTimezoneOffset() < Math.max(new Date(d.getFullYear(), 0, 1).getTimezoneOffset(), new Date(d.getFullYear(), 6, 1).getTimezoneOffset()) ? 60 : 0;
+        var decl = -23.44 * Math.PI / 180 * Math.cos(2 * Math.PI / 365 * (doy + 10)), cosH = Math.max(-0.95, Math.min(0.95, -Math.tan(42.5 * Math.PI / 180) * Math.tan(decl)));
+        var halfMin = Math.round((12 / Math.PI) * Math.acos(cosH) * 60), noon = 730 + dst, cur = d.getHours() * 60 + d.getMinutes();
+        var sunDark = cur >= (noon + halfMin) || cur < (noon - halfMin) || matchMedia("(prefers-color-scheme: dark)").matches;
+        if (t === "dark" || (t === "auto" && sunDark)) {
           document.documentElement.dataset.theme = "dark";
           document.querySelector('meta[name="theme-color"]').content = "#111513";
         }

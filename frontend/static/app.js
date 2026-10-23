@@ -144,13 +144,35 @@ const COLORS_LIGHT = {
   let chartsReady = false;
 
   const THEME_KEY = "lae.theme";
+  const THEME_TS_KEY = "lae.theme.ts";
+
+  function solarBounds(now = new Date()) {
+    const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86_400_000);
+    const jan = new Date(now.getFullYear(), 0, 1).getTimezoneOffset();
+    const jul = new Date(now.getFullYear(), 6, 1).getTimezoneOffset();
+    const dst = now.getTimezoneOffset() < Math.max(jan, jul) ? 60 : 0;
+    const decl = (-23.44 * Math.PI / 180) * Math.cos((2 * Math.PI / 365) * (doy + 10));
+    const cosH = Math.max(-0.95, Math.min(0.95, -Math.tan(42.5 * Math.PI / 180) * Math.tan(decl)));
+    const halfMin = Math.round((12 / Math.PI) * Math.acos(cosH) * 60);
+    const noon = 730 + dst;
+    const sunriseMin = noon - halfMin;
+    const sunsetMin = noon + halfMin;
+    const curMin = now.getHours() * 60 + now.getMinutes();
+    const sunsetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Math.floor(sunsetMin / 60), sunsetMin % 60, 0, 0);
+    return { isNight: curMin >= sunsetMin || curMin < sunriseMin, sunsetTs: sunsetDate.getTime(), afterTodaySunset: curMin >= sunsetMin };
+  }
 
   function preferredTheme() {
     try {
       const saved = localStorage.getItem(THEME_KEY);
-      if (saved === "dark" || saved === "light") return saved;
+      if (saved === "dark" || saved === "light") {
+        const ts = Number(localStorage.getItem(THEME_TS_KEY) || 0);
+        const sb = solarBounds();
+        if (saved === "light" && sb.afterTodaySunset && ts < sb.sunsetTs) return "dark";
+        return saved;
+      }
     } catch { /* localStorage non disponibile: si usa la preferenza di sistema */ }
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return solarBounds().isNight || window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
 
   function applyTheme(mode, { persist = true, redraw = true } = {}) {
@@ -158,14 +180,16 @@ const COLORS_LIGHT = {
     try { bumpDraw(); } catch { /* drawing layer not set up yet */ }
     Object.keys(COLORS).forEach((k) => delete COLORS[k]);
     Object.assign(COLORS, mode === "dark" ? COLORS_DARK : COLORS_LIGHT);
-    const btn = el("theme-toggle-btn");
-    if (btn) {
-      btn.textContent = mode === "dark" ? "☾" : "☀";
-      btn.title = mode === "dark" ? "Switch to light theme" : "Switch to dark theme";
-      btn.setAttribute("aria-label", btn.title);
+    for (const id of ["theme-toggle-btn", "mobile-strip-theme-btn"]) {
+      const b = el(id);
+      if (b) {
+        b.textContent = mode === "dark" ? "☀" : "☾";
+        b.title = mode === "dark" ? "Switch to light theme" : "Switch to dark theme";
+        b.setAttribute("aria-label", b.title);
+      }
     }
     if (persist) {
-      try { localStorage.setItem(THEME_KEY, mode); } catch { /* ignora */ }
+      try { localStorage.setItem(THEME_KEY, mode); localStorage.setItem(THEME_TS_KEY, String(Date.now())); } catch { /* ignora */ }
     }
     // I colori del grafico non stanno nel CSS: sono opzioni passate alla
     // libreria alla creazione, quindi vanno riapplicati a mano.
@@ -11130,14 +11154,19 @@ const COLORS_LIGHT = {
   }
 
   function bindTheme() {
-    const btn = el("theme-toggle-btn");
-    if (btn) {
-      btn.addEventListener("click", () => {
-        const now = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-        applyTheme(now);
-        savePreferences();   // cosi' la scelta ti segue sull'altro computer
-      });
+    const toggleNow = () => {
+      const now = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      applyTheme(now);
+      savePreferences();
+    };
+    for (const id of ["theme-toggle-btn", "mobile-strip-theme-btn"]) {
+      const b = el(id);
+      if (b) b.addEventListener("click", toggleNow);
     }
+    window.setInterval(() => {
+      const want = preferredTheme();
+      if (document.documentElement.getAttribute("data-theme") !== want) applyTheme(want, { persist: false });
+    }, 60_000);
     // Se non e' mai stata fatta una scelta esplicita, il tema continua a
     // seguire il sistema: chi passa a scuro la sera se lo ritrova.
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

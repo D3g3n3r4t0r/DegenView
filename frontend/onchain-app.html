@@ -19,7 +19,7 @@
      preload: con font-display swap il testo esce subito, e su rete lenta
      i font rubavano banda ai moduli che portano i dati. -->
 <!-- Dark mode (theme.js) before the first paint: no light flash. -->
-<script>try{var t=localStorage.getItem("lae:theme");if(t==="dark"||(t==="auto"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script>try{var t=localStorage.getItem("lae:theme:mode")||"auto";localStorage.setItem("lae:theme",t);var d=new Date(),doy=Math.floor((d-new Date(d.getFullYear(),0,0))/864e5),dst=d.getTimezoneOffset()<Math.max(new Date(d.getFullYear(),0,1).getTimezoneOffset(),new Date(d.getFullYear(),6,1).getTimezoneOffset())?60:0,decl=-23.44*Math.PI/180*Math.cos(2*Math.PI/365*(doy+10)),cosH=Math.max(-0.95,Math.min(0.95,-Math.tan(42.5*Math.PI/180)*Math.tan(decl))),halfMin=Math.round(12/Math.PI*Math.acos(cosH)*60),noon=730+dst,cur=d.getHours()*60+d.getMinutes(),night=cur>=noon+halfMin||cur<noon-halfMin||matchMedia("(prefers-color-scheme: dark)").matches;if(t==="dark"||(t==="auto"&&night))document.documentElement.dataset.theme="dark"}catch(e){}</script>
 <!--onchain-importmap-->
 <!--onchain-modulepreload-->
 <link rel="stylesheet" href="/static/onchain/shell.css" />
@@ -75,6 +75,7 @@
           <span class="agent-say" data-agent-say>Scout watching</span>
         </button>
         <button type="button" class="tb-deposit" data-sheet="receive" data-trading-only>Deposit</button>
+        <button type="button" class="tb-bell" id="theme-toggle-onchain" aria-label="Toggle dark/light theme" title="Toggle dark/light theme">☾</button>
         <button type="button" class="tb-bell" id="inbox-btn" aria-label="Alerts">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>
           <i data-inbox-dot hidden></i>

@@ -10,17 +10,56 @@ import { t, locale } from "../lib/i18n";
 // theme, and the track record of the picks (track.js).
 const THEMES = [["light", "Light"], ["dark", "Dark"], ["auto", "Auto"]] as const;
 const KEY = "lae:theme";
+const MODE_KEY = "lae:theme:mode";
+export function solarSchedule(now = new Date()): { sunriseMin: number; sunsetMin: number; isNight: boolean; label: string } {
+  const start = new Date(now.getFullYear(), 0, 0);
+  const doy = Math.floor((now.getTime() - start.getTime()) / 86_400_000);
+  const janOff = new Date(now.getFullYear(), 0, 1).getTimezoneOffset();
+  const julOff = new Date(now.getFullYear(), 6, 1).getTimezoneOffset();
+  const dst = now.getTimezoneOffset() < Math.max(janOff, julOff) ? 60 : 0;
+  const decl = (-23.44 * Math.PI / 180) * Math.cos((2 * Math.PI / 365) * (doy + 10));
+  const cosH = Math.max(-0.95, Math.min(0.95, -Math.tan(42.5 * Math.PI / 180) * Math.tan(decl)));
+  const halfMin = Math.round((12 / Math.PI) * Math.acos(cosH) * 60);
+  const noon = 730 + dst;
+  const sunriseMin = noon - halfMin;
+  const sunsetMin = noon + halfMin;
+  const cur = now.getHours() * 60 + now.getMinutes();
+  const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  return { sunriseMin, sunsetMin, isNight: cur >= sunsetMin || cur < sunriseMin, label: `${fmt(sunsetMin)} → ${fmt(sunriseMin)}` };
+}
 const DAYS = [1, 3, 7, 30, 90];
 const pct = (f?: number | null) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 100)}%`);
 const share = (f?: number | null) => (f == null ? "—" : `${Math.round(f * 100)}%`);
 const tone = (f?: number | null) => (f == null ? "" : f >= 0 ? "text-up" : "text-down");
 
-function themePref(): string { try { return localStorage.getItem(KEY) || "light"; } catch { return "light"; } }
-function applyTheme(pref: string) {
-  try { localStorage.setItem(KEY, pref); } catch { /* private mode */ }
-  const dark = pref === "dark" || (pref === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+export function themePref(): string { try { return localStorage.getItem(MODE_KEY) || "auto"; } catch { return "auto"; } }
+export function applyTheme(pref: string, persist = true) {
+  if (persist) { try { localStorage.setItem(MODE_KEY, pref); localStorage.setItem(KEY, pref); } catch { /* private mode */ } }
+  const dark = pref === "dark" || (pref === "auto" && (solarSchedule().isNight || matchMedia("(prefers-color-scheme: dark)").matches));
   document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
+  if (meta) meta.content = dark ? "#111513" : "#efeae0";
+  window.dispatchEvent(new Event("lae:theme-change"));
 }
+export function syncAutoTheme() {
+  applyTheme(themePref(), false);
+}
+export function toggleDarkLight() {
+  const curDark = document.documentElement.dataset.theme === "dark";
+  applyTheme(curDark ? "light" : "dark", true);
+}
+export function useDarkTheme(): [boolean, () => void] {
+  const [dark, setDark] = useState(() => document.documentElement.dataset.theme === "dark");
+  useEffect(() => {
+    const sync = () => setDark(document.documentElement.dataset.theme === "dark");
+    sync();
+    window.addEventListener("lae:theme-change", sync);
+    return () => window.removeEventListener("lae:theme-change", sync);
+  }, []);
+  return [dark, toggleDarkLight];
+}
+
+
 const readFile = (f: File) => new Promise<string>((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = ko; r.readAsDataURL(f); });
 
 export function Profile({ onOpen, onMe }: { onOpen: (e: Gem, context: string) => void; onMe?: (p: api.Profile) => void }) {
@@ -33,7 +72,14 @@ export function Profile({ onOpen, onMe }: { onOpen: (e: Gem, context: string) =>
   const form = useRef<HTMLFormElement>(null);
 
   const me = (x: api.Profile) => { setP(x); onMe?.(x); };
-  useEffect(() => { api.getProfile().then((d) => me(d.profile)).catch(() => {}); api.getTrack().then(setTrack).catch(() => {}); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => {
+    api.getProfile().then((d) => me(d.profile)).catch(() => {});
+    api.getTrack().then(setTrack).catch(() => {});
+    const onTheme = () => setTheme(themePref());
+    window.addEventListener("lae:theme-change", onTheme);
+    return () => window.removeEventListener("lae:theme-change", onTheme);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, []);
 
   async function save(ev: React.FormEvent) {
     ev.preventDefault();
@@ -86,6 +132,7 @@ export function Profile({ onOpen, onMe }: { onOpen: (e: Gem, context: string) =>
         ))}
       </div>
 
+      <small className="mt-1.5 block text-[12px] text-text-3">{theme === "auto" ? `${t("Automatic dark mode at sunset")} · ${solarSchedule().label}` : theme === "dark" ? t("Dark mode always active") : t("Light mode always active")}</small>
       <h2 className="mb-2 mt-5 text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">{t("Track record")}</h2>
       <p className="text-[13px] text-text-2">{t("Every pick is frozen with its receipt and checked against the market. Research, not advice.")}</p>
       <div className="mt-2 flex gap-1">

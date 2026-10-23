@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { ICONS, LABEL, type View } from "./Dock";
 import { setLang, t, useLang } from "../lib/i18n";
+import { useDarkTheme } from "../views/Profile";
 
 export type Place = { v: View; sub?: "arenas" | "database"; label: string; icon?: View };
 
@@ -45,9 +46,25 @@ export function Sidebar({ view, sub, quality, initial, onGo }: {
           <span className="grid h-8 w-8 flex-none place-items-center rounded-full bg-on-ink text-[13px] font-semibold text-ink">{initial}</span>
           <span className="truncate">{t("Profile")}</span>
         </button>
+        <ThemePill />
         <LangPill />
       </div>
     </aside>
+  );
+}
+
+function ThemePill() {
+  const [dark, toggle] = useDarkTheme();
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={dark ? t("Switch to light theme") : t("Switch to dark theme")}
+      title={dark ? t("Switch to light theme") : t("Switch to dark theme")}
+      className="grid h-8 w-8 flex-none place-items-center rounded-full bg-white/10 text-[14px] text-on-ink transition-colors hover:bg-sage hover:text-ink"
+    >
+      {dark ? "☀" : "☾"}
+    </button>
   );
 }
 
