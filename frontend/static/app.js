@@ -3,78 +3,70 @@
 
   // Terminal noir — dark mode chart palette
   const COLORS_DARK = {
-    paperBg: "#080b0f",
-    ink: "#c9d1d9",
-    inkDim: "#6e7681",
-    gridMinor: "rgba(26, 37, 53, 0.55)",
-    gridMajor: "rgba(26, 37, 53, 0.85)",
-    bull: "#00d68f",
-    bear: "#ff4560",
-    accent: "#00d68f",
-    stamp: "#f0a500",
-    bullFill: "rgba(0, 214, 143, 0.12)",
-    bullBorder: "rgba(0, 214, 143, 0.75)",
-    bearFill: "rgba(255, 69, 96, 0.12)",
-    bearBorder: "rgba(255, 69, 96, 0.75)",
-    // Grigie e non colorate per direzione: su TradingView una imbalance e' una
-    // zona di prezzo, non un segnale rialzista o ribassista, e il colore lo
-    // suggeriva. Il verde/rosso resta agli order block, che una direzione ce
-    // l'hanno davvero.
-    fvgBullFill: "rgba(148, 158, 170, 0.16)",
-    fvgBullBorder: "rgba(148, 158, 170, 0.55)",
-    fvgBearFill: "rgba(148, 158, 170, 0.16)",
-    fvgBearBorder: "rgba(148, 158, 170, 0.55)",
-    confluenceFill: "rgba(0, 214, 143, 0.07)",
-    confluenceBorder: "rgba(0, 214, 143, 0.40)",
-    ema20: "#5b9cf6",
-    ema50: "#f0a500",
-    bbUpper: "rgba(91, 156, 246, 0.85)",
-    bbMid: "rgba(91, 156, 246, 0.45)",
-    bbLower: "rgba(91, 156, 246, 0.85)",
-    vwap: "#8b8bff",
-    bmsbSma: "#ff6b6b",
-    bmsbEma: "#2ec27e",
-    rsi: "#5b9cf6",
-    macd: "#5b9cf6",
-    macdSignal: "#f0a500",
-  };
+  paperBg: "#111513",
+  ink: "#e8ebe4",
+  inkDim: "#8f998c",
+  gridMinor: "rgba(232, 235, 228, 0.05)",
+  gridMajor: "rgba(232, 235, 228, 0.10)",
+  bull: "#63c48b",
+  bear: "#ec8468",
+  accent: "#c9d4c0",
+  stamp: "#d9a94f",
+  bullFill: "rgba(99, 196, 139, 0.14)",
+  bullBorder: "rgba(99, 196, 139, 0.78)",
+  bearFill: "rgba(236, 132, 104, 0.14)",
+  bearBorder: "rgba(236, 132, 104, 0.78)",
+  fvgBullFill: "rgba(201, 212, 192, 0.16)",
+  fvgBullBorder: "rgba(201, 212, 192, 0.55)",
+  fvgBearFill: "rgba(236, 132, 104, 0.14)",
+  fvgBearBorder: "rgba(236, 132, 104, 0.55)",
+  confluenceFill: "rgba(201, 212, 192, 0.09)",
+  confluenceBorder: "rgba(201, 212, 192, 0.42)",
+  ema20: "#63c48b",
+  ema50: "#d9a94f",
+  bbUpper: "rgba(201, 212, 192, 0.75)",
+  bbMid: "rgba(201, 212, 192, 0.40)",
+  bbLower: "rgba(201, 212, 192, 0.75)",
+  vwap: "#9b8cff",
+  bmsbSma: "#ec8468",
+  bmsbEma: "#63c48b",
+  rsi: "#c9d4c0",
+  macd: "#63c48b",
+  macdSignal: "#d9a94f",
+};
 
-  // Minimal Ink — light mode chart palette: monochrome candles, only P&L uses color
-  const COLORS_LIGHT = {
-    paperBg: "#ffffff",
-    ink: "#000000",
-    inkDim: "#666666",
-    gridMinor: "rgba(0, 0, 0, 0.05)",
-    gridMajor: "rgba(0, 0, 0, 0.10)",
-    bull: "#1a1a1a",
-    bear: "#1a1a1a",
-    accent: "#000000",
-    stamp: "#d97706",
-    bullFill: "rgba(0, 0, 0, 0.04)",
-    bullBorder: "#00a86b",
-    bearFill: "rgba(0, 0, 0, 0.06)",
-    bearBorder: "#e03040",
-    fvgBullFill: "rgba(120, 128, 138, 0.14)",
-    fvgBullBorder: "rgba(120, 128, 138, 0.50)",
-    fvgBearFill: "rgba(120, 128, 138, 0.14)",
-    fvgBearBorder: "rgba(120, 128, 138, 0.50)",
-    confluenceFill: "rgba(0, 0, 0, 0.03)",
-    confluenceBorder: "rgba(0, 0, 0, 0.22)",
-    // Candles stay monochrome, indicator lines do not: in shades of grey
-    // EMA 20 and 50, MACD and its signal, the two BMSB lines could not be
-    // told apart, and nothing said which was which.
-    ema20: "#2962ff",
-    ema50: "#e8710a",
-    bbUpper: "rgba(41, 98, 255, 0.60)",
-    bbMid: "rgba(41, 98, 255, 0.40)",
-    bbLower: "rgba(41, 98, 255, 0.60)",
-    vwap: "#8e24aa",
-    bmsbSma: "#d32f2f",
-    bmsbEma: "#00875a",
-    rsi: "#7e57c2",
-    macd: "#2962ff",
-    macdSignal: "#e8710a",
-  };
+const COLORS_LIGHT = {
+  paperBg: "#f8f5ef",
+  ink: "#2f3a32",
+  inkDim: "#687264",
+  gridMinor: "rgba(47, 58, 50, 0.06)",
+  gridMajor: "rgba(47, 58, 50, 0.12)",
+  bull: "#2f3a32",
+  bear: "#2f3a32",
+  accent: "#2f3a32",
+  stamp: "#d96b1f",
+  bullFill: "rgba(201, 212, 192, 0.32)",
+  bullBorder: "#2f7a4a",
+  bearFill: "rgba(180, 71, 47, 0.14)",
+  bearBorder: "#b4472f",
+  fvgBullFill: "rgba(201, 212, 192, 0.24)",
+  fvgBullBorder: "rgba(47, 122, 74, 0.55)",
+  fvgBearFill: "rgba(180, 71, 47, 0.12)",
+  fvgBearBorder: "rgba(180, 71, 47, 0.55)",
+  confluenceFill: "rgba(47, 58, 50, 0.05)",
+  confluenceBorder: "rgba(47, 58, 50, 0.28)",
+  ema20: "#2f7a4a",
+  ema50: "#8f6417",
+  bbUpper: "rgba(47, 122, 74, 0.55)",
+  bbMid: "rgba(47, 122, 74, 0.35)",
+  bbLower: "rgba(47, 122, 74, 0.55)",
+  vwap: "#5a527a",
+  bmsbSma: "#b4472f",
+  bmsbEma: "#2f7a4a",
+  rsi: "#2f3a32",
+  macd: "#2f7a4a",
+  macdSignal: "#8f6417",
+};
 
   // Il contenuto viene sostituito quando si cambia tema, ma l'oggetto resta lo
   // stesso: le decine di riferimenti a COLORS.x sparsi nel file leggono al
@@ -5214,7 +5206,7 @@
     // dense gridlines that read as "considered" on a wide desktop screen
     // just look busy/dated on a phone. Same hue, much lower opacity.
     const isMobile = window.matchMedia("(max-width: 760px)").matches;
-    const chartGridColor = isMobile ? "rgba(255, 255, 255, 0.035)" : COLORS.gridMinor;
+    const chartGridColor = COLORS.gridMinor;
     const baseOptions = {
       layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'JetBrains Mono', 'IBM Plex Mono', monospace" },
       grid: { vertLines: { color: chartGridColor }, horzLines: { color: chartGridColor } },
@@ -6337,7 +6329,7 @@
       // over the axis numbers.
       const x2 = mainChart.timeScale().width();
       if (x1 >= x2) return;
-      const light = COLORS.paperBg === "#ffffff";
+      const light = ((((COLORS.paperBg === "#ffffff" || COLORS.paperBg === "#f8f5ef") || COLORS.paperBg === "#f8f5ef") || COLORS.paperBg === "#f8f5ef") || COLORS.paperBg === "#f8f5ef");
       ctx.save();
       ctx.font = "10px 'JetBrains Mono', monospace";
       ctx.textAlign = "right";
@@ -6387,7 +6379,7 @@
         ctx.font = "9px 'JetBrains Mono', monospace";
         ctx.textAlign = "center";
         const tw = ctx.measureText(label).width;
-        ctx.fillStyle = COLORS.paperBg === "#ffffff" ? "rgba(255,255,255,0.85)" : "rgba(8,11,12,0.75)";
+        ctx.fillStyle = ((((COLORS.paperBg === "#ffffff" || COLORS.paperBg === "#f8f5ef") || COLORS.paperBg === "#f8f5ef") || COLORS.paperBg === "#f8f5ef") || COLORS.paperBg === "#f8f5ef") ? "rgba(255,255,255,0.85)" : "rgba(8,11,12,0.75)";
         ctx.fillRect(mx - tw / 2 - 3, my - 8, tw + 6, 12);
         ctx.fillStyle = colorA + "0.85)";
         ctx.fillText(label, mx, my + 2);
@@ -8485,7 +8477,7 @@
         const alpha = 0.5 + norm * 0.5;
         color = isBull ? `rgba(0,214,143,${alpha.toFixed(2)})` : `rgba(255,69,96,${alpha.toFixed(2)})`;
       } else {
-        color = COLORS.paperBg === "#ffffff"
+        color = ((((COLORS.paperBg === "#ffffff" || COLORS.paperBg === "#f8f5ef") || COLORS.paperBg === "#f8f5ef") || COLORS.paperBg === "#f8f5ef") || COLORS.paperBg === "#f8f5ef")
           ? `rgba(70,80,95,${(0.45 + norm * 0.40).toFixed(2)})`
           : `rgba(140,150,165,${(0.30 + norm * 0.40).toFixed(2)})`;
       }
