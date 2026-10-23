@@ -194,13 +194,19 @@ class MexcFutures(FuturesAdapter):
             sym = p.get("symbol", "")
             # positionType: 1 long, 2 short.
             is_long = int(p.get("positionType") or 1) == 1
-            mark = float(p.get("holdAvgPrice") or 0)
+            entry = float(p.get("openAvgPrice") or p.get("holdAvgPrice") or 0)
+            # The mark is the contract's fair price, read live: holdAvgPrice
+            # (used until 23/10) is the average entry, so the unrealized P&L
+            # read ~0 and the distance to liquidation was measured from entry.
+            try:
+                mark = await self.mark_price(sym, creds)
+            except Exception:
+                mark = entry
             try:
                 csize = await self._contract_size(sym)
             except Exception:
                 csize = 1.0
             qty = vol * csize
-            entry = float(p.get("openAvgPrice") or 0)
             out.append(Position(
                 exchange=self.slug, symbol=sym,
                 side="long" if is_long else "short", quantity=qty,
@@ -208,7 +214,7 @@ class MexcFutures(FuturesAdapter):
                 leverage=int(float(p.get("leverage") or 1)),
                 margin=float(p.get("im") or p.get("oim") or 0),
                 notional=qty * mark,
-                unrealized_pnl=float(p.get("realised") or 0) + (mark - entry) * qty * (1 if is_long else -1),
+                unrealized_pnl=(mark - entry) * qty * (1 if is_long else -1),   # "realised" is already banked
                 liquidation_price=float(p.get("liquidatePrice") or 0),
             ))
         return out

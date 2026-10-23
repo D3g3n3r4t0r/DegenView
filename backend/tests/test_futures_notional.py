@@ -20,8 +20,13 @@ def test_fixed_usdt_ignores_available_and_uses_leverage():
 
 
 def test_pct_balance_uses_available_and_leverage():
-    # 20% di 1000 USDT disponibili = 200 di margine, leva 3x = 600 di nozionale.
-    assert adapter._notional("pct_balance", 20.0, 3, available=1000.0) == pytest.approx(600.0)
+    # 20% di 1000 USDT disponibili = 200 di margine, leva 3x = 600 di nozionale,
+    # meno lo 0.5% tenuto da parte per la commissione d'apertura (23/10).
+    assert adapter._notional("pct_balance", 20.0, 3, available=1000.0) == pytest.approx(600.0 * 0.995)
+
+
+def test_all_the_margin_leaves_room_for_the_fee():
+    assert adapter._notional("pct_balance", 100.0, 1, available=1000.0) < 1000.0
 
 
 def test_base_qty_is_quantity_times_mark_ignoring_leverage():

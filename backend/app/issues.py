@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0385", "MEXC: quantita' rifiutate, uscite del bot sbagliate, acquisti al 100% impossibili",
+     "Richiesta in chat, 23/10: 'per il trading con denaro reale [...] utilizzeremo solo Mexc [...] fare i test su quello e verificare che sia tutto ok (chiavi, operazioni, ingressi, uscite, percentuale di portafoglio per il trade, ecc)'. Trovato con un MEXC finto che applica le regole vere e con prove sul MEXC vero: quantita' sempre a 6 decimali (MEXC ne accetta 2 su KAS, 0 su PEPE), uscite del bot calcolate come un nuovo ingresso, 100% del saldo senza margine, prezzo delle posizioni futures preso dal prezzo di carico.",
+     "alta"),
     ("seed-0384", "Scheda Trading: errori 500, ordini saltati annunciati come eseguiti, saldo con le chiavi del server",
      "Controllo della scheda Trading del 23/10, con il sito in locale e ordini veri con chiavi finte: (1) un rifiuto di Bitstamp o un errore di rete su un ordine manuale dava errore 500 e non finiva nel diario; (2) Binance Futures dava 500 su anteprima e ordine, e l'elenco delle posizioni saltava per tutti gli exchange; (3) i bot scrivevano 'eseguito' e mandavano 'Ordine ESEGUITO' anche per ordini mai partiti; (4) il copy trading Reale falliva sul wallet spento senza dirlo; (5) il saldo libero del Manual order veniva dalle chiavi del server. Richiesta in chat: 'Si, sistema tutto'.",
      "alta"),

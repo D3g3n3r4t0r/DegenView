@@ -34,6 +34,9 @@ import abc
 from dataclasses import dataclass
 
 
+PCT_MARGIN_KEEP = 0.995
+
+
 class FuturesExecutionError(RuntimeError):
     """Errore che arriva dall'exchange, gia' tradotto in italiano dove si
     riesce a riconoscerlo. Un solo tipo per tutti gli exchange: chi chiama
@@ -175,7 +178,9 @@ class FuturesAdapter(abc.ABC):
             if not mark or mark <= 0:
                 raise FuturesExecutionError("Market price not available for this symbol")
             return size_value * mark
-        margin = size_value if size_mode == "fixed_usdt" else available * size_value / 100
+        # A share of the margin keeps PCT_MARGIN_KEEP aside for the opening
+        # fee: 100% of it at 1x asked for more than there is (23/10).
+        margin = size_value if size_mode == "fixed_usdt" else available * size_value / 100 * PCT_MARGIN_KEEP
         return margin * leverage
 
     @staticmethod
