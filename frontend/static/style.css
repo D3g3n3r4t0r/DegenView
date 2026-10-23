@@ -4802,14 +4802,6 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
 .cockpit:not([data-area="analizza"]) .manual-order-form,
 .cockpit:not([data-area="analizza"]) .futures-order-form { max-width: 560px; }
 
-@media (min-width: 1100px) {
-  .cockpit[data-area="trading"] #opera-authenticated { column-count: 2; column-gap: 24px; }
-  .cockpit[data-area="trading"] #opera-authenticated > * { break-inside: avoid; }
-  .cockpit[data-area="trading"] #opera-authenticated > .section-title-row { break-after: avoid; }
-}
-@media (min-width: 1700px) {
-  .cockpit[data-area="trading"] #opera-authenticated { column-count: 3; }
-}
 
 /* ============================================================
    Instrument — componenti
@@ -5267,19 +5259,6 @@ td {
 .cz-bar { grid-column: 1; height: 4px; border-radius: 99px; background: var(--bg-sunk); overflow: hidden; }
 .cz-bar i { display: block; height: 100%; background: var(--violet); border-radius: 99px; }
 .cz-tf { grid-column: 2; grid-row: 3; font-family: var(--font-mono); font-size: 11px; color: var(--violet); }
-
-/* ── Alert a colonne: le sezioni si affiancano invece di impilarsi in
-   una pila lunga due schermate. Le colonne del testo tengono insieme
-   titolo e lista perche' un titolo orfano in fondo a una colonna non dice
-   piu' a cosa si riferisce. ── */
-@media (min-width: 1100px) {
-  .cockpit[data-area="alert"] #alert-authenticated { column-count: 2; column-gap: 22px; }
-  .cockpit[data-area="alert"] #alert-authenticated > * { break-inside: avoid; }
-  .cockpit[data-area="alert"] #alert-authenticated > .section-title-row { break-after: avoid; }
-}
-@media (min-width: 1600px) {
-  .cockpit[data-area="alert"] #alert-authenticated { column-count: 3; }
-}
 
 /* ── Allargare il grafico da qualsiasi area ── */
 .chart-expand-btn {
@@ -6190,3 +6169,35 @@ button, a, summary, label, select, input[type="checkbox"], input[type="radio"] {
 .tg-pause-row:not(.is-paused) .tg-pause-actions button { border-color: var(--warn); color: var(--warn); }
 .tg-pause-row.is-paused .tg-pause-actions button { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 @media (max-width: 520px) { .tg-pause-row { grid-template-columns: auto 1fr; grid-template-areas: "dot name" "dot state" ". actions"; } .tg-pause-actions { justify-content: flex-start; } }
+
+/* ── Alert and Trading as sub-tabs (layout B, 23/10; static/subtabs.js) ──
+   One section at a time, full width. Replaces the CSS columns that
+   rebalanced, and moved the sections, whenever one opened. */
+.subtabs { display: flex; align-items: flex-end; gap: 22px; border-bottom: 1px solid var(--border); margin: 4px 0 14px; overflow-x: auto; scrollbar-width: none; }
+.subtabs::-webkit-scrollbar { display: none; }
+.subtabs > button { flex: none; background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 1px; margin-bottom: -1px; font: inherit; font-size: .9rem; color: var(--ink-dim); cursor: pointer; white-space: nowrap; }
+.subtabs > button:hover { color: var(--ink); }
+.subtabs > button[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+.subtabs > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.subtabs > button.needs-attention::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--warn); vertical-align: middle; }
+.subtabs > .subtabs-chart { margin-left: auto; font-size: .8rem; border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; margin-bottom: 6px; }
+.subtab-panel[hidden] { display: none !important; }
+.opera-sub.subtab-panel { border: 0; margin-top: 0; background: transparent; }
+.opera-sub.subtab-panel > summary { cursor: default; padding: 0 0 10px; }
+.opera-sub.subtab-panel > summary::before { content: none; }
+.opera-sub.subtab-panel > .opera-sub-body, .opera-sub.subtab-panel > .trading-auto-section { padding: 0; }
+/* The chart closed in Alert and Trading; "Show chart" brings it back. */
+.cockpit.chart-mini .chart-area { display: none; }
+.cockpit[data-area="alert"] .tab-content.active > .panel,
+.cockpit[data-area="trading"] .tab-content.active > .panel { max-width: 1120px; }
+/* The On-chain wallet section imports the whole on-chain app (main.js), and
+   its modules add their own chrome straight to <body>: the agent button and
+   its panel (ask.js), the "pick a token" desktop pane (detail.js), the token
+   page dialog, background-job and hide toasts, burst canvases. Unstyled on
+   the classic site they covered the page (the agent icon page-sized) and
+   took the clicks (found 23/10 testing the sub-tabs). The wallet's own sheet
+   (#sheet: Receive, Send, Limits) lives inside the section and stays.
+   style.css is the classic site's only. */
+body > #ask-fab, body > .ask-sheet, body > .desk-empty, body > dialog.detail,
+body > .bg-hint, body > .hide-toast, body > .fx-burst { display: none !important; }
+.subtab-panel .telegram-setup, .subtab-panel .tg-pause { max-width: 720px; }

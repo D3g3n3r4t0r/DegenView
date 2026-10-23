@@ -953,7 +953,16 @@
   "8 hours": "8 ore",
   "24 hours": "24 ore",
   "No chat of this kind on your account.": "Nessuna chat di questo tipo sul tuo account.",
-  "Notifications on": "Notifiche attive"
+  "Notifications on": "Notifiche attive",
+  "Price alerts": "Alert di prezzo",
+  "Telegram": "Telegram",
+  "Bots & keys": "Bot e chiavi",
+  "Futures": "Futures",
+  "Copy trading": "Copy trading",
+  "Show chart": "Mostra grafico",
+  "Hide chart": "Nascondi grafico",
+  "Alert sections": "Sezioni di Alert",
+  "Trading sections": "Sezioni di Trading"
  },
  "patterns": [
   [

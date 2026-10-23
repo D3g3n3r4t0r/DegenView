@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0392", "Alert e Trading affollati: sezioni che saltano da una colonna all'altra",
+     "Richiesta in chat, 23/10: 'reimpostare a livello grafico l'interno delle sezioni alert e trading, perche' sono quelle piu' affollate, e quando si aprono le varie sezioni interne [...] ci sono dei problemi di visualizzazione, di passaggio di una finestra da una colonna all'altra'. Tre proposte (artifact 1mMR2eH6Aad9rJRjLyDrR8); scelta: 'Applica B per entrambe'.",
+     "media"),
     ("seed-0391", "Scansione cluster per le chain Layer 0, Layer 1 e Layer 2 in classifica (es. Kaspa, Injective)",
      "Lorenzo, 23/10: 'fai in modo che l'attuale scansione dei cluster sia in grado di rilevare acnhe le chain layer0 layer1 e 2 presenti nelle classifiche dell'app, ovviamente' e 'nello specifico kaspa; injective per esempio'. Il motore dei cluster accettava solo robinhood, ethereum, base, bsc e solana, scartando tutte le righe con chain='layer'.",
      "alta"),

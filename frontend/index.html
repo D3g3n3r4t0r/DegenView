@@ -702,32 +702,17 @@
           </div>
 
           <div id="alert-authenticated" class="hidden">
-            <div id="telegram-status-chip" class="telegram-status-chip hidden">
-              <span class="tg-status-label"><span class="tg-status-dot"></span>Telegram connected</span>
-              <button type="button" id="telegram-edit-btn" class="tg-edit-link">Edit</button>
+            <!-- 23/10, layout B ("Applica B per entrambe"): one sub-tab at a time,
+                 full width, instead of CSS columns that reshuffled the sections
+                 whenever one opened (static/subtabs.js). Ids unchanged. -->
+            <div class="subtabs" role="tablist" aria-label="Alert sections" data-subtabs="alert">
+              <button type="button" role="tab" data-subtab-target="alerts">Your alerts</button>
+              <button type="button" role="tab" data-subtab-target="price">Price alerts</button>
+              <button type="button" role="tab" data-subtab-target="history">History</button>
+              <button type="button" role="tab" data-subtab-target="telegram">Telegram</button>
+              <button type="button" class="subtabs-chart" data-chart-toggle>Show chart</button>
             </div>
-            <!-- 16/10: after Save, what each chat receives and whether it got the test message -->
-            <ul id="telegram-check" class="telegram-check hidden"></ul>
-            <!-- 23/10: pause a group's notifications for a while (static/telegram-pause.js, notify/pause.py) -->
-            <section id="tg-pause" class="tg-pause hidden" aria-labelledby="tg-pause-title">
-              <div class="section-title-row"><span class="section-eyebrow" id="tg-pause-title">Telegram notifications</span></div>
-              <ul id="tg-pause-list" class="tg-pause-list"></ul>
-              <p class="panel-hint">A paused group gets nothing; when it resumes, the bot says how many messages were skipped. Answers to what you write to the bot still arrive.</p>
-            </section>
-            <div id="telegram-setup" class="telegram-setup">
-              <label>Your Telegram chat ID
-                <input type="text" id="telegram-chat-id-input" placeholder="es. 123456789" autocomplete="off" />
-              </label>
-              <label>Alerts chat ID <small>(optional: a separate chat that gets only strategy signals and price alerts — optimizations, listings and gems go to the main chat. Write /chatid in it to get the id)</small>
-                <input type="text" id="telegram-signal-chat-id-input" placeholder="es. -1001234567890" autocomplete="off" />
-              </label>
-              <label>Gems chat ID <small>(optional: a separate chat for the new gems found by the research; empty = the main chat. Write /chatid in it to get the id)</small>
-                <input type="text" id="telegram-gems-chat-id-input" placeholder="es. -1001234567890" autocomplete="off" />
-              </label>
-              <button type="button" id="telegram-chat-id-save">Save</button>
-              <p class="panel-hint">Send any message to the bot, then open <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> to find your chat ID — ask for the bot link if you don't have it.</p>
-            </div>
-
+            <div class="subtab-panel" role="tabpanel" data-subtab="alerts">
             <div class="section-title-row">
               <span class="section-eyebrow">Your alerts</span>
               <span id="watchlist-count" class="section-count"></span>
@@ -760,6 +745,12 @@
               </label>
             </details>
 
+
+            <p class="panel-hint">Checked every minute in the background; each confirmed signal goes to Telegram.</p>
+
+            <ul id="watchlist-list" class="watchlist-cards"></ul>
+            </div>
+            <div class="subtab-panel" role="tabpanel" data-subtab="price" hidden>
             <!-- Price alerts -->
             <div class="section-title-row" style="margin-top:16px">
               <span class="section-eyebrow">Price alert</span>
@@ -778,11 +769,8 @@
               <button type="submit">+</button>
             </form>
             <ul id="price-alerts-list" class="pa-list"></ul>
-
-            <p class="panel-hint">Checked every minute in the background; each confirmed signal goes to Telegram.</p>
-
-            <ul id="watchlist-list" class="watchlist-cards"></ul>
-
+            </div>
+            <div class="subtab-panel" role="tabpanel" data-subtab="history" hidden>
             <!-- Alert log (storico) -->
             <div class="section-title-row" style="margin-top:16px">
               <span class="section-eyebrow">Alert history</span>
@@ -797,6 +785,35 @@
                 Notifications on a user-defined technical condition. Not investment advice.
               </p>
               <button type="button" id="open-script-from-alert" class="pine-secondary-link hidden">Custom Pine script →</button>
+            </div>
+            </div>
+            <div class="subtab-panel" role="tabpanel" data-subtab="telegram" hidden>
+            <div id="telegram-status-chip" class="telegram-status-chip hidden">
+              <span class="tg-status-label"><span class="tg-status-dot"></span>Telegram connected</span>
+              <button type="button" id="telegram-edit-btn" class="tg-edit-link">Edit</button>
+            </div>
+            <!-- 16/10: after Save, what each chat receives and whether it got the test message -->
+            <ul id="telegram-check" class="telegram-check hidden"></ul>
+            <!-- 23/10: pause a group's notifications for a while (static/telegram-pause.js, notify/pause.py) -->
+            <section id="tg-pause" class="tg-pause hidden" aria-labelledby="tg-pause-title">
+              <div class="section-title-row"><span class="section-eyebrow" id="tg-pause-title">Telegram notifications</span></div>
+              <ul id="tg-pause-list" class="tg-pause-list"></ul>
+              <p class="panel-hint">A paused group gets nothing; when it resumes, the bot says how many messages were skipped. Answers to what you write to the bot still arrive.</p>
+            </section>
+            <div id="telegram-setup" class="telegram-setup">
+              <label>Your Telegram chat ID
+                <input type="text" id="telegram-chat-id-input" placeholder="es. 123456789" autocomplete="off" />
+              </label>
+              <label>Alerts chat ID <small>(optional: a separate chat that gets only strategy signals and price alerts — optimizations, listings and gems go to the main chat. Write /chatid in it to get the id)</small>
+                <input type="text" id="telegram-signal-chat-id-input" placeholder="es. -1001234567890" autocomplete="off" />
+              </label>
+              <label>Gems chat ID <small>(optional: a separate chat for the new gems found by the research; empty = the main chat. Write /chatid in it to get the id)</small>
+                <input type="text" id="telegram-gems-chat-id-input" placeholder="es. -1001234567890" autocomplete="off" />
+              </label>
+              <button type="button" id="telegram-chat-id-save">Save</button>
+              <p class="panel-hint">Send any message to the bot, then open <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> to find your chat ID — ask for the bot link if you don't have it.</p>
+            </div>
+
             </div>
           </div>
         </div>
@@ -835,8 +852,20 @@
                  diario + ordine manuale, tutto insieme) — su un telefono era
                  un solo scroll enorme senza punti di riferimento. Ora e' un
                  piccolo menu di sezioni: si apre solo quella che serve. -->
+            <!-- 23/10, layout B ("Applica B per entrambe"): the sections are
+                 sub-tabs, one open at a time and full width (static/subtabs.js);
+                 the CSS columns that reshuffled them on opening are gone. -->
+            <div class="subtabs" role="tablist" aria-label="Trading sections" data-subtabs="trading">
+              <button type="button" role="tab" data-subtab-target="positions">Positions</button>
+              <button type="button" role="tab" data-subtab-target="manual">Manual order</button>
+              <button type="button" role="tab" data-subtab-target="bots">Bots &amp; keys</button>
+              <button type="button" role="tab" data-subtab-target="futures">Futures</button>
+              <button type="button" role="tab" data-subtab-target="copy">Copy trading</button>
+              <button type="button" role="tab" data-subtab-target="wallet">On-chain wallet</button>
+              <button type="button" class="subtabs-chart" data-chart-toggle>Show chart</button>
+            </div>
             <!-- ── Posizioni aperte ── -->
-            <details class="opera-sub">
+            <details class="opera-sub subtab-panel" data-subtab="positions">
               <summary>Open positions <span id="positions-count" class="section-count"></span></summary>
               <div class="opera-sub-body">
                 <div class="section-title-row">
@@ -853,7 +882,7 @@
             </details>
 
             <!-- ── Futures ── -->
-            <details class="opera-sub">
+            <details class="opera-sub subtab-panel" data-subtab="futures">
               <summary>Futures order <span class="trading-auto-badge futures-badge">⚠️ Leverage — real money</span></summary>
               <div class="trading-auto-section futures-section">
               <p class="panel-hint">Isolated margin, closes always <code>reduceOnly</code>. The server rejects the order without explicit confirmation, re-checks the leverage cap and verifies margin against the real balance: the checkbox below is the first of three gates, not the only one.</p>
@@ -966,7 +995,7 @@
             </details>
 
             <!-- Trading Automatico -->
-            <details class="opera-sub">
+            <details class="opera-sub subtab-panel" data-subtab="bots">
               <summary>Auto-trading <span class="trading-auto-badge">⚠️ Real money</span></summary>
               <div class="trading-auto-section">
               <p class="panel-hint trading-auto-hint">Set up API keys with trading permissions (not withdrawal) here. Which strategy can use them is decided in the Alert tab, ticker by ticker: "Alerts only" or "Auto-trading".</p>
@@ -986,7 +1015,7 @@
             <!-- Copy trading (22/10): follow a Solana wallet and copy its
                  swaps seconds later. Engine: app/trading/onchain/copytrade.py;
                  page: static/copytrade.js, loaded at the first opening. -->
-            <details class="opera-sub" id="copytrade-details">
+            <details class="opera-sub subtab-panel" data-subtab="copy" id="copytrade-details">
               <summary>Copy trading · Solana <span class="trading-auto-badge">⚠️ Real money</span></summary>
               <div class="trading-auto-section ct">
                 <p class="panel-hint">Paste a Solana wallet: its buys and sells are copied a few seconds later. Start in Simulated: real quotes, nothing sent.</p>
@@ -1096,7 +1125,7 @@
                  farebbe fetch/poll on-chain anche senza aprire mai questa
                  sezione. onchain-app.html resta intatta e raggiungibile
                  (link diretto, QR salvati) per chi ci arriva da fuori. -->
-            <details class="opera-sub" id="onchain-embed-details">
+            <details class="opera-sub subtab-panel" data-subtab="wallet" id="onchain-embed-details">
               <summary>On-chain wallet <span class="trading-auto-badge">⚠️ Real money</span></summary>
               <div class="opera-sub-body">
                 <p class="panel-hint">DEX swaps on Solana and Robinhood Chain — key generated on the server, never imported. Same "real money" rules as the sections above. <a href="/onchain-app.html" target="_blank" rel="noopener">Open as a standalone page</a> (handy for the key-reveal QR, which needs your phone anyway).</p>
@@ -1234,7 +1263,7 @@
             </details>
 
             <!-- Ordine manuale -->
-            <details class="opera-sub">
+            <details class="opera-sub subtab-panel" data-subtab="manual">
               <summary>Manual order <span class="trading-auto-badge">⚠️ Real money</span></summary>
               <div class="trading-auto-section">
               <div class="manual-order-form">
@@ -1612,5 +1641,6 @@
   <script src="/static/diagnostics.js" defer></script>
   <script src="/static/copytrade.js" defer></script>
   <script src="/static/telegram-pause.js" defer></script>
+  <script src="/static/subtabs.js" defer></script>
 </body>
 </html>
