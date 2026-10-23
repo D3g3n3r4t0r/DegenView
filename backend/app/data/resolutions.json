@@ -3528,5 +3528,10 @@
     "status": "risolto",
     "at": 1792788000,
     "summary": "Nel Cantiere (/cantiere) e nella Bacheca (#issues-panel) ogni task mostra ora una barra di percentuale di completamento in tempo reale (0%–100%) con aggiornamento al secondo e polling accelerato (ogni 8 s con lavori/deploy in corso): nuova sezione Task Cantiere & Bacheca in /cantiere, barra di avanzamento live per i deploy su Hetzner con indicazione della fase attiva, barra per le PR aperte, barra per i commit online e barra .issue-progress in ogni scheda della Bacheca."
+  },
+  "seed-0403l": {
+    "status": "risolto",
+    "at": 1792789050,
+    "summary": "Rimosso il limite giornaliero di 5 controlli cluster per account ('5 checks a day per account') in /api/onchain/coordinated-sells/check e in wallet_clusters.py (PER_ACCOUNT_PER_DAY = 0, MANUAL_PER_DAY = 10000): ora tutti gli account possono avviare scansioni manuali dei cluster senza blocchi giornalieri."
   }
 }

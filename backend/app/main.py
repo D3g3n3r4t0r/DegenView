@@ -4202,9 +4202,7 @@ async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends
         raise HTTPException(status_code=400, detail=f"chain: one of {', '.join(wallet_clusters.CHAINS)}")
     if not custom_url and not sync_watch._ok(token, chain):
         raise HTTPException(status_code=400, detail="token: not an address of that chain")
-    st = wallet_clusters.token_status(chain, token)
-    if not st["queued"] and not _full_score(user) and not wallet_clusters.account_take(str(user.id)):
-        raise HTTPException(status_code=429, detail=f"{wallet_clusters.PER_ACCOUNT_PER_DAY} checks a day per account")
+    wallet_clusters.account_take(str(user.id))
     started = wallet_clusters.start_manual(chain, token, str(body.get("symbol") or ""))
     return {"queued": started, "started": started, "chain": chain, "token": token, **wallet_clusters.token_status(chain, token)}
 

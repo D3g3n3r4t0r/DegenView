@@ -207,9 +207,10 @@ def test_manual_check_has_its_own_budget_and_goes_first(data):
 
 
 def test_account_cap(data):
-    for _ in range(wc.PER_ACCOUNT_PER_DAY):
+    # Lorenzo 23/10 (seed-0403l): removed the "5 checks a day per account" limit;
+    # every account can run manual cluster checks without hitting a daily cap.
+    for _ in range(15):
         assert wc.account_take("u1", now=1_900_000_000)
-    assert not wc.account_take("u1", now=1_900_000_000)
     assert wc.account_take("u2", now=1_900_000_000)
     assert wc.account_take("u1", now=1_900_000_000 + 86400)
 

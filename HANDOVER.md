@@ -1,3 +1,8 @@
+# 2026-10-23 — Rimozione del limite "5 checks a day per account" sui controlli manuali dei cluster — `seed-0403l`
+
+Lorenzo, 23/10: "rimuovi questa limitazione per i cluster : Poi dice “Max 5 check day for account”".
+- **Causa e correzione (`backend/app/main.py` & `backend/app/trading/onchain/wallet_clusters.py`):** dopo l'unificazione degli account (`settings.onchain_full_score_emails = ""`), `_full_score(user)` era `False` per tutti gli utenti e `/api/onchain/coordinated-sells/check` applicava il tetto `PER_ACCOUNT_PER_DAY = 5` rispondendo HTTP 429 (`"5 checks a day per account"`). Rimosso il blocco 429 in `onchain_coordinated_check` (`main.py`), impostato `PER_ACCOUNT_PER_DAY = 0` (illimitato) e `MANUAL_PER_DAY = 10_000` in `wallet_clusters.py`, e aggiornato `tests/test_wallet_clusters.py::test_account_cap`.
+
 # 2026-10-23 — Barra di percentuale di completamento in tempo reale per ogni task nel Cantiere (`/cantiere`) e nella Bacheca (`#issues-panel`) — `seed-0402l`
 
 Lorenzo, 23/10: "nel cantiere voglio vedere barra di percentuale di completamento di ogni task in tempo reale".

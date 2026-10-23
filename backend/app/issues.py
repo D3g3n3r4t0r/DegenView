@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0403l", "Rimozione del limite di 5 controlli cluster al giorno per account ('5 checks a day per account')",
+     "Lorenzo, 23/10: 'rimuovi questa limitazione per i cluster : Poi dice \"Max 5 check day for account\"'.",
+     "alta"),
     ("seed-0402l", "Barra di percentuale di completamento in tempo reale per ogni task nel Cantiere (/cantiere) e nella Bacheca",
      "Lorenzo, 23/10: 'nel cantiere voglio vedere barra di percentuale di completamento di ogni task in tempo reale'.",
      "alta"),

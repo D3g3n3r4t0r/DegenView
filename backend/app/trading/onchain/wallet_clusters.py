@@ -76,17 +76,17 @@ MAX_PER_DAY = 10_000    # no real cap (Lorenzo 22/10: "rendilo costante"); only 
 LOOP_S = 300            # candidates refreshed this often; builds run back to back
 GAP_S = 15
 REBUILD_TOP_S = 2 * 86400   # Top/arenas: rebuilt every 2 days, the rest weekly
-MANUAL_PER_DAY = 20       # checks asked for by hand: their own budget, first in line
-PER_ACCOUNT_PER_DAY = 5   # of which one account may ask (whitekobra: no own cap)
+MANUAL_PER_DAY = 10_000   # no real cap on manual checks (Lorenzo 23/10: rimossa limitazione)
+PER_ACCOUNT_PER_DAY = 0   # 0 = unlimited checks per day for every account
 
 
 def account_take(who: str, now: float | None = None) -> bool:
-    """Counts one manual check for `who` today; False past its cap."""
+    """Records a manual check for `who` today; no daily cap enforced (Lorenzo 23/10)."""
     now = now if now is not None else time.time()
     st = _state()
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     by = st.get("manual_by") if (st.get("manual_by") or {}).get("day") == day else {"day": day}
-    if by.get(who, 0) >= PER_ACCOUNT_PER_DAY:
+    if PER_ACCOUNT_PER_DAY > 0 and by.get(who, 0) >= PER_ACCOUNT_PER_DAY:
         return False
     by[who] = by.get(who, 0) + 1
     st["manual_by"] = by
