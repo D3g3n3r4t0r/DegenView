@@ -68,6 +68,7 @@ class Chain:
         self.T0 = int(time.time()) - self.LATEST
         self.logs, self.txs, self.max_span = logs, txs, max_span
         self.spans = []
+        self.lowest = None
 
     async def rpc(self, chain, method, params):
         if method == "eth_blockNumber":
@@ -78,6 +79,7 @@ class Chain:
             f = params[0]
             a, b = int(f["fromBlock"], 16), int(f["toBlock"], 16)
             self.spans.append(b - a + 1)
+            self.lowest = a if self.lowest is None else min(self.lowest, a)
             if self.max_span and b - a + 1 > self.max_span:
                 raise RuntimeError("RPC base (eth_getLogs): block range is too large")
             want_from = f["topics"][1] is not None
@@ -134,6 +136,9 @@ def test_a_closed_trade_is_measured_end_to_end(monkeypatch):
     assert day["pnl_usd"] == pytest.approx(300.0)
     assert r["tokens"][0]["mint"] == TOKEN
     assert pnl.cached("base", W.upper().replace("0X", "0x")) is r
+    # 7 days at most (23/10): no 30-day card, and no block older than a week was searched
+    assert set(r["windows"]) == {"24h", "7d"} and r["days"] == 7
+    assert chain.lowest >= Chain.LATEST - 7 * 86_400 - 1
 
 
 def test_bad_input():

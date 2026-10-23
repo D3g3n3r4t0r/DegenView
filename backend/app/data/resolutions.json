@@ -1,4 +1,9 @@
 {
+  "seed-0416l": {
+    "status": "risolto",
+    "at": 1792795329,
+    "summary": "L'analisi di redditivita' dei wallet EVM ora legge solo gli ultimi 7 giorni e mostra le schede delle ultime 24 ore e degli ultimi 7 giorni, senza quella dei 30 giorni. I blocchi da cercare sono circa un quarto di prima, quindi l'analisi e' molto piu' veloce. L'analisi dei wallet Solana resta a 30 giorni."
+  },
   "seed-0415l": {
     "status": "risolto",
     "at": 1792794660,

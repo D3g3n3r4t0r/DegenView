@@ -330,7 +330,7 @@
     if (c.partial) notes.push(`<p class="ct-warn">Too many transactions: only the latest ${c.transactions} were read.</p>`);
     if (c.unread) notes.push(`<p class="ct-reason">${c.unread} transactions could not be read and are missing.</p>`);
     if (r.chain ? !c.price_history : !c.sol_history) notes.push(`<p class="ct-reason">No ${r.chain ? esc(c.native) : "SOL"} price history: today's price was used.</p>`);
-    if (r.chain && c.partial && c.from) notes.push(`<p class="ct-warn">Read back to ${new Date(c.from * 1000).toLocaleDateString("en-GB")} only: the rest of the 30 days took too long.</p>`);
+    if (r.chain && c.partial && c.from) notes.push(`<p class="ct-warn">Read back to ${new Date(c.from * 1000).toLocaleDateString("en-GB")} only: the rest of the period took too long.</p>`);
     const open = r.still_open.length ? `<ul class="ct-list">${r.still_open.map((o) => `
       <li class="ct-row is-muted"><span class="ct-grow"><a class="ct-mono" href="${tokenUrl(r.chain, o.mint)}" target="_blank" rel="noopener">${short(o.mint)}</a> <span class="ct-dim">${ago(o.opened_at)}</span></span>
         <span class="ct-dim">put in</span> ${usd(o.invested_usd)}</li>`).join("")}</ul>` : "";
@@ -344,8 +344,8 @@
         ${followed ? "" : `<button type="button" class="section-action-btn" id="ct-pnl-follow">Copy this wallet</button>`}</p>
       <p class="ct-reason">Only trades opened and closed inside each period count: from the first buy to the last sell. Positions still open are left out.</p>
       ${notes.join("")}
-      <div class="ct-pnl-grid">${WINDOWS.map(([k, l]) => pnlCard(k, l, r.windows[k])).join("")}</div>
-      ${toks ? `<div class="section-title-row"><span class="section-eyebrow">Closed trades by token, 30 days</span></div>${toks}` : ""}
+      <div class="ct-pnl-grid">${WINDOWS.filter(([k]) => r.windows[k]).map(([k, l]) => pnlCard(k, l, r.windows[k])).join("")}</div>
+      ${toks ? `<div class="section-title-row"><span class="section-eyebrow">Closed trades by token, ${r.days === 7 ? "7" : "30"} days</span></div>${toks}` : ""}
       ${open ? `<div class="section-title-row"><span class="section-eyebrow">Still open, not counted</span><span class="section-count">${r.still_open_count}</span></div>${open}` : ""}`;
     $("ct-pnl-follow")?.addEventListener("click", () => {
       reset();
