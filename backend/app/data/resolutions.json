@@ -1,4 +1,10 @@
 {
+  "seed-0405l": {
+    "status": "risolto",
+    "at": 1792790091,
+    "summary": "Gli id della bacheca non possono piu' finire doppi in silenzio. La lettera dell'account distingue i due account, non due chat dello stesso account: in una sera tre numeri sono stati presi due volte, e git univa le due voci senza conflitti mentre il programma ne leggeva una sola. Ora uno script sceglie il numero libero guardando main subito prima del commit, controlla le collisioni e, se serve, sposta da solo la voce sul primo numero libero. Le PR lo controllano in automatico e il deploy si blocca se una chiave compare due volte. Ripulito anche seed-0398l, che era scritto due volte: la bacheca mostrava la versione piu' corta e vecchia.",
+    "detail": "scripts/seed_id.py (next / check / fix, solo libreria standard), test in tests/test_seed_id_script.py che riproducono il caso del 23/10, test_no_board_key_is_written_twice in test_issues.py (fallisce sul main di prima, che aveva seed-0398l doppio), workflow .github/workflows/board-ids.yml sulle PR, regola aggiornata in CLAUDE.md: numero scelto subito prima del commit, check prima del merge e dopo ogni rebase."
+  },
   "seed-0404l": {
     "status": "risolto",
     "at": 1792789155,
@@ -3519,11 +3525,6 @@
     "status": "risolto",
     "at": 1792784000,
     "summary": "Ripristinati subito tutti i ~46 progetti in Settori e Oggi per tutti gli account (disattivato il filtro _kobra_lists/_gem_view su onchain_full_score_emails che lasciava solo DREGG e PARE), introdotto il sistema di autoripristino automatico (_safe_arena_pool) che rileva se un filtro o la finestra a 30 giorni svuota la lista progetti e ripristina in automatico il pool completo, e accorciati i messaggi di deploy su Telegram in un unico messaggio compatto con scheda grafica in stile Design 01."
-  },
-  "seed-0398l": {
-    "status": "risolto",
-    "at": 1792786000,
-    "summary": "Rivoluzione delle performance su 3 Pilastri: (1) Native Rust Quant Core (backend/rust_core -> libdegenview_rs.so compilato nel Dockerfile multi-stage + rust_bridge.py e orjson SIMD in fast_json.py) per confirmed_events e cache degli indicatori LKI/LKI2 durante l'ottimizzazione; (2) Cache in-memory basata su mtime/impronta in arenas.py, sectors.py, coordinated_sells.py, wallet_clusters.py, parser.py e indicators.py; (3) Motore WebAssembly lato browser (wasm-engine.js) e cache SWR a 0 ms in /app."
   },
   "seed-0401l": {
     "status": "risolto",

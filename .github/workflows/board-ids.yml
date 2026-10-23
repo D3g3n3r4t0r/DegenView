@@ -1,0 +1,28 @@
+name: Board ids
+
+# Two chats can pick the same seed-NNNN (23/10: three times in one evening).
+# git merges such entries cleanly and json.load keeps only the last one, so
+# the check runs before the merge, against what main has now. Standard
+# library only: no install, a few seconds. Direct pushes to main are covered
+# by tests/test_issues.py in the deploy job.
+on:
+  pull_request:
+    paths:
+      - 'backend/app/issues.py'
+      - 'backend/app/data/resolutions.json'
+      - 'backend/app/data/replies.json'
+      - 'HANDOVER.md'
+      - 'scripts/seed_id.py'
+      - '.github/workflows/board-ids.yml'
+concurrency:
+  group: board-ids-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  seed-ids:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/seed_id.py check

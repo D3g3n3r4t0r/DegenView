@@ -67,6 +67,23 @@ restano come sono (fino a `seed-0394`). La stessa chiave va in `resolutions.json
 commit (le schede di deploy le riconoscono, `notify/deploy_card.py`); il test
 `test_new_seed_ids_carry_the_account_letter` blocca un id nuovo senza lettera.
 
+**La lettera distingue gli account, non le chat** (23/10 sera: due chat dello
+stesso account hanno preso `seed-0398l`, `seed-0401l` e `seed-0403l` due volte;
+git unisce le due voci senza conflitti e `json.load` tiene solo l'ultima, quindi
+una risoluzione spariva in silenzio). Per questo:
+
+- il numero si sceglie **subito prima del commit**, non all'inizio del lavoro:
+  `python scripts/seed_id.py next --letter l` (o `g`) guarda `origin/main`;
+- prima del merge (e dopo ogni rebase): `python scripts/seed_id.py check`;
+  se segnala una collisione, `python scripts/seed_id.py fix seed-NNNNx` sposta
+  solo la voce di questo ramo (`_SEED`, `resolutions.json`, `replies.json`,
+  righe nuove di `HANDOVER.md`) sul primo numero libero, poi va corretto il
+  messaggio di commit;
+- chi pubblica direttamente su `main` fa lo stesso `check` prima del push.
+
+Le PR lo controllano da sole (`.github/workflows/board-ids.yml`), e
+`test_no_board_key_is_written_twice` blocca il deploy se una chiave compare due volte.
+
 L'unione avviene in lettura, per `id`. Un id che non corrisponde a nessuna
 segnalazione è una diagnosi che nessuno vedrà mai — c'è un test che lo verifica.
 
