@@ -401,3 +401,29 @@ def test_public_board_masks_author_emails(store):
     assert "@" not in text.replace("DeepSeek", "")
     assert out["items"][0]["author"] == "so•••"
     assert out["items"][0]["replies"][0]["author"] == "ot•••"
+
+
+def test_new_seed_ids_carry_the_account_letter():
+    """Two people, two Claude accounts (23/10): parallel chats took the same
+    seed-NNNN twice. Ids after seed-0392 carry the account letter, g or l
+    (CLAUDE.md), and no id appears twice."""
+    import re
+    from collections import Counter
+
+    from app import issues as mod
+
+    importlib.reload(mod)
+    ids = [s[0] for s in mod._SEED]
+    dup = [k for k, n in Counter(ids).items() if n > 1]
+    assert not dup, f"ids used twice: {dup}"
+    for sid in ids:
+        m = re.fullmatch(r"seed-(\d{4})([a-z]*)", sid)
+        if not m:
+            continue                     # an old named id (seed-timeframe-ladder-20260930)
+        if int(m.group(1)) > 392:
+            assert m.group(2) in ("g", "l"), f"{sid}: a new entry needs the account letter g or l (CLAUDE.md)"
+
+
+def test_deploy_cards_find_ids_with_a_letter():
+    from app.notify import deploy_card
+    assert deploy_card._SEED_RE.findall("Fix it (seed-0393g, seed-0393l and seed-0042)") == ["seed-0393g", "seed-0393l", "seed-0042"]
