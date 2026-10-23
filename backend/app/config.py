@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     # True opens /app to every signed-in account (guest links aside) and sends
     # phones from /onchain-app.html to it; False goes back to the list above.
     onchain_next_for_all: bool = True
+    # Lorenzo, 22/10: "aggiorna anche l'app desktop [...] usando la stessa
+    # tecnologia". /app has a desktop layout; True sends computers there too,
+    # not only phones (?classic=1 still opens the current app). Off until
+    # Lorenzo confirms the desktop parity list: it moves the gems section.
+    onchain_next_desktop: bool = False
     # Accounts whose Top and arenas score the database rows on the whole row,
     # as the token page does (Lorenzo, 17/10: "per ora falla solo per
     # whitekobra"). Everyone else keeps the lighter rows, and the Telegram

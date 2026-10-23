@@ -96,7 +96,7 @@ export function Database({ onOpen, scan }: { onOpen: (p: Project) => void; scan:
           {chips.length > 1 && <button type="button" onClick={() => clear("all")} className="rounded-full px-3 py-1 text-[13px] text-text-2 underline">{t("Clear all")}</button>}
         </div>
       )}
-      <ol className="mt-3">
+      <ol className="mt-3 desk:grid desk:grid-cols-2 desk:gap-x-3">
         {shown.length ? shown.map((p, i) => <ProjectRow key={`${p.chain}:${p.token}`} p={p} i={i} onOpen={onOpen} />)
           : !loading && <li className="py-4 text-[14px] text-text-2">{narr.length ? t("No project in these narratives yet.") : query.q || query.status || query.kind ? t("Nothing matches.") : t("The database is filling up: sources are being read.")}</li>}
       </ol>
@@ -119,8 +119,8 @@ function ProjectRow({ p, i, onOpen }: { p: Project; i: number; onOpen: (p: Proje
   try { site = p.website ? new URL(p.website).hostname.replace(/^www\./, "") : ""; } catch { /* not a URL */ }
   const layer = p.chain === "layer" && p.overall?.layer && LAYERS[p.overall.layer] ? p.overall.layer : "";
   return (
-    <motion.li initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.26, delay: Math.min(i, 8) * 0.02 }} className="mb-2">
-      <button type="button" onClick={() => onOpen(p)} className="flex w-full items-start gap-3 rounded-[20px] bg-card px-3.5 py-3 text-left active:bg-pill">
+    <motion.li initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.26, delay: Math.min(i, 8) * 0.02 }} className="mb-2 desk:col-span-1">
+      <button type="button" onClick={() => onOpen(p)} className="flex w-full items-start gap-3 rounded-[20px] bg-card px-3.5 py-3 text-left active:bg-pill desk:h-full desk:hover:bg-press/40">
         <span className={`num w-7 flex-none pt-0.5 text-[15px] font-semibold ${out ? "line-through decoration-1 opacity-45" : ""}`}
           title={out ? t("Score, not on the board") : t("Score")}>{score}</span>
         <span className="min-w-0 flex-1">

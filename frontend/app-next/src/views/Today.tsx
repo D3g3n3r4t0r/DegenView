@@ -29,7 +29,10 @@ export function Today({ data, onOpen, onSectors, onWatch, early, onEarly }: { da
   const watchAll = watchedIds().flatMap((id) => { const hit = byId.get(id); return hit ? [{ id, hit, news: news.get(id) }] : []; });
   const watch = watchAll.slice(0, WATCH_ROWS);
   return (
-    <>
+    // Phone: one column in this order. Desktop: what changed on the left, the watchlist and the sectors on the right.
+    <div className="flex flex-col desk:grid desk:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] desk:items-start desk:gap-x-8">
+     <div className="contents desk:block">
+      <div className="order-1">
       <p className="text-[13px] text-text-2">
         {t.since ? tr("{n} projects ranked · {m} changes {since}", { n: ranked, m: t.items.length, since: sinceText(t.since) }) : tr("{n} projects ranked", { n: ranked })}
       </p>
@@ -42,35 +45,8 @@ export function Today({ data, onOpen, onSectors, onWatch, early, onEarly }: { da
         <span className="flex-1"><b className="block text-[15px] font-semibold">Early</b><small className="text-[12.5px] text-text-3">{tr("under $300k cap, every other bar passed")}</small></span>
         <b className="num text-[20px] font-semibold">{early ?? "…"}</b><span className="ml-2 text-text-3">›</span>
       </button>
-      {watch.length > 0 && (
-        <>
-          <div className="mt-4 flex items-baseline justify-between">
-            <h2 className="text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">{tr("Your watchlist")}</h2>
-            <button type="button" onClick={onWatch} className="text-[13px] font-medium text-text-2">{tr("Show all ›")}</button>
-          </div>
-          <ol className="mt-2 rounded-[20px] bg-card p-1.5">
-            {watch.map(({ id, hit, news: n }) => {
-              const e = hit.e;
-              const [chg, sign] = changeText(e.change_24h);
-              return (
-                <li key={id}>
-                  <button type="button" onClick={() => onOpen(e)} className="flex w-full items-center gap-3 rounded-[16px] px-2 py-2 text-left active:bg-pill">
-                    <Logo size={34} symbol={e.symbol} image={e.image} chain={e.chain} token={e.token_address} />
-                    <span className="min-w-0 flex-1">
-                      <b className="block truncate text-[15px] font-medium leading-tight">{e.symbol}</b>
-                      <small className="block truncate text-[12.5px] text-text-2">{n ? todayText(n)[0] : `${hit.sector}${e.arena_rank ? ` · #${e.arena_rank}` : ""}${e.score != null ? ` · ${tr("score {n}", { n: Math.round(e.score) })}` : ""}`}</small>
-                    </span>
-                    <span className="flex flex-col items-end">
-                      <b className="num text-[14px] font-semibold">{usdShort(e.market_cap)}</b>
-                      <em className={`num text-[12px] not-italic ${sign === "up" ? "text-up" : sign === "down" ? "text-down" : "text-text-3"}`}>{chg}</em>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-        </>
-      )}
+      </div>
+      <div className="order-3">
       {t.since ? (
         <>
           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -109,6 +85,41 @@ export function Today({ data, onOpen, onSectors, onWatch, early, onEarly }: { da
           {tr("Today compares the ranking with about a day ago. The first reading is saved now: changes show up after the next research run.")}
         </p>
       )}
+      </div>
+     </div>
+     <div className="contents desk:block">
+      <div className="order-2 desk:[&>div:first-child]:mt-0">
+      {watch.length > 0 && (
+        <>
+          <div className="mt-4 flex items-baseline justify-between">
+            <h2 className="text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">{tr("Your watchlist")}</h2>
+            <button type="button" onClick={onWatch} className="text-[13px] font-medium text-text-2">{tr("Show all ›")}</button>
+          </div>
+          <ol className="mt-2 rounded-[20px] bg-card p-1.5">
+            {watch.map(({ id, hit, news: n }) => {
+              const e = hit.e;
+              const [chg, sign] = changeText(e.change_24h);
+              return (
+                <li key={id}>
+                  <button type="button" onClick={() => onOpen(e)} className="flex w-full items-center gap-3 rounded-[16px] px-2 py-2 text-left active:bg-pill">
+                    <Logo size={34} symbol={e.symbol} image={e.image} chain={e.chain} token={e.token_address} />
+                    <span className="min-w-0 flex-1">
+                      <b className="block truncate text-[15px] font-medium leading-tight">{e.symbol}</b>
+                      <small className="block truncate text-[12.5px] text-text-2">{n ? todayText(n)[0] : `${hit.sector}${e.arena_rank ? ` · #${e.arena_rank}` : ""}${e.score != null ? ` · ${tr("score {n}", { n: Math.round(e.score) })}` : ""}`}</small>
+                    </span>
+                    <span className="flex flex-col items-end">
+                      <b className="num text-[14px] font-semibold">{usdShort(e.market_cap)}</b>
+                      <em className={`num text-[12px] not-italic ${sign === "up" ? "text-up" : sign === "down" ? "text-down" : "text-text-3"}`}>{chg}</em>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      )}
+      </div>
+      <div className={`order-4 ${watch.length ? "" : "desk:[&>div:first-child]:mt-0"}`}>
       <div className="mt-5 flex items-baseline">
         <h2 className="flex-1 text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">{tr("Strongest sectors")}</h2>
         <button type="button" onClick={onSectors} className="text-[13px] font-medium text-text-2">{tr("All sectors ›")}</button>
@@ -125,7 +136,10 @@ export function Today({ data, onOpen, onSectors, onWatch, early, onEarly }: { da
           </button>
         ))}
       </div>
-    </>
+      </div>
+     </div>
+    </div>
+
   );
 }
 

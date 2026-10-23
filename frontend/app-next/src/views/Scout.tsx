@@ -103,7 +103,9 @@ export function Scout({ sells, onSells }: { sells?: { risk: number | null } | nu
   const live = latest && Date.now() / 1000 - latest.t <= LIVE_S ? latest : null;
 
   return (
-    <>
+    // Desktop: the engine and Inside Engine on the left, the activity on the right.
+    <div className="desk:grid desk:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] desk:items-start desk:gap-8">
+     <div>
       {sells && (
         <button type="button" onClick={onSells} className="flex h-11 w-full items-center gap-2 rounded-full bg-card px-4 text-left text-[14px] font-medium">
           <span className="flex-1">{tr("Coordinated sells")}</span>
@@ -159,6 +161,8 @@ export function Scout({ sells, onSells }: { sells?: { risk: number | null } | nu
         </div>
       )}
 
+     </div>
+     <div className="desk:pt-1">
       <AnimatePresence>
         {live && (
           <motion.div key={live.t} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
@@ -191,7 +195,8 @@ export function Scout({ sells, onSells }: { sells?: { risk: number | null } | nu
         )) : <li className="py-3 text-[14px] text-text-2">{tr("No activity recorded yet today.")}</li>}
       </ul>
       {items.length >= 60 && <button type="button" onClick={earlier} className="mx-auto mt-3 block h-10 rounded-full bg-pill px-4 text-[14px]">{tr("Load earlier")}</button>}
-    </>
+     </div>
+    </div>
   );
 }
 

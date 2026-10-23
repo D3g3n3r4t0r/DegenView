@@ -46,7 +46,9 @@ export function Clusters({ onToken, inApp }: { onToken: (e: Gem) => void; inApp?
     .sort((a, b) => (b.risk?.score ?? -1) - (a.risk?.score ?? -1));
 
   return (
-    <>
+    // Desktop: the check and the live engine on the left, the checked tokens on the right.
+    <div className="desk:grid desk:grid-cols-2 desk:items-start desk:gap-8">
+     <div>
       <label className="flex h-12 items-center gap-2 rounded-full bg-card px-4 shadow-[inset_0_0_0_1.5px_var(--c-ink)]">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Paste a token address to check")} autoComplete="off" spellCheck={false}
           aria-label={t("Token address")} className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-text-3" />
@@ -62,8 +64,9 @@ export function Clusters({ onToken, inApp }: { onToken: (e: Gem) => void; inApp?
 
       <h2 className="mb-2 mt-5 text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">{t("Live")}</h2>
       <ClusterQueue onOpen={open} />
-
-      <div className="mb-2 mt-5 flex flex-wrap items-center gap-1.5">
+     </div>
+     <div>
+      <div className="mb-2 mt-5 flex flex-wrap items-center gap-1.5 desk:mt-0">
         <h2 className="mr-auto text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">{t("Checked, riskiest first")}</h2>
         {!!inApp?.size && ([["app", `${t("In the app")} ${nApp}`], ["all", `${t("All")} ${list?.length ?? 0}`]] as const).map(([k, label]) => (
           <button key={k} type="button" onClick={() => setScope(k)} aria-pressed={scope === k}
@@ -98,7 +101,8 @@ export function Clusters({ onToken, inApp }: { onToken: (e: Gem) => void; inApp?
             })}
           </ol>
         ) : <p className="rounded-[16px] bg-card p-4 text-[14px] text-text-2">{list.length ? t("No token here checked yet: see All.") : t("No token checked yet. Paste an address above.")}</p>}
-    </>
+     </div>
+    </div>
   );
 }
 
@@ -120,8 +124,8 @@ function Asked({ chain, token, onOpen, onReady }: { chain: string; token: string
 function LiveCheck({ chain, token, onClose, onOpen }: { chain: string; token: string; onClose: () => void; onOpen: () => void }) {
   return (
     <motion.div role="dialog" aria-modal="true" aria-label={t("Cluster check")} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}
-      transition={{ duration: 0.2 }} className="fixed inset-0 z-40 overflow-y-auto bg-bg">
-      <div className="mx-auto max-w-[540px] px-4 pb-28 pt-[calc(12px+env(safe-area-inset-top))]">
+      transition={{ duration: 0.2 }} className="fixed inset-0 z-40 overflow-y-auto bg-bg desk:left-[238px]">
+      <div className="mx-auto max-w-[540px] desk:max-w-[1100px] desk:pt-9 px-4 pb-28 pt-[calc(12px+env(safe-area-inset-top))]">
         <header className="mb-4 flex items-center gap-2">
           <button type="button" onClick={onClose} aria-label={t("Back")} className="grid h-10 w-10 place-items-center rounded-full bg-pill text-[18px]">‹</button>
           <span className="min-w-0 flex-1">

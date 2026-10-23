@@ -78,11 +78,12 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
   const alive = useRef(true);
   const want = useRef("");
 
-  useEffect(() => () => { alive.current = false; }, []);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   // Back on the phone closes the page, as the original's dialog.
   useEffect(() => {
-    history.pushState({ detail: 1 }, "");
+    // One entry for the page, also when the desktop swaps the token beside the list.
+    if (!history.state?.detail) history.pushState({ detail: 1 }, "");
     const pop = () => onClose();
     addEventListener("popstate", pop);
     return () => removeEventListener("popstate", pop);
@@ -233,8 +234,8 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
 
   return (
     <motion.div role="dialog" aria-label={tr("Token")} aria-modal="true" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
-      transition={{ duration: 0.18 }} className="fixed inset-0 z-40 flex flex-col bg-bg">
-      <header className="flex h-14 flex-none items-center gap-2 px-4 pt-[env(safe-area-inset-top)]">
+      transition={{ duration: 0.18 }} className="@container fixed inset-0 z-40 flex flex-col bg-bg desk:left-[var(--tp-left,238px)] desk:border-l desk:border-line">
+      <header className="flex h-14 flex-none items-center gap-2 px-4 pt-[env(safe-area-inset-top)] desk:h-[72px] desk:px-8">
         <button type="button" onClick={close} aria-label={tr("Back")} className="-ml-2 grid h-10 w-10 place-items-center"><Icon d="m15 5-7 7 7 7" className="h-6 w-6" /></button>
         <span className="flex min-w-0 flex-1 items-center gap-2.5 text-[16px] font-medium text-text-2">
           <b className="truncate font-medium">{open.context?.split(" · score")[0] || sym}</b>
@@ -246,11 +247,14 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
             d="M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 8.5 4 9.5 6-.5 1-1.6 2.6-3.3 3.9M6.2 7.6C4.3 8.9 3 10.8 2.5 12c1 2 4.5 6 9.5 6 1.5 0 2.9-.4 4.1-1M9.9 9.9a3 3 0 0 0 4.2 4.2" />
           <Round label={tr("Add to watchlist")} pressed={watch} onClick={() => setWatch(toggleWatch(watchId(e)))} d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8 6.8 19.6l1-5.8L3.5 9.7l5.9-.8z" />
           <Round label={copied === "yes" ? tr("Link copied") : tr("Share")} onClick={share} d="M12 15V3.5M8 7.5l4-4 4 4M6 11H5v9.5h14V11h-1" />
+          <a href={dex} target="_blank" rel="noopener" className="hidden h-10 items-center rounded-full bg-ink px-4 text-[14px] font-semibold text-on-ink desk:flex">DexScreener ↗</a>
         </span>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28">
-        <section className="mt-5 flex items-center gap-3">
+      {/* A wide page (the desktop): the chart and the money on the left, Why / Info on the right, each column scrolling on its own. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 desk:px-8 desk:pb-12 @min-[960px]:grid @min-[960px]:grid-cols-[minmax(0,1.55fr)_minmax(360px,1fr)] @min-[960px]:gap-10 @min-[960px]:overflow-hidden @min-[960px]:pb-0">
+       <div className="@min-[960px]:min-h-0 @min-[960px]:overflow-y-auto @min-[960px]:pb-12">
+        <section className="mt-5 flex items-center gap-3 desk:mt-1">
           <span className="w-[44px]"><Logo size={44} symbol={sym} image={e.image ?? entry?.image} chain={e.chain} token={e.token_address} /></span>
           <span className="min-w-0 flex-1">
             <b className="block truncate text-[18px] font-semibold">{name}</b>
@@ -280,7 +284,7 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
             ))}
           </div>
         </div>
-        <div className="h-[240px] overflow-hidden rounded-[16px] bg-card">
+        <div className="h-[240px] overflow-hidden rounded-[16px] bg-card desk:h-[min(460px,52vh)]">
           {chart.state === "candles" && !libFailed && <CandleChart candles={chart.candles} k={k} onFail={() => setLibFailed(true)} />}
           {chart.state === "candles" && libFailed && <Line candles={chart.candles} k={k} />}
           {chart.state === "embed" && <iframe className="h-full w-full rounded-[20px] border-0" src={embedUrl(e.chain, chart.pair, interval)} title={tr("{s} chart on DexScreener", { s: sym })} loading="lazy" referrerPolicy="no-referrer" />}
@@ -291,7 +295,9 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
         {note && <p className="mt-1 text-[13px] text-text-3">{note}</p>}
         <SellsMap chain={e.chain} token={e.token_address} />
         {e.chain === "solana" && <DevPayments token={e.token_address} symbol={sym} setup={!!entry?.benchmark || e.token_address === DREGG_MINT} />}
-        <nav ref={tabs} className="mt-[18px] flex scroll-mt-4 gap-1 rounded-full bg-pill p-1">
+       </div>
+       <div className="@min-[960px]:min-h-0 @min-[960px]:overflow-y-auto @min-[960px]:pb-12">
+        <nav ref={tabs} className="mt-[18px] flex scroll-mt-4 gap-1 rounded-full bg-pill p-1 @min-[960px]:sticky @min-[960px]:top-0 @min-[960px]:z-10 @min-[960px]:mt-1">
           {(["why", "info"] as const).map((t) => (
             <button key={t} type="button" aria-current={tab === t ? "true" : undefined} onClick={() => setTab(t)}
               className={`relative h-9 flex-1 rounded-full text-[14px] font-medium ${tab === t ? "text-text" : "text-text-2"}`}>
@@ -315,9 +321,10 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
             </>
           ) : entry ? <Details e={entry} /> : <InfoFallback chain={e.chain} token={e.token_address} pairUrl={pairUrl} />}
         </div>
+       </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-5" style={{ background: "linear-gradient(transparent, var(--c-bg) 18px)" }}>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 px-4 desk:hidden pb-[calc(env(safe-area-inset-bottom)+12px)] pt-5" style={{ background: "linear-gradient(transparent, var(--c-bg) 18px)" }}>
         <div className="pointer-events-auto flex gap-2">
           <button type="button" onClick={() => tabs.current?.scrollIntoView({ behavior: "smooth", block: "start" })} className="h-12 flex-1 rounded-full bg-pill text-[15px] font-semibold">{tr("Why")} · {tr("Info")}</button>
           <a href={dex} target="_blank" rel="noopener" className="flex h-12 flex-1 items-center justify-center rounded-full bg-ink text-[15px] font-semibold text-on-ink">DexScreener ↗</a>

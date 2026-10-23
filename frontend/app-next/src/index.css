@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@theme { --breakpoint-desk: 1100px; }
+
 @font-face { font-family: "Geist"; font-weight: 100 900; font-display: swap; src: url("/static/fonts/geist-latin.woff2") format("woff2"); }
 
 /* The phone skin of the app (static/onchain/classic.css), light and dark
