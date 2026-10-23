@@ -106,4 +106,26 @@ def test_lorenzo_and_whitekobra_share_the_exact_same_unified_app_by_default():
     other = SimpleNamespace(email="anyone@example.com", is_guest=False)
     for u in (lorenzo, kobra, other):
         assert main._onchain_variant(u) == "current"
-        assert main._full_score(u) is True
+        assert main._full_score(u) is False
+
+
+def test_self_healing_arena_pool_restores_projects_when_filter_collapses_them(monkeypatch):
+    full_projects = [
+        {"chain": "solana", "token_address": f"TOK{i}", "symbol": f"T{i}", "score": 80 - i}
+        for i in range(10)
+    ]
+    monkeypatch.setattr(main, "_top_entries", lambda n=500, narrative="", full=False, cutoff_days=30: list(full_projects))
+    monkeypatch.setattr(main, "_kobra_lists", lambda narrative="": (full_projects[:2], []))
+    pool, _ = main._safe_arena_pool("", full=True)
+    assert len(pool) == 10
+
+
+def test_deploy_message_is_concise_and_single_caption():
+    from app.notify import deploy_card
+    commits = [
+        {"sha": "24c1d73e99999", "commit": {"message": "Fix sectors projects and shorten deploy msg (seed-0397l)\n\nAggiornamento: Ripristinati tutti i progetti in Settori con autoripristino e accorciati i messaggi di deploy su Telegram"}},
+    ]
+    msg = deploy_card.build_deploy_message(commits)
+    assert len(msg) < 700
+    assert "╭" not in msg
+    assert "seed-0397l" in msg

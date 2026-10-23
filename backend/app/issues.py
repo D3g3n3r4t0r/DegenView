@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0397l", "Progetti spariti in Settori (solo 2 visibili), autoripristino pool e messaggi deploy Telegram troppo lunghi",
+     "Lorenzo, 23/10: 'sono spariti i progetti' (screenshot Settori con soli 2 progetti DREGG e PARE per via del filtro _kobra_lists/_gem_view attivo su tutti), 'rendi il sistema in grado di autoripristinarsi se rileva questo tipo di problemi', 'i messaggi su telegram sono troppo lunghi, falli meglio'.",
+     "alta"),
     ("seed-0396l", "Rifacimento completo della versione Desktop con il Design 01 (Today Editorial Pill) e Grafico protagonista",
      "Lorenzo, 23/10: 'e rifai anche la versione desktop , SU QUESTA DEVI DARE IL MASSIMO', 'ricordati che il grafico e\' la cosa principale'.",
      "alta"),

@@ -1113,11 +1113,14 @@ async def _notify_deploy() -> None:
         return              # only "Solo-account:" changes: nothing to announce
     from app.notify import deploy_card
     public_commits = [c for c in new_commits if not weekly_recap.private_account(c["commit"]["message"])]
+    rich_text = deploy_card.build_deploy_message(public_commits, repo=_GITHUB_REPO)
     card_png = deploy_card.render_deploy_card(public_commits)
     if card_png:
-        await telegram.send_photo(card_png, caption="🚀 <b>DegenView · Scheda Grafica Nuovo Deploy</b>")
-    rich_text = deploy_card.build_deploy_message(public_commits, repo=_GITHUB_REPO)
-    await telegram.send_message(rich_text)
+        sent = await telegram.send_photo(card_png, caption=rich_text)
+        if not sent:
+            await telegram.send_message(rich_text)
+    else:
+        await telegram.send_message(rich_text)
 
 
 
@@ -3906,10 +3909,7 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
         # The arenas (arenas.py, Lorenzo 07/10) take every project that
         # passed the gates, not a fixed 50; `entries` stays for older pages.
         full = _full_score(user)
-        if full:
-            pool, early = _kobra_lists(narrative)
-        else:
-            pool, early = _top_entries(ARENA_POOL, narrative), onchain_leaderboard.board().get("early") or []
+        pool, early = _safe_arena_pool(narrative, full=full)
         for e in pool:
             e["backtests"] = None
         out = pool[:max(1, min(int(n), 50))]
@@ -3934,6 +3934,43 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
             "backtests": onchain_strategy_lab.status(_top_entries(50))}
 
 
+def _safe_arena_pool(narrative: str = "", full: bool = False) -> tuple[list[dict], list[dict]]:
+    """Self-healing arena pool: if a strict filter (_kobra_lists/_gem_view) or a
+    30-day analysis cutoff collapses the visible projects (e.g. from ~46 down
+    to 2), automatically restores the full _top_entries pool so Sectors and
+    Today never lose their projects."""
+    base_pool = _top_entries(ARENA_POOL, narrative, full=False)
+    base_early = onchain_leaderboard.board().get("early") or []
+    if full:
+        pool, early = _kobra_lists(narrative)
+        if len(base_pool) >= 5 and len(pool) < max(5, len(base_pool) // 2):
+            logger.warning(
+                "Self-healing: filtered pool collapsed to %d/%d projects; restoring full arena pool",
+                len(pool), len(base_pool),
+            )
+            seen = {f"{e.get('chain')}:{e.get('token_address')}" for e in pool}
+            pool = list(pool) + [dict(e) for e in base_pool if f"{e.get('chain')}:{e.get('token_address')}" not in seen]
+            pool.sort(key=lambda e: -(e.get("score") or 0))
+            if not early and base_early:
+                early = list(base_early)
+    else:
+        pool, early = base_pool, base_early
+    if not full and not narrative and len(pool) < 5:
+        try:
+            relaxed = _top_entries(ARENA_POOL, narrative, full=False, cutoff_days=365)
+        except TypeError:
+            relaxed = []
+        if len(relaxed) > len(pool):
+            logger.warning(
+                "Self-healing: base pool had only %d projects (30d cutoff); restored %d projects via 365d window",
+                len(pool), len(relaxed),
+            )
+            seen = {f"{e.get('chain')}:{e.get('token_address')}" for e in pool}
+            pool = list(pool) + [dict(e) for e in relaxed if f"{e.get('chain')}:{e.get('token_address')}" not in seen]
+            pool.sort(key=lambda e: -(e.get("score") or 0))
+    return pool, early
+
+
 @app.get("/api/onchain/sectors")
 async def onchain_sectors_view(user: User = Depends(auth.get_current_user)) -> dict:
     """Sectors and Today for the React app (sectors.py, Lorenzo 22/10
@@ -3941,7 +3978,7 @@ async def onchain_sectors_view(user: User = Depends(auth.get_current_user)) -> d
     per sector, with what changed since about a day ago."""
     _require_onchain_enabled()
     full = _full_score(user)
-    pool = _kobra_lists("")[0] if full else _top_entries(ARENA_POOL, "")
+    pool, _ = _safe_arena_pool("", full=full)
     tenure = onchain_arenas.load_tenure() if full else None
     built = onchain_arenas.build(pool, tenure=tenure)
     return await asyncio.to_thread(onchain_sectors.view, built["arenas"], None, True, "full" if full else "base")
@@ -4272,11 +4309,7 @@ ARENA_POOL = 500   # every gated project; the arenas set no fixed size
 
 
 def _full_score(user: User | None) -> bool:
-    raw = (settings.onchain_full_score_emails or "").strip()
-    email = getattr(user, "email", None)
-    if raw == "*":
-        return bool(email)
-    return email in email_allowlist(raw)
+    return getattr(user, "email", None) in email_allowlist(settings.onchain_full_score_emails)
 
 
 # Whitekobra's gems (Lorenzo, 17/10): one row per project, nothing launched
@@ -4481,7 +4514,7 @@ def _crashed_out(chain: str, token: str) -> bool:
     return True
 
 
-def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[dict]:
+def _top_entries(n: int = 50, narrative: str = "", full: bool = False, cutoff_days: int = 30) -> list[dict]:
     """La Top della schermata Strategie: la bacheca delle gemme piu' le
     righe studiate migliori del database, per punteggio. `narrative`
     (chiavi separate da virgole) tiene solo i progetti di quelle narrative.
@@ -4518,7 +4551,7 @@ def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[d
             onchain_gem_hold.keep(k, "cap", False)
             onchain_gem_hold.keep(k, "floor", False)
     seen = {f"{e['chain']}:{e['token_address']}" for e in out}
-    cutoff = time.time() - 30 * 86400
+    cutoff = time.time() - cutoff_days * 86400
     # "ranked" too: a row whose flag outlived its place on the board was
     # skipped by both halves of the Top (Lorenzo, 28/09: high scores never on the podium).
     rows = [r for st in ("studied", "ranked")

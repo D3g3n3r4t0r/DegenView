@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     # as the token page does (Lorenzo, 17/10: "per ora falla solo per
     # whitekobra"). Everyone else keeps the lighter rows, and the Telegram
     # alerts and the nightly run read the Top as before.
-    onchain_full_score_emails: str = "*"
+    onchain_full_score_emails: str = ""
     # Accounts that may set outside-service keys in Diagnostics (service_keys.py)
     # besides the admins: whitekobra (Lorenzo, 20/10, the Groq key).
     service_keys_emails: str = "sha256:ec987139be8d4d3991504dbe9bd5c8f92ce102948dee4e4305db5e84e841eb0e,sha256:fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"

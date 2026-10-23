@@ -3464,5 +3464,10 @@
     "status": "risolto",
     "at": 1792782500,
     "summary": "Rifatta la versione Desktop con il Design 01 (Today Editorial Pill — Editorial Quant Workstation): sidebar flottante in Forest Ink (#2f3a32) con pillole attive in salvia (#c9d4c0) in stile /app#today, top bar editoriale a pillole, grafico incorniciato e sempre protagonista (58%+ della larghezza in tutte le sezioni e aperto di default anche in Alert e Trading), card destre sopraelevate (#f8f5ef), 4-figures del backtest in Instrument Serif monumentale (28px), righe Watchlist con avatar squircle e sotto-schede a pillola."
+  },
+  "seed-0397l": {
+    "status": "risolto",
+    "at": 1792784000,
+    "summary": "Ripristinati subito tutti i ~46 progetti in Settori e Oggi per tutti gli account (disattivato il filtro _kobra_lists/_gem_view su onchain_full_score_emails che lasciava solo DREGG e PARE), introdotto il sistema di autoripristino automatico (_safe_arena_pool) che rileva se un filtro o la finestra a 30 giorni svuota la lista progetti e ripristina in automatico il pool completo, e accorciati i messaggi di deploy su Telegram in un unico messaggio compatto con scheda grafica in stile Design 01."
   }
 }
