@@ -260,10 +260,10 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
     }).join("");
   }
 
-  function runState(r){
+  function runState(r, resolvedBy){
     if(r.status !== "completed") return r.status === "in_progress" ? ["run","in corso"] : ["run","in coda"];
     if(r.conclusion === "success") return ["ok","online"];
-    if(r.conclusion === "failure" || r.conclusion === "timed_out") return ["bad","fallito"];
+    if(r.conclusion === "failure" || r.conclusion === "timed_out") return resolvedBy ? ["ok","risolto"] : ["bad","fallito"];
     if(r.conclusion === "cancelled") return ["skip","annullato"];
     return ["skip", r.conclusion || "—"];
   }
@@ -271,8 +271,11 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
     var live = runs.filter(function(r){ return r.status !== "completed"; }).length;
     $("n-dep").textContent = live ? live + " in corso" : "";
     if(!runs.length){ $("deploys").innerHTML = '<li class="empty">Nessun deploy recente su main.</li>'; return; }
+    var latestOkSha = null;
     $("deploys").innerHTML = runs.map(function(r){
-      var st = runState(r);
+      if(r.status === "completed" && r.conclusion === "success") latestOkSha = String(r.head_sha || "");
+      var resolvedBy = (r.conclusion === "failure" || r.conclusion === "timed_out") ? latestOkSha : null;
+      var st = runState(r, resolvedBy);
       var start = r.run_started_at || r.created_at;
       var d = r.status === "completed"
         ? esc(dur(new Date(r.updated_at) - new Date(start)))
@@ -284,7 +287,7 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
         '<div class="state ' + st[0] + '"><i></i>' + esc(st[1]) + '</div>' +
         '<div class="body"><div class="main-t"><a href="' + esc(r.html_url) + '" target="_blank" rel="noopener">' + esc(label) + '</a></div>' +
         '<div class="sub">' + (p.pr ? '<span class="chip pr">#' + esc(p.pr) + '</span> ' : '') +
-        '<a class="sha" href="' + WEB + '/commit/' + esc(r.head_sha) + '" target="_blank" rel="noopener"><code class="br">' + esc(String(r.head_sha).slice(0,7)) + '</code></a> · durata ' + d + '</div></div>' +
+        '<a class="sha" href="' + WEB + '/commit/' + esc(r.head_sha) + '" target="_blank" rel="noopener"><code class="br">' + esc(String(r.head_sha).slice(0,7)) + '</code></a> · durata ' + d + (resolvedBy ? ' · risolto da <a class="sha" href="' + WEB + '/commit/' + esc(resolvedBy) + '" target="_blank" rel="noopener"><code class="br">' + esc(resolvedBy.slice(0,7)) + '</code></a>' : '') + '</div></div>' +
         '<div class="meta">' + relSpan(start) + '</div></li>';
     }).join("");
   }

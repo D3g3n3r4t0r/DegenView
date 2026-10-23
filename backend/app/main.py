@@ -8873,7 +8873,7 @@ async def engn_page() -> HTMLResponse:
 # stiamo pushando". The repository is public; the server reads GitHub for
 # the page (the site's CSP keeps browsers on their own origin), a minute of
 # cache per list, with the API token when there is one.
-_CHANGES_PATHS = {"pulls": "pulls?state=open&per_page=30", "runs": "actions/runs?branch=main&per_page=10",
+_CHANGES_PATHS = {"pulls": "pulls?state=open&per_page=30", "runs": "actions/runs?branch=main&per_page=20",
                   "commits": "commits?sha=main&per_page=30"}
 _changes_cache: dict[str, tuple[float, object]] = {}
 
