@@ -6162,3 +6162,14 @@ button, a, summary, label, select, input[type="checkbox"], input[type="radio"] {
 .ct-real { display: flex; gap: 8px; align-items: flex-start; font-size: .82rem; margin-top: 6px; cursor: pointer; }
 .ct-form .mo-row { flex-wrap: wrap; }
 .ct-form .mo-row .mo-field-grow { flex: 1 1 260px; }
+.ct-pnl { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-sunk); }
+.ct-pnl-input { flex: 1 1 260px; }
+.ct-pnl-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .8rem; margin: 4px 0 0; }
+.ct-pnl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.ct-pnl-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--bg); }
+.ct-pnl-card h4 { margin: 0 0 8px; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-dim); }
+.ct-pnl-card dl { display: grid; grid-template-columns: 1fr auto; gap: 5px 10px; margin: 0; font-size: .82rem; }
+.ct-pnl-card dt { color: var(--ink-dim); }
+.ct-pnl-card dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.ct-pnl-card dd:first-of-type b { font-size: 1.05rem; }
+.ct-warn { margin: 0; font-size: .8rem; color: var(--warn); background: var(--warn-soft); padding: 6px 9px; border-radius: 6px; }

@@ -61,6 +61,7 @@
         <span class="ct-grow"><b>${esc(f.label || short(f.address))}</b> <a class="ct-mono ct-dim" href="https://solscan.io/account/${esc(f.address)}" target="_blank" rel="noopener">${short(f.address)}</a></span>
         <span class="ct-dim">${f.copy === "both" ? "Entries and exits" : "Entries only"}</span>
         <span>${f.sizing === "pct" ? `${f.pct}%` : `${usd(f.fixed_usd)} / position`}</span>
+        <button type="button" class="section-action-btn" data-act="analyze">Analyze</button>
         <button type="button" class="section-action-btn" data-act="edit">Edit</button>
         <button type="button" class="section-action-btn" data-act="toggle">${f.mode === "off" ? "Resume" : "Pause"}</button>
         <button type="button" class="section-action-btn" data-act="remove">Remove</button>
@@ -187,6 +188,7 @@
     const f = state.follows.find((x) => x.address === address);
     try {
       if (btn.dataset.act === "edit") return fill(f);
+      if (btn.dataset.act === "analyze") return analyze(address);
       if (btn.dataset.act === "remove") {
         if (!confirm("Stop following this wallet? Open copied positions stay, and can be sold from the list.")) return;
         await api(`/api/copytrade/follow/${encodeURIComponent(address)}`, { method: "DELETE" });
@@ -224,6 +226,94 @@
     if (accept && !confirm("Allow Real mode on this account? Copies will spend the Solana wallet's money without asking each time.")) { ev.target.checked = false; return; }
     try { await api("/api/copytrade/real", { method: "POST", body: JSON.stringify({ accept }) }); load(); }
     catch (e) { msg(e.message, true); }
+  });
+
+  // ── Wallet profitability (wallet_pnl.py): 24 h / 7 d / 30 d ──────────
+  const WINDOWS = [["24h", "Last 24 hours"], ["7d", "Last 7 days"], ["30d", "Last 30 days"]];
+  const pct = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v}%`);
+  const cls = (v) => (v == null || v === 0 ? "" : v > 0 ? "ct-up" : "ct-down");
+  let pnlRun = 0;
+
+  function pnlCard(key, label, w) {
+    const rows = [
+      ["Realized profit", `<b class="${cls(w.realized_usd)}">${signed(w.realized_usd) || "$0"}</b>`],
+      ["Return on sold", `<b class="${cls(w.roi_pct)}">${pct(w.roi_pct)}</b>`],
+      ["Opened and closed in the period", `<span class="${cls(w.opened_and_closed_usd)}">${signed(w.opened_and_closed_usd) || "$0"}</span>`],
+      ["Tokens closed", `${w.tokens_closed}`],
+      ["Win rate", w.win_rate_pct == null ? "—" : `${w.win_rate_pct}% <span class="ct-dim">(${w.wins}/${w.tokens_closed})</span>`],
+      ["Buys", `${w.buys} · ${usd(w.bought_usd)}`],
+      ["Sells", `${w.sells} · ${usd(w.sold_usd)}`],
+      ["Best token", w.best ? `<a class="ct-mono" href="https://dexscreener.com/solana/${esc(w.best.mint)}" target="_blank" rel="noopener">${short(w.best.mint)}</a> <span class="ct-up">${signed(w.best.pnl_usd)}</span>` : "—"],
+      ["Worst token", w.worst ? `<a class="ct-mono" href="https://dexscreener.com/solana/${esc(w.worst.mint)}" target="_blank" rel="noopener">${short(w.worst.mint)}</a> <span class="ct-down">${signed(w.worst.pnl_usd)}</span>` : "—"],
+    ];
+    return `<section class="ct-pnl-card" data-window="${key}"><h4>${label}</h4><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+      ${w.sells_without_cost ? `<p class="ct-reason">${w.sells_without_cost} sells of tokens with no buy in the history: left out of the profit</p>` : ""}</section>`;
+  }
+
+  function renderPnl(r) {
+    const c = r.coverage;
+    const notes = [];
+    if (r.bot_like) notes.push(`<p class="ct-warn">Looks like a bot: ${r.swaps_per_day} swaps a day. Copying it mostly pays fees.</p>`);
+    if (c.partial) notes.push(`<p class="ct-warn">Too many transactions: only the latest ${c.transactions} were read.</p>`);
+    if (c.unread) notes.push(`<p class="ct-reason">${c.unread} transactions could not be read and are missing.</p>`);
+    if (!c.sol_history) notes.push(`<p class="ct-reason">No SOL price history: today's price was used.</p>`);
+    const open = r.open.length ? `<ul class="ct-list">${r.open.map((o) => `
+      <li class="ct-row"><span class="ct-grow"><a class="ct-mono" href="https://dexscreener.com/solana/${esc(o.mint)}" target="_blank" rel="noopener">${short(o.mint)}</a> <span class="ct-dim">${ago(o.opened_at)}</span></span>
+        <span class="ct-dim">paid for it</span> ${usd(o.cost_usd)} <span class="ct-dim">worth now</span> ${usd(o.value_usd)}
+        <b class="${cls(o.unrealized_usd)}">${o.unrealized_usd == null ? "no route" : signed(o.unrealized_usd)}</b></li>`).join("")}</ul>` : `<p class="ct-empty">No open position.</p>`;
+    const toks = r.tokens.length ? `<ul class="ct-list">${r.tokens.slice(0, 12).map((t) => `
+      <li class="ct-row"><span class="ct-grow"><a class="ct-mono" href="https://dexscreener.com/solana/${esc(t.mint)}" target="_blank" rel="noopener">${short(t.mint)}</a>${t.holding ? ` <span class="ct-badge">holding</span>` : ""}</span>
+        <span class="ct-dim">${t.buys} buys · ${t.sells} sells</span> <b class="${cls(t.realized_usd)}">${signed(t.realized_usd) || "$0"}</b></li>`).join("")}</ul>` : "";
+    const followed = state?.follows?.some((f) => f.address === r.address);
+    $("ct-pnl-out").innerHTML = `
+      <p class="ct-dim ct-pnl-head"><a class="ct-mono" href="https://solscan.io/account/${esc(r.address)}" target="_blank" rel="noopener">${short(r.address)}</a>
+        · ${c.swaps} swaps in ${c.transactions} transactions · ${ago(r.generated_at)} ago
+        ${followed ? "" : `<button type="button" class="section-action-btn" id="ct-pnl-follow">Copy this wallet</button>`}</p>
+      ${notes.join("")}
+      <div class="ct-pnl-grid">${WINDOWS.map(([k, l]) => pnlCard(k, l, r.windows[k])).join("")}</div>
+      <div class="section-title-row"><span class="section-eyebrow">Still open now</span><span class="section-count ${cls(r.unrealized_usd)}">${signed(r.unrealized_usd) || "$0"}</span></div>
+      ${open}
+      ${toks ? `<div class="section-title-row"><span class="section-eyebrow">Tokens, 30 days</span></div>${toks}` : ""}`;
+    $("ct-pnl-follow")?.addEventListener("click", () => {
+      reset();
+      $("ct-address").value = r.address;
+      $("ct-address").scrollIntoView({ block: "center", behavior: "smooth" });
+      $("ct-address").focus();
+    });
+  }
+
+  async function analyze(address, fresh = false) {
+    const run = ++pnlRun;
+    $("ct-pnl-address").value = address;
+    $("ct-pnl").scrollIntoView({ block: "start", behavior: "smooth" });
+    $("ct-pnl-go").disabled = true;
+    $("ct-pnl-out").innerHTML = "";
+    $("ct-pnl-progress").classList.remove("is-error");
+    $("ct-pnl-progress").textContent = "Starting";
+    try {
+      const start = await api("/api/copytrade/analyze", { method: "POST", body: JSON.stringify({ address, fresh }) });
+      if (start.result) { renderPnl(start.result); $("ct-pnl-progress").textContent = ""; return; }
+      let since = 0;
+      for (;;) {
+        await new Promise((ok) => setTimeout(ok, 1500));
+        if (run !== pnlRun) return;
+        const job = await api(`/api/jobs/${start.job}?since=${since}&visible=1`);
+        since = job.log_total;
+        if (job.log.length) $("ct-pnl-progress").textContent = job.log[job.log.length - 1].m;
+        if (job.state === "finito") { renderPnl(job.result); $("ct-pnl-progress").textContent = ""; return; }
+        if (job.state !== "in corso") throw new Error(job.error || "Analysis failed");
+      }
+    } catch (e) {
+      $("ct-pnl-progress").textContent = e.message;
+      $("ct-pnl-progress").classList.add("is-error");
+    } finally {
+      if (run === pnlRun) $("ct-pnl-go").disabled = false;
+    }
+  }
+
+  $("ct-pnl-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    analyze($("ct-pnl-address").value.trim(), true);
   });
 
   root.addEventListener("toggle", poll);

@@ -11,10 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app import auth
+from app import jobs as jobs_store
 from app import guest as guest_links
 from app.config import settings
 from app.models import User
-from app.trading.onchain import copytrade
+from app.trading.onchain import copytrade, wallet_pnl
 
 router = APIRouter()
 
@@ -45,6 +46,11 @@ class LimitsRequest(BaseModel):
 
 class RealRequest(BaseModel):
     accept: bool
+
+
+class AnalyzeRequest(BaseModel):
+    address: str = Field(min_length=32, max_length=44)
+    fresh: bool = False
 
 
 class CloseRequest(BaseModel):
@@ -113,3 +119,19 @@ async def copytrade_close(body: CloseRequest, user: User = Depends(_member)) -> 
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/api/copytrade/analyze")
+async def copytrade_analyze(body: AnalyzeRequest, user: User = Depends(_member)) -> dict:
+    """A wallet's profitability over 24 h / 7 / 30 days (wallet_pnl.py): a
+    job, since a busy wallet means thousands of transactions to read. A
+    result younger than 15 minutes comes back at once."""
+    address = body.address.strip()
+    if not copytrade.valid_address(address):
+        raise HTTPException(status_code=400, detail="Not a Solana wallet address.")
+    hit = None if body.fresh else wallet_pnl.cached(address)
+    if hit:
+        return {"result": hit}
+    jid = jobs_store.create(user.id, "wallet_pnl", f"Profitability {address[:4]}…{address[-4:]}", page="/")
+    jobs_store.run(jid, lambda: wallet_pnl.analyze(address, lambda m: jobs_store.log(jid, m)))
+    return {"job": jid}
