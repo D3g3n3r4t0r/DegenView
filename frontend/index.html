@@ -1018,16 +1018,17 @@
                  swaps seconds later. Engine: app/trading/onchain/copytrade.py;
                  page: static/copytrade.js, loaded at the first opening. -->
             <details class="opera-sub subtab-panel" data-subtab="copy" id="copytrade-details">
-              <summary>Copy trading · Solana <span class="trading-auto-badge">⚠️ Real money</span></summary>
+              <summary>Copy trading · Solana + EVM <span class="trading-auto-badge">⚠️ Real money</span></summary>
               <div class="trading-auto-section ct">
-                <p class="panel-hint">Paste a Solana wallet: its buys and sells are copied a few seconds later. Start in Simulated: real quotes, nothing sent.</p>
+                <p class="panel-hint">Paste a Solana wallet or an EVM one (0x…): its buys and sells are copied a few seconds later. Start in Simulated: real quotes, nothing sent. EVM wallets are copied in Simulated only for now.</p>
                 <div class="ct-status" id="ct-status"></div>
+                <div class="ct-evm" id="ct-evm"></div>
 
                 <form class="ct-form" id="ct-form" autocomplete="off">
                   <div class="mo-row">
                     <div class="mo-field mo-field-grow">
                       <label class="mo-label" for="ct-address">Wallet to copy</label>
-                      <input id="ct-address" class="mo-input ct-mono" placeholder="Solana address" required minlength="32" maxlength="44" />
+                      <input id="ct-address" class="mo-input ct-mono" placeholder="Solana or EVM (0x…) address" required minlength="32" maxlength="44" />
                     </div>
                     <div class="mo-field">
                       <label class="mo-label" for="ct-label">Wallet name</label>
@@ -1058,6 +1059,10 @@
                       </select>
                     </div>
                   </div>
+                  <fieldset class="ct-seg ct-chains" id="ct-chains" hidden>
+                    <legend class="mo-label">Networks to copy on</legend>
+                    <div id="ct-chain-boxes" class="ct-chain-boxes"></div>
+                  </fieldset>
                   <details class="ct-adv">
                     <summary>Protections</summary>
                     <div class="ct-grid">
@@ -1070,7 +1075,7 @@
                         <input id="ct-slip" class="mo-input" type="number" min="0.1" max="50" step="0.1" value="5" />
                       </div>
                     </div>
-                    <p class="panel-hint">Always on: no token with a live freeze or mint authority, none that Jupiter can't sell back, no buy moving the price more than 8%, no trade seen more than 90 s late, nothing under $5.</p>
+                    <p class="panel-hint">Always on: no token with a live freeze or mint authority (Solana), none that can't be sold back (Jupiter on Solana, KyberSwap or Uniswap on EVM), no buy moving the price more than 8%, no trade seen more than 90 s late, nothing under $5.</p>
                   </details>
                   <div class="ct-actions">
                     <button type="submit" class="ct-primary" id="ct-save">Follow</button>

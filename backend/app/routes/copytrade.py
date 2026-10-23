@@ -15,7 +15,7 @@ from app import jobs as jobs_store
 from app import guest as guest_links
 from app.config import settings
 from app.models import User
-from app.trading.onchain import copytrade, wallet_pnl
+from app.trading.onchain import copytrade, copytrade_evm, wallet_pnl
 
 router = APIRouter()
 
@@ -36,6 +36,7 @@ class FollowRequest(BaseModel):
     fixed_usd: float | None = None
     max_chase_pct: float | None = None
     slippage_pct: float | None = None
+    chains: list[str] | None = None          # EVM wallets only: the networks to copy on
 
 
 class LimitsRequest(BaseModel):
@@ -78,6 +79,22 @@ async def copytrade_state(user: User = Depends(_member)) -> dict:
         "stats": copytrade.stats(acc),
         "wallet": {"address": w.address if w else None, "sol": sol, "enabled": bool(w and w.enabled)},
         "server": {"real_enabled": settings.onchain_execution_enabled, **copytrade.status},
+        "evm": await _evm_state(user),
+    }
+
+
+async def _evm_state(user: User) -> dict:
+    """The EVM wallet is the account's Robinhood wallet: an EVM key is the same
+    address on every EVM network (Lorenzo's choice, 23/10)."""
+    w = (user.onchain_wallets or {}).get("robinhood")
+    balances = await copytrade_evm.native_balances(w.address) if w else {}
+    return {
+        "address": w.address if w else None,
+        "chains": [{"id": c, "label": cfg["label"], "native": cfg["native"], "copy": copytrade_evm.copyable(c),
+                    "dex": cfg["dex"], "tx": cfg["tx"], "balance": balances.get(c),
+                    **{k: v for k, v in copytrade_evm.status[c].items() if k in ("state", "error")}}
+                   for c, cfg in copytrade_evm.CHAINS.items()],
+        "real": False,
     }
 
 
@@ -127,6 +144,8 @@ async def copytrade_analyze(body: AnalyzeRequest, user: User = Depends(_member))
     job, since a busy wallet means thousands of transactions to read. A
     result younger than 15 minutes comes back at once."""
     address = body.address.strip()
+    if copytrade_evm.is_evm(address):
+        raise HTTPException(status_code=400, detail="The profitability analysis reads Solana wallets only for now.")
     if not copytrade.valid_address(address):
         raise HTTPException(status_code=400, detail="Not a Solana wallet address.")
     hit = None if body.fresh else wallet_pnl.cached(address)

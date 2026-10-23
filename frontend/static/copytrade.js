@@ -1,4 +1,5 @@
-/* Copy trading · Solana (Trading tab). Engine: app/trading/onchain/copytrade.py.
+/* Copy trading · Solana + EVM (Trading tab). Engines: app/trading/onchain/copytrade.py
+ * and copytrade_evm.py (EVM wallets: one 0x address, six networks, simulated).
  * Reads /api/copytrade every few seconds while the section is open; text is
  * English and goes through i18n.js like the rest of the page. */
 (function () {
@@ -17,6 +18,14 @@
   const signed = (v) => (v == null ? "" : `${v >= 0 ? "+" : "−"}${usd(Math.abs(v))}`);
   const ago = (t) => { const s = Math.max(0, Date.now() / 1000 - t); return s < 60 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)}m` : s < 86400 ? `${Math.round(s / 3600)}h` : `${Math.round(s / 86400)}d`; };
   const MODE = { sim: "Simulated", real: "Real", off: "Paused" };
+  const isEvm = (a) => /^0x[0-9a-fA-F]{40}$/.test(String(a || "").trim());
+  const chainOf = (id) => (state && state.evm ? state.evm.chains.find((c) => c.id === id) : null) || null;
+  // Where a token and a transaction can be looked at: DexScreener for tokens on
+  // every network, the network's own explorer for transactions where we know it.
+  const tokenUrl = (chain, token) => `https://dexscreener.com/${chain ? (chainOf(chain)?.dex || chain) : "solana"}/${encodeURIComponent(token)}`;
+  const txUrl = (chain, tx) => (!chain ? `https://solscan.io/tx/${encodeURIComponent(tx)}` : chainOf(chain)?.tx ? `${chainOf(chain).tx}${encodeURIComponent(tx)}` : null);
+  const walletUrl = (a) => (isEvm(a) ? `https://debank.com/profile/${encodeURIComponent(a)}` : `https://solscan.io/account/${encodeURIComponent(a)}`);
+  const chainChips = (ids) => (ids || []).map((id) => `<span class="ct-chip">${esc(chainOf(id)?.label || id)}</span>`).join("");
 
   async function api(path, opts = {}) {
     const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -53,16 +62,53 @@
     $("ct-status").innerHTML = parts.filter(Boolean).join(" ");
   }
 
+  function renderEvm() {
+    const e = state.evm, box = $("ct-evm");
+    if (!e) { box.innerHTML = ""; return; }
+    const rows = e.chains.map((c) => `
+      <li class="ct-evm-row">
+        <span class="ct-grow"><b>${esc(c.label)}</b></span>
+        <span class="ct-mono">${c.balance == null ? "—" : `${Number(c.balance).toFixed(c.balance >= 1 ? 3 : 5)} ${esc(c.native)}`}</span>
+        <span class="ct-badge ${c.copy ? "is-sim" : "is-off"}" title="${c.copy ? "Its trades are copied" : "No trusted quote source on this network yet: trades are seen and logged, not copied"}">${c.copy ? "Copied" : "Seen only"}</span>
+        ${c.state === "error" ? `<span class="ct-down" title="${esc(c.error || "")}">network not answering</span>` : ""}
+      </li>`).join("");
+    box.innerHTML = `
+      <div class="section-title-row"><span class="section-eyebrow">EVM wallet</span></div>
+      ${e.address
+        ? `<p class="ct-evm-addr"><span class="ct-mono" title="${esc(e.address)}">${esc(e.address)}</span>
+             <button type="button" class="section-action-btn" id="ct-evm-copy">Copy</button></p>
+           <p class="panel-hint">One address on every network below, like MetaMask: it is your Robinhood Chain wallet. Each network pays its fees in its own coin, so a network needs some of that coin before copies can run there. To open it in MetaMask: On-chain wallet below → Robinhood Chain → reveal the key; the same key opens all these networks.</p>`
+        : `<p class="panel-hint ct-down">No EVM wallet yet: create the Robinhood Chain wallet in On-chain wallet below. It becomes your address on all these networks.</p>`}
+      <ul class="ct-list ct-evm-list">${rows}</ul>`;
+    $("ct-evm-copy")?.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(e.address); msg("EVM address copied."); } catch { msg(e.address); }
+    });
+  }
+  function renderChainPicker() {
+    const box = $("ct-chain-boxes");
+    if (!state.evm || box.dataset.ready) return;
+    box.innerHTML = state.evm.chains.map((c) => `<label><input type="checkbox" name="ct-chain" value="${esc(c.id)}" checked /> ${esc(c.label)}${c.copy ? "" : ` <span class="ct-dim">(seen only)</span>`}</label>`).join("");
+    box.dataset.ready = "1";
+  }
+  function addressKind() {
+    const evm = isEvm($("ct-address").value);
+    $("ct-chains").hidden = !evm;
+    const real = $("ct-mode").querySelector('option[value="real"]');
+    real.disabled = evm || !(state && state.real_ok);
+    real.textContent = evm ? "Real (not on EVM yet)" : "Real";
+    if (evm && $("ct-mode").value === "real") $("ct-mode").value = "sim";
+    return evm;
+  }
   function renderFollows() {
     const ul = $("ct-follows");
     if (!state.follows.length) { ul.innerHTML = `<li class="ct-empty">No wallet followed yet.</li>`; return; }
     ul.innerHTML = state.follows.map((f) => `
       <li class="ct-row" data-address="${esc(f.address)}">
         <span class="ct-badge is-${f.mode}">${MODE[f.mode]}</span>
-        <span class="ct-grow"><b>${esc(f.label || short(f.address))}</b> <a class="ct-mono ct-dim" href="https://solscan.io/account/${esc(f.address)}" target="_blank" rel="noopener">${short(f.address)}</a></span>
+        <span class="ct-grow"><b>${esc(f.label || short(f.address))}</b> <a class="ct-mono ct-dim" href="${walletUrl(f.address)}" target="_blank" rel="noopener">${short(f.address)}</a>${isEvm(f.address) ? ` ${chainChips(f.chains)}` : ""}</span>
         <span class="ct-dim">${f.copy === "both" ? "Entries and exits" : "Entries only"}</span>
         <span>${f.sizing === "pct" ? `${f.pct}%` : `${usd(f.fixed_usd)} / position`}</span>
-        <button type="button" class="section-action-btn" data-act="analyze">Analyze</button>
+        ${isEvm(f.address) ? "" : `<button type="button" class="section-action-btn" data-act="analyze">Analyze</button>`}
         <button type="button" class="section-action-btn" data-act="edit">Edit</button>
         <button type="button" class="section-action-btn" data-act="toggle">${f.mode === "off" ? "Resume" : "Pause"}</button>
         <button type="button" class="section-action-btn" data-act="remove">Remove</button>
@@ -76,7 +122,7 @@
     ul.innerHTML = state.positions.map((p) => `
       <li class="ct-row" data-leader="${esc(p.leader)}" data-mint="${esc(p.mint)}">
         <span class="ct-badge is-${p.real ? "real" : "sim"}">${p.real ? "Real" : "Simulated"}</span>
-        <span class="ct-grow"><a class="ct-mono" href="https://dexscreener.com/solana/${esc(p.mint)}" target="_blank" rel="noopener">${short(p.mint)}</a> <span class="ct-dim">·</span> ${esc(names[p.leader] || short(p.leader))}</span>
+        <span class="ct-grow"><a class="ct-mono" href="${tokenUrl(p.chain, p.token || p.mint)}" target="_blank" rel="noopener">${short(p.token || p.mint)}</a>${p.chain ? ` ${chainChips([p.chain])}` : ""} <span class="ct-dim">·</span> ${esc(names[p.leader] || short(p.leader))}</span>
         <span>${usd(p.cost_usd)}</span>
         <span class="ct-dim">${ago(p.opened_at)}</span>
         <button type="button" class="section-action-btn" data-act="close">Sell all</button>
@@ -91,12 +137,13 @@
     const names = Object.fromEntries(state.follows.map((f) => [f.address, f.label || short(f.address)]));
     ul.innerHTML = state.trades.map((t) => {
       const ok = t.status === "sim" || t.status === "submitted";
-      const tx = t.tx ? ` <a class="ct-dim" href="https://solscan.io/tx/${esc(t.tx)}" target="_blank" rel="noopener">tx</a>` : "";
+      const txHref = t.tx ? txUrl(t.chain, t.tx) : null;
+      const tx = txHref ? ` <a class="ct-dim" href="${txHref}" target="_blank" rel="noopener">tx</a>` : "";
       return `
       <li class="ct-row ${ok ? "" : "is-muted"}">
         <span class="ct-dim ct-time">${ago(t.t)}</span>
         <span class="ct-side is-${t.side}">${t.side === "buy" ? "BUY" : "SELL"}</span>
-        <span class="ct-grow"><a class="ct-mono" href="https://dexscreener.com/solana/${esc(t.mint)}" target="_blank" rel="noopener">${short(t.mint)}</a>
+        <span class="ct-grow"><a class="ct-mono" href="${tokenUrl(t.chain, t.mint)}" target="_blank" rel="noopener">${short(t.mint)}</a>${t.chain ? ` ${chainChips([t.chain])}` : ""}
           <span class="ct-dim">${t.manual ? "by hand" : esc(names[t.leader] || t.label || short(t.leader))}</span>
           ${t.leader_usd != null ? `<span class="ct-dim">his trade</span> ${usd(t.leader_usd)}` : ""}
           ${t.usd != null ? `<span class="ct-dim">our copy</span> <b>${usd(t.usd)}</b>` : ""}
@@ -110,6 +157,8 @@
 
   function render() {
     renderStatus();
+    renderEvm();
+    renderChainPicker();
     renderFollows();
     renderPositions();
     renderLog();
@@ -118,7 +167,7 @@
       if (document.activeElement !== $(id)) $(id).value = lim[k];
     }
     $("ct-real-ok").checked = state.real_ok;
-    $("ct-mode").querySelector('option[value="real"]').disabled = !state.real_ok;
+    addressKind();
   }
 
   async function load() {
@@ -145,9 +194,16 @@
     $("ct-mode").value = f.mode;
     $("ct-chase").value = f.max_chase_pct;
     $("ct-slip").value = f.slippage_pct;
+    if (isEvm(f.address)) {
+      const on = new Set(f.chains || []);
+      document.querySelectorAll('input[name="ct-chain"]').forEach((b) => { b.checked = on.has(b.value); });
+    }
+    addressKind();
     $("ct-save").textContent = "Save";
     $("ct-address").scrollIntoView({ block: "center", behavior: "smooth" });
   }
+
+  $("ct-address").addEventListener("input", addressKind);
 
   function reset() {
     editing = null;
@@ -155,6 +211,7 @@
     $("ct-address").readOnly = false;
     $("ct-save").textContent = "Follow";
     sizingLabel();
+    addressKind();
   }
 
   $("ct-form").addEventListener("submit", async (ev) => {
@@ -169,6 +226,10 @@
       [fixed ? "fixed_usd" : "pct"]: size,
       max_chase_pct: Number($("ct-chase").value), slippage_pct: Number($("ct-slip").value),
     };
+    if (isEvm(body.address)) {
+      body.chains = [...document.querySelectorAll('input[name="ct-chain"]:checked')].map((b) => b.value);
+      if (!body.chains.length) { msg("Pick at least one network.", true); return; }
+    }
     if (body.mode === "real" && !confirm("Real mode: this wallet's trades will be copied with real money, automatically. Continue?")) return;
     try {
       await api("/api/copytrade/follow", { method: "POST", body: JSON.stringify(body) });

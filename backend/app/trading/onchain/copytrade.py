@@ -128,13 +128,19 @@ def open_count(acc: dict) -> int:
     return sum(len(p) for p in acc["positions"].values())
 
 
-def watched() -> dict[str, list[str]]:
-    """Leader address -> owners following it with a mode other than off."""
+def watched(kind: str | None = None) -> dict[str, list[str]]:
+    """Leader address -> owners following it with a mode other than off.
+    kind "solana" or "evm" keeps only those addresses: the Solana socket must
+    never be asked to subscribe to a 0x address (copytrade_evm.py)."""
+    from app.trading.onchain import copytrade_evm
     out: dict[str, list[str]] = {}
     for owner, acc in _load()["users"].items():
         for addr, f in acc.get("follows", {}).items():
-            if f.get("mode") != "off":
-                out.setdefault(addr, []).append(owner)
+            if f.get("mode") == "off":
+                continue
+            if kind is not None and copytrade_evm.is_evm(addr) != (kind == "evm"):
+                continue
+            out.setdefault(addr, []).append(owner)
     return out
 
 
@@ -147,9 +153,15 @@ def valid_address(addr: str) -> bool:
 
 
 def set_follow(owner_id: str, address: str, fields: dict) -> dict:
-    """Add or change a followed wallet; raises ValueError on a bad value."""
-    if not valid_address(address):
-        raise ValueError("Not a Solana wallet address.")
+    """Add or change a followed wallet; raises ValueError on a bad value.
+    A 0x address is an EVM wallet (copytrade_evm.py), copied on the chains
+    picked in fields["chains"] (every supported one by default)."""
+    from app.trading.onchain import copytrade_evm
+    evm = copytrade_evm.is_evm(address)
+    if evm:
+        address = copytrade_evm.norm(address)
+    elif not valid_address(address):
+        raise ValueError("Not a Solana or EVM wallet address.")
     acc = account(owner_id)
     if address not in acc["follows"] and len(acc["follows"]) >= MAX_FOLLOWS:
         raise ValueError(f"At most {MAX_FOLLOWS} wallets.")
@@ -166,6 +178,15 @@ def set_follow(owner_id: str, address: str, fields: dict) -> dict:
         raise ValueError("Chase or slippage out of range.")
     if f["mode"] == "real" and not acc["real_ok_at"]:
         raise ValueError("Confirm real money for this account first.")
+    if evm:
+        if f["mode"] == "real":
+            # Phase 3 of the EVM plan (HANDOVER.md): only after the simulation has been watched.
+            raise ValueError("EVM wallets are copied in Simulated for now: real money on EVM networks comes later.")
+        chains = fields.get("chains") if fields.get("chains") is not None else f.get("chains") or list(copytrade_evm.CHAINS)
+        chains = [c for c in copytrade_evm.CHAINS if c in set(chains)]
+        if not chains:
+            raise ValueError("Pick at least one network.")
+        f["chains"] = chains
     f["label"] = str(f["label"])[:40]
     acc["follows"][address] = f
     _save()
@@ -173,8 +194,9 @@ def set_follow(owner_id: str, address: str, fields: dict) -> dict:
 
 
 def remove_follow(owner_id: str, address: str) -> None:
+    from app.trading.onchain import copytrade_evm
     acc = account(owner_id)
-    acc["follows"].pop(address, None)
+    acc["follows"].pop(copytrade_evm.norm(address) if copytrade_evm.is_evm(address) else address, None)
     _save()
 
 
@@ -395,7 +417,7 @@ async def handle_signature(leader: str, sig: str) -> None:
     if len(_handled) > 20_000:
         _handled.clear()
         _handled.add(sig)
-    owners = watched().get(leader, [])
+    owners = watched("solana").get(leader, [])
     if not owners:
         return
     try:
@@ -589,6 +611,9 @@ def _close(acc: dict, leader: str, mint: str) -> None:
 
 async def close_position(owner_id: str, leader: str, mint: str) -> dict:
     """Sell a copied position by hand (the only exit with "entry only")."""
+    from app.trading.onchain import copytrade_evm
+    if copytrade_evm.is_evm(leader):
+        return await copytrade_evm.close_position(owner_id, copytrade_evm.norm(leader), mint)
     acc = account(owner_id)
     pos = acc["positions"].get(leader, {}).get(mint)
     if pos is None:
@@ -619,7 +644,7 @@ def stats(acc: dict) -> dict:
 # ── watcher ───────────────────────────────────────────────────────────────
 
 async def _poll_once() -> None:
-    for leader in list(watched()):
+    for leader in list(watched("solana")):
         try:
             rows = await rpc("getSignaturesForAddress", [leader, {"limit": 15, "commitment": "confirmed"}])
         except RuntimeError as exc:
@@ -643,7 +668,7 @@ async def _poll_loop() -> None:
 async def _ws_loop() -> None:
     import websockets
     while True:
-        leaders = sorted(watched())
+        leaders = sorted(watched("solana"))
         status["addresses"] = len(leaders)
         if not leaders:
             status["ws"] = "idle"
@@ -661,7 +686,7 @@ async def _ws_loop() -> None:
                 pending = {i: leader for i, leader in enumerate(leaders, 1)}
                 status.update(ws="connected", error="")
                 while True:
-                    if sorted(watched()) != leaders:
+                    if sorted(watched("solana")) != leaders:
                         break                     # the list changed: subscribe again
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=5)

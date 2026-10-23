@@ -970,7 +970,32 @@
   "Manual close": "Chiusura manuale",
   "Manual close (futures)": "Chiusura manuale (futures)",
   "Sign-up is by invitation: only an invited email can create an account.": "La registrazione è su invito: solo un'email invitata può creare un account.",
-  "dismissed": "scartate"
+  "dismissed": "scartate",
+  "Copy trading · Solana + EVM": "Copy trading · Solana + EVM",
+  "Paste a Solana wallet or an EVM one (0x…): its buys and sells are copied a few seconds later. Start in Simulated: real quotes, nothing sent. EVM wallets are copied in Simulated only for now.": "Incolla un wallet Solana o uno EVM (0x…): i suoi acquisti e vendite vengono copiati pochi secondi dopo. Parti in Simulato: quotazioni vere, niente inviato. Per ora i wallet EVM si copiano solo in Simulato.",
+  "Solana or EVM (0x…) address": "Indirizzo Solana o EVM (0x…)",
+  "Networks to copy on": "Reti su cui copiare",
+  "Always on: no token with a live freeze or mint authority (Solana), none that can't be sold back (Jupiter on Solana, KyberSwap or Uniswap on EVM), no buy moving the price more than 8%, no trade seen more than 90 s late, nothing under $5.": "Sempre attive: niente token con freeze o mint authority ancora attive (Solana), niente token che non si possono rivendere (Jupiter su Solana, KyberSwap o Uniswap su EVM), nessun acquisto che sposta il prezzo di oltre l'8%, nessun trade visto con oltre 90 s di ritardo, niente sotto i 5 $.",
+  "EVM wallet": "Wallet EVM",
+  "Copy": "Copia",
+  "One address on every network below, like MetaMask: it is your Robinhood Chain wallet. Each network pays its fees in its own coin, so a network needs some of that coin before copies can run there. To open it in MetaMask: On-chain wallet below → Robinhood Chain → reveal the key; the same key opens all these networks.": "Un solo indirizzo su tutte le reti qui sotto, come MetaMask: e' il tuo wallet di Robinhood Chain. Ogni rete paga le commissioni nella sua moneta, quindi su una rete servono un po' di quella moneta prima che le copie possano partire. Per aprirlo in MetaMask: On-chain wallet qui sotto → Robinhood Chain → rivela la chiave; la stessa chiave apre tutte queste reti.",
+  "No EVM wallet yet: create the Robinhood Chain wallet in On-chain wallet below. It becomes your address on all these networks.": "Ancora nessun wallet EVM: crea il wallet di Robinhood Chain in On-chain wallet qui sotto. Diventa il tuo indirizzo su tutte queste reti.",
+  "Copied": "Copiata",
+  "Seen only": "Solo vista",
+  "Its trades are copied": "I suoi trade vengono copiati",
+  "No trusted quote source on this network yet: trades are seen and logged, not copied": "Su questa rete non c'e' ancora una fonte di prezzi affidabile: i trade vengono visti e registrati, non copiati",
+  "network not answering": "la rete non risponde",
+  "(seen only)": "(solo vista)",
+  "Real (not on EVM yet)": "Reale (non ancora su EVM)",
+  "Pick at least one network.": "Scegli almeno una rete.",
+  "EVM address copied.": "Indirizzo EVM copiato.",
+  "real money on EVM networks is not switched on yet": "i soldi veri sulle reti EVM non sono ancora attivi",
+  "no way to sell it back (possible honeypot or tax)": "impossibile rivenderlo (possibile honeypot o tassa)",
+  "EVM wallets are copied in Simulated for now: real money on EVM networks comes later.": "Per ora i wallet EVM si copiano in Simulato: i soldi veri sulle reti EVM arriveranno dopo.",
+  "Not a Solana or EVM wallet address.": "Non e' un indirizzo di wallet Solana o EVM.",
+  "The profitability analysis reads Solana wallets only for now.": "Per ora l'analisi di redditivita' legge solo wallet Solana.",
+  "no Uniswap pool for this pair on Robinhood Chain": "nessun pool Uniswap per questa coppia su Robinhood Chain",
+  "the quote returns nothing": "la quotazione non restituisce niente"
  },
  "patterns": [
   [
@@ -1156,6 +1181,18 @@
   [
    "^● Manual close(.*)$",
    "● Chiusura manuale$1"
+  ],
+  [
+   "^seen only: no trusted quote source on (.+) yet$",
+   "solo vista: su $1 non c'e' ancora una fonte di prezzi affidabile"
+  ],
+  [
+   "^no (\\S+) price right now$",
+   "nessun prezzo di $1 in questo momento"
+  ],
+  [
+   "^KyberSwap does not trade on (.+)$",
+   "KyberSwap non opera su $1"
   ]
  ]
 }

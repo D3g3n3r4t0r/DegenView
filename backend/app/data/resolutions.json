@@ -1,4 +1,11 @@
 {
+  "seed-0409l": {
+    "status": "risolto",
+    "at": 1792791879,
+    "summary": "Il copy trading ora segue anche i wallet EVM (0x…), in modalita' simulata. Il wallet di Robinhood Chain diventa l'indirizzo EVM unico: la stessa chiave vale su Base, BNB Chain, Ethereum, Robinhood Chain, Arc e Monad, e la sezione mostra l'indirizzo con il saldo di ogni rete, come su FOMO. Si incolla un indirizzo 0x, si scelgono le reti, e il server guarda i suoi trade ogni pochi secondi e li copia in simulato con le stesse regole e gli stessi tetti di Solana (i limiti valgono insieme per Solana ed EVM). Quotazioni da KyberSwap su Base, BNB, Ethereum e Monad, da Uniswap su Robinhood Chain; su Arc i trade si vedono e si registrano ma non si copiano, perche' non c'e' ancora una fonte di prezzi affidabile.",
+    "detail": "app/trading/onchain/copytrade_evm.py: rilevamento con eth_getLogs sui Transfer ERC-20 da e verso i wallet seguiti; lettura del trade dalla ricevuta piu' la variazione del saldo nativo nel blocco (gas aggiunto, anche la commissione L1 di Base); WETH/WBNB contano come nativo, USDC/USDT come dollari; controlli: prezzo inseguito, impatto, rivendibilita' (honeypot o tassa), 90 s di ritardo massimo, minimo 5 $. Modalita' reale rifiutata sugli indirizzi EVM fino alla fase 3. 18 test (tests/test_copytrade_evm.py). Nel sandbox le reti sono bloccate: la prima prova vera e' in produzione, in simulato.",
+    "next": "Fase 3, soldi veri sulle reti EVM: firma ed invio dei swap KyberSwap (approve dei token, gas per rete, nonce), il consenso gia' esistente e l'interruttore del server; da fare solo dopo qualche giorno di simulazione osservata. Da verificare in produzione: il nome 'monad' su KyberSwap e i limiti dei nodi pubblici (Monad 25 richieste/s)."
+  },
   "seed-0405l": {
     "status": "risolto",
     "at": 1792790091,

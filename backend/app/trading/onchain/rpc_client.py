@@ -58,6 +58,11 @@ _ENDPOINTS: dict[str, list[str]] = {
     "ethereum": ["https://ethereum-rpc.publicnode.com"],
     "base": ["https://base-rpc.publicnode.com", "https://mainnet.base.org"],
     "bsc": ["https://bsc-rpc.publicnode.com", "https://bsc-dataseed.bnbchain.org"],
+    # EVM copy trading (23/10). Arc: the node unlocks.py and pool_prices.py
+    # already read. Monad: the official public node (docs.monad.xyz, network
+    # information: chain id 143, 25 requests/s), not yet called from here.
+    "arc": ["https://rpc.mainnet.arc.io"],
+    "monad": ["https://rpc.monad.xyz"],
 }
 
 _FAILURE_THRESHOLD = 3
