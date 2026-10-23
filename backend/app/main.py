@@ -80,8 +80,9 @@ from app.analysis.optimize import (
     max_return_search_nd,
     optimize_strategy,
 )
+from app.accel.fast_json import FastJSONResponse
 from app.analysis.pipeline import run_pipeline
-from app.analysis.smc_engine import compute_dealing_range, compute_levels, compute_swings
+from app.analysis.smc_engine import _df_smc_key, compute_dealing_range, compute_levels, compute_swings
 from app.analysis.strategies import (
     AVAILABLE_STRATEGIES,
     DEFAULT_STRATEGY,
@@ -1717,7 +1718,7 @@ async def lifespan(app: FastAPI):
         t.cancel()
 
 
-app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
+app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan, default_response_class=FastJSONResponse)
 app.include_router(quant_router(auth.get_current_user))
 # Route groups split out of this file (app/routes/), same paths as before.
 for _name in ("issues", "price_alerts", "drawings", "jobs", "push", "guest_links", "auth_routes", "copytrade",
@@ -7182,17 +7183,26 @@ async def analyze(
                     trades=[],
                 )
             df_candles = df if tf_key == "ltf" else df.iloc[-50:]
-            candles = [
-                Candle(
-                    time=int(ts.timestamp()),
-                    open=float(row.open),
-                    high=float(row.high),
-                    low=float(row.low),
-                    close=float(row.close),
-                    volume=float(row.volume),
-                )
-                for ts, row in zip(df_candles.index, df_candles.itertuples(index=False))
-            ]
+            candle_key = _df_smc_key(df_candles, f"candles:{tf_key}")
+            candles = _CANDLES_CACHE.get(candle_key) if candle_key is not None else None
+            if candles is None:
+                if hasattr(df_candles.index, "asi8"):
+                    times = (df_candles.index.asi8 // 10**9).tolist()
+                else:
+                    times = [int(ts.timestamp()) for ts in df_candles.index]
+                opens = df_candles["open"].astype(float).tolist()
+                highs_c = df_candles["high"].astype(float).tolist()
+                lows_c = df_candles["low"].astype(float).tolist()
+                closes = df_candles["close"].astype(float).tolist()
+                vols = df_candles["volume"].astype(float).tolist()
+                candles = [
+                    Candle(time=t, open=o, high=h, low=lo, close=c, volume=v)
+                    for t, o, h, lo, c, v in zip(times, opens, highs_c, lows_c, closes, vols)
+                ]
+                if candle_key is not None:
+                    if len(_CANDLES_CACHE) >= 192:
+                        _CANDLES_CACHE.pop(next(iter(_CANDLES_CACHE)), None)
+                    _CANDLES_CACHE[candle_key] = candles
             # Same story for the raw candle/indicator time series: the chart only
             # ever plots ltf, and build_summary's per-timeframe indicator readout
             # (below) only reads each series' *last* value. htf/mtf keep full
@@ -7231,6 +7241,10 @@ async def analyze(
         )
 
     return await _cpu(_compute)
+
+
+_CANDLES_CACHE: dict[tuple, list[Candle]] = {}
+_DEEP_BT_CACHE: dict[tuple, BacktestResult] = {}
 
 
 def _slice_to_window(df, start_ms: int | None, end_ms: int | None):
@@ -7319,20 +7333,41 @@ async def deep_backtest(
 
     df = _slice_to_period(df, symbol, start_date, end_date)
 
+    s_dump = strategy_params.model_dump()
+    b_dump = backtest_params.model_dump()
+    bt_df_key = _df_smc_key(df, f"{asset_type}:{exchange}:{symbol.upper()}:{backtest_interval}")
+    bt_cache_key = (
+        bt_df_key,
+        strategy_name,
+        tuple(sorted(s_dump.items())),
+        tuple(sorted(b_dump.items())),
+        start_date or "",
+        end_date or "",
+    ) if bt_df_key is not None else None
+    if bt_cache_key is not None:
+        cached_bt = _DEEP_BT_CACHE.get(bt_cache_key)
+        if cached_bt is not None:
+            return cached_bt
+
     # Sul DEX si compra e si vende il token, niente short (vedi /api/analyze).
     sig = None
     if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
-        sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params.model_dump()))
+        sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, s_dump))
     result = await _cpu(partial(
         run_backtest,
         df,
-        strategy_params.model_dump(),
-        backtest_params.model_dump(),
+        s_dump,
+        b_dump,
         strategy_name=strategy_name,
         signals=sig,
         intrabar_fn=_intrabar_fn(asset_type, strategy_name),
     ))
-    return result.model_copy(update={"interval": backtest_interval})
+    final_res = result.model_copy(update={"interval": backtest_interval})
+    if bt_cache_key is not None:
+        if len(_DEEP_BT_CACHE) >= 128:
+            _DEEP_BT_CACHE.pop(next(iter(_DEEP_BT_CACHE)), None)
+        _DEEP_BT_CACHE[bt_cache_key] = final_res
+    return final_res
 
 
 class OptimizeCandidate(BaseModel):
@@ -8946,7 +8981,8 @@ async def changes(what: str) -> JSONResponse:
     if what not in _CHANGES_PATHS:
         raise HTTPException(status_code=400, detail="what: pulls, runs or commits")
     hit = _changes_cache.get(what)
-    if hit and _time.time() - hit[0] < 60:
+    ttl = 8 if what in ("runs", "pulls") else 15
+    if hit and _time.time() - hit[0] < ttl:
         return JSONResponse(hit[1])
     headers = {"Accept": "application/vnd.github+json"}
     if settings.github_api_token:

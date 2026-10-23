@@ -14,6 +14,40 @@ LIQUIDITY_RANGE_PERCENT = 0.01
 # few per type; older structure is no longer actionable anyway.
 _LEVEL_LIMIT_PER_TYPE = {"bos": 6, "choch": 6, "order_block": 5, "fvg": 6, "eqh": 5, "eql": 5}
 
+# Bounded content-fingerprinted caches for SMC swings and structural levels.
+# Keyed by (timeframe_key/swing_len, n, first_ts, last_ts, last_close, last_high, last_low)
+# so any new bar or live unclosed bar price change invalidates immediately, while
+# repeated /api/analyze requests (or strategy/parameter toggles on the same chart)
+# skip ~180 ms of O(N^2) Python loops in `smartmoneyconcepts`.
+_SMC_CACHE_MAX = 192
+_SWINGS_CACHE: dict[tuple, pd.DataFrame] = {}
+_LEVELS_CACHE: dict[tuple, list[LiquidityLevel]] = {}
+_SMC_STATS = {"swings_hits": 0, "swings_misses": 0, "levels_hits": 0, "levels_misses": 0}
+
+
+def _df_smc_key(df: pd.DataFrame, extra: str | int = "") -> tuple | None:
+    n = len(df)
+    if n == 0:
+        return None
+    try:
+        idx = df.index
+        first_ts = int(idx[0].value) if hasattr(idx[0], "value") else hash(idx[0])
+        last_ts = int(idx[-1].value) if hasattr(idx[-1], "value") else hash(idx[-1])
+        c_last = round(float(df["close"].iloc[-1]), 8)
+        h_last = round(float(df["high"].iloc[-1]), 8)
+        l_last = round(float(df["low"].iloc[-1]), 8)
+        return (extra, n, first_ts, last_ts, c_last, h_last, l_last)
+    except Exception:
+        return None
+
+
+def smc_cache_stats() -> dict[str, int]:
+    return {
+        **_SMC_STATS,
+        "swings_cached": len(_SWINGS_CACHE),
+        "levels_cached": len(_LEVELS_CACHE),
+    }
+
 
 def _cap_recent_per_type(levels: list[LiquidityLevel]) -> list[LiquidityLevel]:
     grouped: dict[str, list[LiquidityLevel]] = {}
@@ -53,7 +87,19 @@ def compute_swings(df: pd.DataFrame, timeframe_key: str) -> pd.DataFrame:
     full candle history, and computing it separately per consumer (levels,
     dealing range, fib zones) tripled the work for identical output."""
     swing_length = SWING_LENGTH_BY_TIMEFRAME.get(timeframe_key, 8)
-    return smc.swing_highs_lows(df, swing_length=swing_length)
+    key = _df_smc_key(df, swing_length)
+    if key is not None:
+        cached = _SWINGS_CACHE.get(key)
+        if cached is not None:
+            _SMC_STATS["swings_hits"] += 1
+            return cached
+    _SMC_STATS["swings_misses"] += 1
+    res = smc.swing_highs_lows(df, swing_length=swing_length)
+    if key is not None:
+        if len(_SWINGS_CACHE) >= _SMC_CACHE_MAX:
+            _SWINGS_CACHE.pop(next(iter(_SWINGS_CACHE)), None)
+        _SWINGS_CACHE[key] = res
+    return res
 
 
 def compute_dealing_range(df: pd.DataFrame, swings: pd.DataFrame) -> tuple[float, float] | None:
@@ -72,12 +118,32 @@ def compute_dealing_range(df: pd.DataFrame, swings: pd.DataFrame) -> tuple[float
 
 
 def compute_levels(df: pd.DataFrame, swings: pd.DataFrame) -> list[LiquidityLevel]:
+    # Include the last non-null swing level in the key so different `swings` frames
+    # on the same `df` never collide.
+    valid_sw = swings.dropna(subset=["HighLow"]) if len(swings) else swings
+    sw_tag = (
+        f"{len(valid_sw)}:{float(valid_sw.iloc[-1]['Level']):.6g}"
+        if not valid_sw.empty
+        else "0"
+    )
+    key = _df_smc_key(df, sw_tag)
+    if key is not None:
+        cached = _LEVELS_CACHE.get(key)
+        if cached is not None:
+            _SMC_STATS["levels_hits"] += 1
+            return list(cached)
+    _SMC_STATS["levels_misses"] += 1
     levels: list[LiquidityLevel] = []
     levels.extend(_bos_choch_levels(df, swings))
     levels.extend(_order_block_levels(df, swings))
     levels.extend(_fvg_levels(df))
     levels.extend(_liquidity_levels(df, swings))
-    return _cap_recent_per_type(levels)
+    capped = _cap_recent_per_type(levels)
+    if key is not None:
+        if len(_LEVELS_CACHE) >= _SMC_CACHE_MAX:
+            _LEVELS_CACHE.pop(next(iter(_LEVELS_CACHE)), None)
+        _LEVELS_CACHE[key] = capped
+    return list(capped)
 
 
 def _bos_choch_levels(df: pd.DataFrame, swings: pd.DataFrame) -> list[LiquidityLevel]:

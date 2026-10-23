@@ -9501,11 +9501,70 @@ const COLORS_LIGHT = {
     return Math.min(300, Math.max(60, sec)) * 1000;
   }
 
+  // ---- Client-side SWR Chart & Deep-Backtest Cache (seed-0401l) ----
+  // Keeps the last 25 analyzed (symbol, assetType, exchange, intervals, strategy)
+  // payloads in RAM so switching back to a visited ticker/timeframe/strategy or
+  // clicking a hovered Watchlist row renders in 0 ms with zero blank-screen flash.
+  const CHART_SWR_MAX = 25;
+  const CHART_SWR_FRESH_MS = 15000;
+  const CHART_SWR_MAX_AGE_MS = 180000;
+  const chartSwrCache = new Map();
+  const chartSwrInflight = new Map();
+  const deepBtSwrCache = new Map();
+
+  function buildAnalyzeUrl(symbol, assetType = state.assetType, exchange = state.cryptoExchange) {
+    return `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${assetType}&exchange=${exchange}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
+  }
+
+  function buildDeepBtUrl(symbol, assetType = state.assetType, exchange = state.cryptoExchange) {
+    return `/api/backtest/deep?symbol=${encodeURIComponent(symbol)}&asset_type=${assetType}&exchange=${exchange}&ltf_interval=${getSelectedIntervals().ltf}&${getStrategyAndBacktestQuery()}`;
+  }
+
+  function putSwrMap(map, key, data) {
+    if (map.has(key)) map.delete(key);
+    map.set(key, { ts: Date.now(), data });
+    if (map.size > CHART_SWR_MAX) {
+      const oldest = map.keys().next().value;
+      if (oldest !== undefined) map.delete(oldest);
+    }
+  }
+
+  function getSwrMap(map, key) {
+    const entry = map.get(key);
+    if (!entry) return null;
+    const age = Date.now() - entry.ts;
+    if (age > CHART_SWR_MAX_AGE_MS) {
+      map.delete(key);
+      return null;
+    }
+    return { data: entry.data, fresh: age <= CHART_SWR_FRESH_MS };
+  }
+
+  function prefetchAnalyze(symbol, assetType = state.assetType, exchange = state.cryptoExchange) {
+    if (!symbol) return;
+    const url = buildAnalyzeUrl(symbol, assetType, exchange);
+    const cached = getSwrMap(chartSwrCache, url);
+    if (cached && cached.fresh) return;
+    if (chartSwrInflight.has(url)) return;
+    const p = fetch(url)
+      .then(async (resp) => {
+        if (!resp.ok) return null;
+        const body = await resp.json();
+        putSwrMap(chartSwrCache, url, body);
+        return body;
+      })
+      .catch(() => null)
+      .finally(() => {
+        chartSwrInflight.delete(url);
+      });
+    chartSwrInflight.set(url, p);
+  }
+
   async function silentRefresh(symbol) {
     if (!state.data || state.data.symbol !== symbol) return;
     const seq = state.analyzeSeq;
     try {
-      const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
+      const url = buildAnalyzeUrl(symbol);
       const resp = await fetch(url);
       // A search started meanwhile owns the chart now.
       if (seq !== state.analyzeSeq || !state.data || state.data.symbol !== symbol) return;
@@ -9513,16 +9572,10 @@ const COLORS_LIGHT = {
         showTabError("error-banner", `Auto-refresh failed (${resp.status}).`);
         return;
       }
-      // Il backtest "profondo" gia' caricato (refreshDeepBacktest, sulla
-      // storia intera) e' sempre piu' completo di quello "superficiale" che
-      // /api/analyze ricalcola ogni volta (solo l'ultima pagina di candele)
-      // — sovrascriverlo qui senza guardare riportava indietro i marker sul
-      // grafico a un sottoinsieme di trade diverso ogni 60 secondi, anche
-      // dopo che il profondo era gia' arrivato una volta. Le chiavi del
-      // profondo vincono; quelle di un timeframe non ancora approfondito
-      // restano quelle fresche appena arrivate.
       const deepBacktests = state.data.backtests;
-      state.data = await resp.json();
+      const freshBody = await resp.json();
+      putSwrMap(chartSwrCache, url, freshBody);
+      state.data = freshBody;
       if (deepBacktests) {
         state.data.backtests = { ...state.data.backtests, ...deepBacktests };
       }
@@ -9533,74 +9586,85 @@ const COLORS_LIGHT = {
     }
   }
 
+  function applyAnalyzedBody(body, symbol) {
+    state.data = body;
+    const box = el("ticker-input");
+    if (box && document.activeElement !== box && body.symbol && body.asset_type !== "dex") {
+      box.value = body.symbol;
+      box.title = body.symbol;
+    }
+    state.seenAlertKeys = new Set();
+    state.alertsSeeded = false;
+    if (state.pineActive) clearPineOverride();
+    el("chart-wrap").classList.remove("hidden");
+    resizeAllCharts();
+    loadDrawingsForSymbol();
+    render();
+    notifyParent(true);
+    renderFavorites();
+    savePreferences();
+    refreshDeepBacktest(symbol);
+    const LIVE_WS_EXCHANGES = new Set(["mexc", "kraken"]);
+    if (state.assetType === "crypto" && LIVE_WS_EXCHANGES.has(state.cryptoExchange)) {
+      connectLiveFeed(body.symbol);
+    }
+    if (state.assetType === "crypto") {
+      state.lastFullRefresh = Date.now();
+      state.liveRefreshTimer = setInterval(() => {
+        if (liveFeedHealthy() && Date.now() - (state.lastFullRefresh || 0) < fullRefreshEveryMs()) return;
+        silentRefresh(body.symbol);
+      }, 60000);
+      if (!LIVE_WS_EXCHANGES.has(state.cryptoExchange)) {
+        el("polling-badge").classList.remove("hidden");
+      }
+    }
+    if (body.stale) setTimeout(() => silentRefresh(body.symbol), 4000);
+  }
+
   async function runAnalysis(symbol) {
     clearError();
-    el("loading").classList.remove("hidden");
     el("empty-state").classList.add("hidden");
-    el("chart-wrap").classList.add("hidden");
     disconnectLiveFeed();
 
-    // Only the latest request may draw (overhaul plan, week 1): a timeframe
-    // change and a new search in flight together let the older answer land
-    // last and show the previous ticker.
+    const url = buildAnalyzeUrl(symbol);
+    const swrHit = getSwrMap(chartSwrCache, url);
     const seq = (state.analyzeSeq = (state.analyzeSeq || 0) + 1);
+
+    if (swrHit && swrHit.data) {
+      el("loading").classList.add("hidden");
+      const cloned = typeof structuredClone === "function"
+        ? structuredClone(swrHit.data)
+        : JSON.parse(JSON.stringify(swrHit.data));
+      applyAnalyzedBody(cloned, symbol);
+      if (!swrHit.fresh) {
+        silentRefresh(cloned.symbol || symbol);
+      }
+      return;
+    }
+
+    el("loading").classList.remove("hidden");
+    if (!state.data) {
+      el("chart-wrap").classList.add("hidden");
+    }
+
     await withAsyncButton(el("search-btn"), async () => {
-      const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
-      const resp = await fetch(url);
-      const body = await resp.json();
-      if (seq !== state.analyzeSeq) return;
-      if (!resp.ok) {
-        const detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
-        throw new Error(detail || `Error ${resp.status}`);
+      let body = null;
+      if (chartSwrInflight.has(url)) {
+        body = await chartSwrInflight.get(url);
       }
-      state.data = body;
-      // Whatever opened the chart (watchlist, archive, a link), the box at
-      // the top names what is on it — unless the user is typing there.
-      const box = el("ticker-input");
-      if (box && document.activeElement !== box && body.symbol && body.asset_type !== "dex") {
-        box.value = body.symbol;
-        box.title = body.symbol;
-      }
-      state.seenAlertKeys = new Set();
-      state.alertsSeeded = false;
-      if (state.pineActive) clearPineOverride();
-      el("chart-wrap").classList.remove("hidden");
-      resizeAllCharts();
-      // Detach the previous symbol's drawings before the new candle data
-      // loads, not after — a leftover horizontal-line price line (or any
-      // primitive) from the old symbol staying attached while render()
-      // sets data at a wildly different price magnitude (e.g. BTC's
-      // ~90000 vs. a $1-2 altcoin) stretches the price scale's autoscale
-      // to cover both, squeezing the real candles down to an invisible
-      // sliver — and it doesn't shrink back down on its own afterward.
-      loadDrawingsForSymbol();
-      render();
-      notifyParent(true);
-      renderFavorites();
-      savePreferences();
-      refreshDeepBacktest(symbol);
-      // Live WS streaming is wired up for MEXC and Kraken; every crypto
-      // symbol still gets the periodic refresh below regardless of exchange,
-      // as a fallback if the live feed drops or the pair has no ws channel.
-      const LIVE_WS_EXCHANGES = new Set(["mexc", "kraken"]);
-      if (state.assetType === "crypto" && LIVE_WS_EXCHANGES.has(state.cryptoExchange)) {
-        connectLiveFeed(body.symbol);
-      }
-      if (state.assetType === "crypto") {
-        state.lastFullRefresh = Date.now();
-        state.liveRefreshTimer = setInterval(() => {
-          if (liveFeedHealthy() && Date.now() - (state.lastFullRefresh || 0) < fullRefreshEveryMs()) return;
-          silentRefresh(body.symbol);
-        }, 60000);
-        // No WebSocket wired up for Binance/KuCoin yet — say so plainly
-        // instead of leaving the user guessing whether the chart updates.
-        if (!LIVE_WS_EXCHANGES.has(state.cryptoExchange)) {
-          el("polling-badge").classList.remove("hidden");
+      if (!body) {
+        const resp = await fetch(url);
+        body = await resp.json();
+        if (seq !== state.analyzeSeq) return;
+        if (!resp.ok) {
+          const detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+          throw new Error(detail || `Error ${resp.status}`);
         }
+        putSwrMap(chartSwrCache, url, body);
+      } else if (seq !== state.analyzeSeq) {
+        return;
       }
-      // Drawn from the server's last good copy while it fetches a fresh one:
-      // ask again shortly instead of waiting for the 60 s refresh.
-      if (body.stale) setTimeout(() => silentRefresh(body.symbol), 4000);
+      applyAnalyzedBody(body, symbol);
     }).catch((err) => {
       if (seq !== state.analyzeSeq) return; // a newer search owns the screen
       if (EMBED && !embedRetried) {
@@ -9610,32 +9674,31 @@ const COLORS_LIGHT = {
       }
       notifyParent(false, err.message || "");
       showError(err.message || "Error while analyzing the ticker.");
-      el("empty-state").classList.remove("hidden");
+      if (!state.data) el("empty-state").classList.remove("hidden");
     }).finally(() => {
       if (seq === state.analyzeSeq) el("loading").classList.add("hidden");
     });
   }
 
-  // /api/analyze answers instantly using whatever ltf_candles fetched (a
-  // single page per exchange), so the backtest shown at first is only as
-  // deep as that — good enough to not block the chart on. This follows up
-  // in the background with the real, paginated deep-history backtest and
-  // swaps the Strategia panel over once it resolves. A monotonically
-  // increasing token guards against a slow response from an earlier
-  // symbol/timeframe landing after a newer one already replaced it.
   let deepBacktestSeq = 0;
 
   async function refreshDeepBacktest(symbol) {
     const seq = ++deepBacktestSeq;
     try {
-      const url = `/api/backtest/deep?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&ltf_interval=${getSelectedIntervals().ltf}&${getStrategyAndBacktestQuery()}`;
+      const url = buildDeepBtUrl(symbol);
+      const cachedBt = getSwrMap(deepBtSwrCache, url);
+      if (cachedBt && cachedBt.data && state.data) {
+        state.data.backtests[state.activeTimeframe] = cachedBt.data;
+        renderBacktest();
+        applyChartMarkers();
+        if (cachedBt.fresh) return;
+      }
       const resp = await fetch(url);
       if (!resp.ok || seq !== deepBacktestSeq || !state.data) return;
       const bt = await resp.json();
+      putSwrMap(deepBtSwrCache, url, bt);
       state.data.backtests[state.activeTimeframe] = bt;
       renderBacktest();
-      // Il backtest profondo arriva dopo il primo disegno: i marker delle
-      // operazioni vanno rifatti su questo, non su quello della passata rapida.
       applyChartMarkers();
     } catch (err) {
       // The fast-pass backtest already rendered — losing the deeper one
@@ -9802,6 +9865,8 @@ const COLORS_LIGHT = {
     });
   }
 
+  let favPrefetchWarmed = false;
+
   async function loadFavorites() {
     try {
       const resp = await fetch("/api/favorites");
@@ -9811,6 +9876,20 @@ const COLORS_LIGHT = {
     }
     renderFavorites();
     loadFavoriteQuotes();
+    if (!favPrefetchWarmed && state.favorites.length > 0) {
+      favPrefetchWarmed = true;
+      setTimeout(() => {
+        const activeSym = state.data && state.data.symbol;
+        state.favorites
+          .filter((f) => f.symbol !== activeSym)
+          .slice(0, 3)
+          .forEach((f, idx) => {
+            setTimeout(() => {
+              prefetchAnalyze(f.symbol, f.asset_type, f.asset_type === "crypto" ? f.exchange : state.cryptoExchange);
+            }, idx * 450);
+          });
+      }, 1200);
+    }
   }
 
   async function loadFavoriteQuotes() {
@@ -10042,6 +10121,15 @@ const COLORS_LIGHT = {
       li.appendChild(caret);
       li.appendChild(right);
       li.appendChild(remove);
+      const warmEntry = () => {
+        prefetchAnalyze(
+          entry.symbol,
+          entry.asset_type,
+          entry.asset_type === "crypto" ? entry.exchange : state.cryptoExchange
+        );
+      };
+      li.addEventListener("pointerenter", warmEntry, { passive: true });
+      li.addEventListener("touchstart", warmEntry, { passive: true });
       li.addEventListener("click", () => {
         state.assetType = entry.asset_type;
         if (entry.asset_type === "crypto") state.cryptoExchange = entry.exchange;
@@ -10813,11 +10901,18 @@ const COLORS_LIGHT = {
       // leggibile. Restano compatte finche' non le si apre a mano, tranne
       // quelle che stai cercando.
       const openByDefault = !!issuesView.query;
+      const pct = typeof it.progress === "number"
+        ? Math.max(0, Math.min(100, Math.round(it.progress)))
+        : (it.status === "risolto" || it.status === "scartato" ? 100 : it.status === "in corso" ? 65 : it.status === "riaperto" ? 25 : 10);
       return `<details class="issue-card is-${(it.status || "aperto").replace(" ", "-")}"${openByDefault ? " open" : ""}>
         <summary class="issue-head">
           <span class="issue-status">${ISSUE_STATUS_LABEL[it.status] || it.status}</span>
           <span class="issue-prio p-${it.priority}" data-no-i18n>${issuePrioLabel(it.priority)}</span>
           <span class="issue-title">${escapeHtml(it.title)}</span>
+          <span class="issue-prog-wrap" title="Task completion: ${pct}%" data-no-i18n>
+            <span class="issue-prog-bar"><span class="issue-prog-fill" style="width:${pct}%"></span></span>
+            <span class="issue-prog-pct">${pct}%</span>
+          </span>
         </summary>
         ${it.detail ? `<p class="issue-detail">${escapeHtml(it.detail)}</p>` : ""}
         <p class="issue-meta">${escapeHtml(it.author || "")}${when ? " · " + when : ""} · <code>${escapeHtml(it.id)}</code></p>

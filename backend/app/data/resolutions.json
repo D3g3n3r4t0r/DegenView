@@ -3513,5 +3513,20 @@
     "status": "risolto",
     "at": 1792784000,
     "summary": "Ripristinati subito tutti i ~46 progetti in Settori e Oggi per tutti gli account (disattivato il filtro _kobra_lists/_gem_view su onchain_full_score_emails che lasciava solo DREGG e PARE), introdotto il sistema di autoripristino automatico (_safe_arena_pool) che rileva se un filtro o la finestra a 30 giorni svuota la lista progetti e ripristina in automatico il pool completo, e accorciati i messaggi di deploy su Telegram in un unico messaggio compatto con scheda grafica in stile Design 01."
+  },
+  "seed-0398l": {
+    "status": "risolto",
+    "at": 1792786000,
+    "summary": "Rivoluzione delle performance su 3 Pilastri: (1) Native Rust Quant Core (backend/rust_core -> libdegenview_rs.so compilato nel Dockerfile multi-stage + rust_bridge.py e orjson SIMD in fast_json.py) per confirmed_events e cache degli indicatori LKI/LKI2 durante l'ottimizzazione; (2) Cache in-memory basata su mtime/impronta in arenas.py, sectors.py, coordinated_sells.py, wallet_clusters.py, parser.py e indicators.py; (3) Motore WebAssembly lato browser (wasm-engine.js) e cache SWR a 0 ms in /app."
+  },
+  "seed-0401l": {
+    "status": "risolto",
+    "at": 1792787600,
+    "summary": "Accelerato il caricamento dei grafici su 5 fronti: (1) Cache SWR lato client (ultimi 25 grafici e deep backtest in RAM in app.js) con apertura in 0 ms e zero schermata vuota tra un cambio di ticker/timeframe/strategia e l'altro; (2) Prefetch speculativo su hover/touchstart delle righe Watchlist (.wl-row) e pre-riscaldamento automatico dei primi 3 ticker salvati; (3) Cache per impronta delle candele su Smart Money Concepts (compute_swings e compute_levels: Order Block, FVG, BOS/CHoCH, Liquidity) e Auto-Fibonacci (compute_fib_zones); (4) FastJSONResponse con serializzazione HTTP Rust SIMD (orjson) su FastAPI + costruzione vettorizzata e memorizzata in cache degli oggetti Candle in /api/analyze; (5) Cache in memoria per impronta su /api/backtest/deep."
+  },
+  "seed-0402l": {
+    "status": "risolto",
+    "at": 1792788000,
+    "summary": "Nel Cantiere (/cantiere) e nella Bacheca (#issues-panel) ogni task mostra ora una barra di percentuale di completamento in tempo reale (0%–100%) con aggiornamento al secondo e polling accelerato (ogni 8 s con lavori/deploy in corso): nuova sezione Task Cantiere & Bacheca in /cantiere, barra di avanzamento live per i deploy su Hetzner con indicazione della fase attiva, barra per le PR aperte, barra per i commit online e barra .issue-progress in ogni scheda della Bacheca."
   }
 }

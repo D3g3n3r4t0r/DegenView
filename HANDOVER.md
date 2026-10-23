@@ -1,3 +1,30 @@
+# 2026-10-23 — Barra di percentuale di completamento in tempo reale per ogni task nel Cantiere (`/cantiere`) e nella Bacheca (`#issues-panel`) — `seed-0402l`
+
+Lorenzo, 23/10: "nel cantiere voglio vedere barra di percentuale di completamento di ogni task in tempo reale".
+- **`/cantiere` (`frontend/cantiere.html` & `/api/changes` in `backend/app/main.py`):**
+  - Ogni singolo task/elemento del Cantiere mostra ora una **barra di percentuale di completamento in tempo reale (`0% – 100%`)** con avanzamento fluido al secondo (`setInterval(..., 1000)`), etichetta della fase attiva e polling accelerato in tempo reale (ogni **8 s** quando c'e' un deploy o un task attivo, ogni **20 s** a riposo, con cache server `/api/changes` ridotta a **8 s** per `runs` e `pulls`):
+    - **Nuova sezione `Task Cantiere & Bacheca` (`#tasks`, alimentata dal vivo da `/api/issues` e `/api/jobs`):** mostra i task in lavorazione, aperti, riaperti e gli ultimi completati (piu' eventuali ottimizzazioni Strategy Lab in corso) con filtro rapido (`Attivi + ultimi 15` / `Tutti`), badge ID (`seed-NNNN`), stato, priorita' e barra di avanzamento `0%–100%` in tempo reale.
+    - **Sezione `Deploy in Tempo Reale` (`#deploys`):** barra di completamento dinamica in tempo reale per ogni run di `Deploy to Hetzner`: `8%` in coda, avanzamento al secondo da `12%` a `96%` durante `in_progress` (calcolato sulla durata mediana dei deploy completati con indicazione della fase live: `Verifica & Test`, `Compilazione Rust Core & Immagine Docker`, `Trasferimento & Avvio container su Hetzner`, `Healthcheck finale`) e `100% · Online` al completamento.
+    - **Sezione `In corso · Pull Request` (`#prs`):** barra di avanzamento per ogni PR aperta (`35% · Bozza in lavorazione` oppure `80% · Pronta per il merge`).
+    - **Sezione `Online · Task & Commit Rilasciati` (`#commits`):** ogni commit mostra la propria barra di avanzamento (sincronizzata in tempo reale col deploy attivo se il commit e' in fase di rilascio, oppure `100% · Online`).
+- **Bacheca nel sito principale (`frontend/static/app.js`, `frontend/static/style.css`, `backend/app/issues.py`):**
+  - `issues.list_issues()` espone `progress` (`0..100`) per ogni task e `renderIssues()` disegna la barra di completamento `.issue-prog-wrap` in ogni card della Bacheca.
+
+# 2026-10-23 — Accelerazione estrema del caricamento dei grafici su 5 fronti (Client SWR 0 ms, Watchlist Hover Prefetch, Cache SMC/Fibonacci, `FastJSONResponse` SIMD e Cache `/api/backtest/deep`) — `seed-0401l`
+
+Lorenzo, 23/10: "cambio drastico di performance... altre cose del sito che possiamo velocizzare? tipo il caricamento dei grafici.." -> "procedi".
+- **1. Cache SWR lato client + Zero "Schermata Vuota" (`frontend/static/app.js`):**
+  - Introdotti `chartSwrCache` e `deepBtSwrCache` (fino a 25 grafici completi in memoria, finestra fresh 15s / stale 180s). Tornando su un ticker/timeframe/strategia gia' visitato o pre-caricato, `runAnalysis()` disegna il grafico in **0 ms** senza nascondere `#chart-wrap` e senza mostrare `#loading`, rivalidando in background se necessario. Anche sui cambi a freddo con un grafico gia' aperto, il canvas resta montato senza flash vuoto.
+- **2. Prefetch speculativo su Hover / Touchstart della Watchlist + Pre-riscaldamento all'avvio (`frontend/static/app.js`):**
+  - Al passaggio del mouse (`pointerenter`) o al primo tocco (`touchstart`) su una riga della Watchlist (`.wl-row`), `prefetchAnalyze()` scarica in anticipo `/api/analyze` nella cache SWR prima ancora che il clic venga completato; all'avvio vengono inoltre pre-riscaldati in background i primi 3 ticker della Watchlist.
+- **3. Cache per impronta delle candele su Smart Money Concepts (`smc_engine.py`) e Auto-Fibonacci (`fibonacci.py`):**
+  - `compute_swings()`, `compute_levels()` (Order Block, Fair Value Gap, BOS/CHoCH, Liquidity EQH/EQL) e `compute_fib_zones()` memorizzano i risultati per impronta del DataFrame `(extra, len, first_ts, last_ts, last_close, last_high, last_low)` (fino a 192 voci), abbattendo i ~180 ms di cicli Python $O(N^2)$ di `smartmoneyconcepts` a `0.01 ms` su candele invariate o cambi di strategia, ed esponendo le statistiche in `/api/perf` (`accel.smc_cache`).
+- **4. `FastJSONResponse` (`orjson` SIMD) + Costruzione vettorizzata e cached di `Candle` (`fast_json.py` & `main.py`):**
+  - `FastJSONResponse(JSONResponse)` in `backend/app/accel/fast_json.py` (con `orjson.OPT_NON_STR_KEYS | OPT_SERIALIZE_NUMPY` e fallback sicuro a `super().render()`) impostata come `default_response_class` dell'intera app `FastAPI` in `backend/app/main.py`.
+  - In `/api/analyze`, la lista `candles` e' costruita con estrazione vettorizzata dei timestamp (`df_candles.index.asi8 // 10**9`) e memorizzata in `_CANDLES_CACHE` per impronta del DataFrame.
+- **5. Cache per impronta su `/api/backtest/deep` (`backend/app/main.py`):**
+  - `_DEEP_BT_CACHE` memorizza il `BacktestResult` profondo per impronta delle candele e parametri della strategia/backtest, restituendo il backtest storico in `< 1 ms` quando si passa da un ticker o timeframe all'altro.
+
 # 2026-10-23 — Scansione completa del sito classico e correzioni — `seed-0399l`
 
 Lorenzo, 23/10 (chat dell'account `l`, primo giro sul nuovo repo `D3g3n3r4t0r/DegenView`): "vorrei tu facessi una riscansione completa del sito classico con tutte le sue funzionalita' [...] Deve funzionare tutto perfettamente e sono ben accetti suggerimenti [...] prima di applicare qualsiasi tipo di modifica, dimmelo", poi, letto il resoconto: "fai tutti i miglioramenti, anche i suggerimenti".

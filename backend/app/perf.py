@@ -52,11 +52,13 @@ def snapshot() -> dict:
     accel_info = {}
     try:
         from app.accel import fast_json, ram_cache, rust_bridge
+        from app.analysis.smc_engine import smc_cache_stats
 
         accel_info = {
             "rust_core": rust_bridge.stats(),
             "simd_json": fast_json.stats(),
             "ram_snapshot_cache": ram_cache.stats(),
+            "smc_cache": smc_cache_stats(),
             "wasm_engine": {
                 "enabled": True,
                 "engine": "wasm32-f64-kernel",

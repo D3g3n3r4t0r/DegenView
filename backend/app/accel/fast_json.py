@@ -10,6 +10,8 @@ import json as _stdlib_json
 from pathlib import Path
 from typing import Any
 
+from fastapi.responses import JSONResponse
+
 try:
     import orjson as _orjson  # type: ignore[import-not-found]
     HAS_ORJSON = True
@@ -21,9 +23,32 @@ except Exception:
 _stats = {
     "json_loads": 0,
     "json_dumps": 0,
+    "http_responses": 0,
     "file_cache_hits": 0,
     "file_cache_misses": 0,
 }
+
+
+class FastJSONResponse(JSONResponse):
+    """Drop-in FastAPI `JSONResponse` replacement powered by Rust SIMD `orjson`.
+
+    Falls back to Starlette's standard `JSONResponse.render()` if an object
+    contains custom types unsupported by `orjson`.
+    """
+
+    media_type = "application/json"
+
+    def render(self, content: Any) -> bytes:
+        _stats["http_responses"] += 1
+        if _orjson is not None:
+            try:
+                return _orjson.dumps(
+                    content,
+                    option=_orjson.OPT_NON_STR_KEYS | _orjson.OPT_SERIALIZE_NUMPY,
+                )
+            except (TypeError, ValueError):
+                pass
+        return super().render(content)
 
 # (path_str) -> (mtime_ns, size, parsed_obj)
 _file_cache: dict[str, tuple[int, int, Any]] = {}

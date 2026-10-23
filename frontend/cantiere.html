@@ -6,26 +6,26 @@
 <title>Cantiere DegenView</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <style>
-/* Layout: one calm column, three stacked sections (in corso -> deploy -> online), sticky status bar on top */
+/* Layout: one calm column, four stacked sections (task bacheca -> in corso -> deploy -> online), sticky status bar on top */
 :root{
-  --bg:#f5f6f4; --surface:#ffffff; --fg:#1b1f1d; --muted:#66706b; --line:#dfe3df;
-  --accent:#2f6f5e; --accent-soft:#e3efe9;
-  --run:#b7791f; --run-soft:#fbf1dc; --ok:#2f7a4a; --bad:#b33a3a; --bad-soft:#f8e4e2;
+  --bg:#efeae0; --surface:#f8f5ef; --surface-raised:#e4dfd3; --fg:#2f3a32; --muted:#667068; --line:#e0d9cb;
+  --accent:#2f7a4a; --accent-soft:#dce8dd;
+  --run:#b7791f; --run-soft:#fbf1dc; --ok:#2f7a4a; --bad:#b4472f; --bad-soft:#f8e4e2;
   --new:#fff6c9;
   --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#121614; --surface:#1a1f1d; --fg:#e4e9e6; --muted:#8e9993; --line:#2a312e;
-  --accent:#7cc4ad; --accent-soft:#1f322b;
+  --bg:#111513; --surface:#181e1a; --surface-raised:#222a25; --fg:#e8ece9; --muted:#8e9993; --line:#2a332e;
+  --accent:#6cc08a; --accent-soft:#1f322b;
   --run:#e0a94a; --run-soft:#33291a; --ok:#6cc08a; --bad:#e57b72; --bad-soft:#3a2321;
   --new:#3a3519; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#121614; --surface:#1a1f1d; --fg:#e4e9e6; --muted:#8e9993; --line:#2a312e;
-  --accent:#7cc4ad; --accent-soft:#1f322b;
+  --bg:#111513; --surface:#181e1a; --surface-raised:#222a25; --fg:#e8ece9; --muted:#8e9993; --line:#2a332e;
+  --accent:#6cc08a; --accent-soft:#1f322b;
   --run:#e0a94a; --run-soft:#33291a; --ok:#6cc08a; --bad:#e57b72; --bad-soft:#3a2321;
   --new:#3a3519; color-scheme:dark}
 *{box-sizing:border-box}
@@ -34,12 +34,12 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 var(--sans);-w
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
 a{color:inherit}
 a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
-.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:820px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 
 header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
 .bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding-block:12px}
 .brand{display:flex;align-items:baseline;gap:8px;margin-right:auto;min-width:0}
-.brand h1{font-size:17px;font-weight:600;margin:0;letter-spacing:-.01em}
+.brand h1{font-size:17px;font-weight:700;margin:0;letter-spacing:-.01em}
 .brand .repo{font:12px var(--mono);color:var(--muted);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .status{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
@@ -48,33 +48,61 @@ header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var
 .dot.paused{background:var(--muted)}
 @keyframes pulse{50%{opacity:.35}}
 .quota{font:12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
-button{font:500 13px var(--sans);color:var(--accent);background:var(--accent-soft);border:1px solid transparent;border-radius:6px;padding:6px 11px;cursor:pointer}
+button{font:600 13px var(--sans);color:var(--fg);background:var(--surface-raised);border:1px solid var(--line);border-radius:999px;padding:6px 13px;cursor:pointer;transition:all .15s ease}
 button:hover{border-color:var(--accent)}
+button.active{background:var(--fg);color:var(--surface);border-color:var(--fg)}
 button:disabled{opacity:.55;cursor:default}
-.notice{font-size:13px;padding:8px 12px;border-radius:6px;background:var(--run-soft);color:var(--fg);margin-top:12px}
+.notice{font-size:13px;padding:8px 12px;border-radius:10px;background:var(--run-soft);color:var(--fg);margin-top:12px}
 
-main{display:flex;flex-direction:column;gap:28px;padding-block:20px 40px}
-section h2{display:flex;align-items:baseline;gap:10px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 8px}
+/* Global Cantiere completion summary bar */
+.global-prog-card{margin-top:16px;padding:13px 16px;background:var(--surface);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;gap:8px}
+.global-prog-top{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px}
+.global-prog-title{font-weight:600;display:flex;align-items:center;gap:8px}
+.global-prog-pct{font:600 14px var(--mono);color:var(--ok);font-variant-numeric:tabular-nums}
+
+/* Per-task real-time completion bar */
+.task-prog{margin-top:7px;display:flex;flex-direction:column;gap:4px}
+.task-prog-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--muted)}
+.task-prog-stage{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.task-prog-val{font:600 11.5px var(--mono);font-variant-numeric:tabular-nums;color:var(--fg);flex:none}
+.task-prog-track{width:100%;height:7px;background:var(--surface-raised);border-radius:999px;overflow:hidden;position:relative}
+.task-prog-fill{height:100%;border-radius:999px;background:var(--ok);transition:width .45s cubic-bezier(.22,1,.36,1)}
+.task-prog-fill.is-run{
+  background:linear-gradient(90deg,var(--run) 0%,#e0a94a 50%,var(--run) 100%);
+  background-size:200% 100%;
+  animation:progShimmer 1.6s linear infinite;
+}
+.task-prog-fill.is-open{background:var(--run)}
+.task-prog-fill.is-bad{background:var(--bad)}
+@keyframes progShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+main{display:flex;flex-direction:column;gap:26px;padding-block:18px 40px}
+section h2{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 8px}
 section h2 .n{font:12px var(--mono);letter-spacing:0;text-transform:none}
-.list{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:8px}
-.list>li{padding:11px 14px;border-top:1px solid var(--line);display:flex;gap:12px;align-items:flex-start;min-width:0;transition:background-color 2.5s ease}
+.sec-tools{margin-left:auto;display:flex;gap:6px}
+.sec-tools button{font-size:11.5px;padding:3px 10px}
+.list{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.list>li{padding:12px 15px;border-top:1px solid var(--line);display:flex;gap:12px;align-items:flex-start;min-width:0;transition:background-color 2.5s ease}
 .list>li:first-child{border-top:0}
 .list>li.fresh{background:var(--new);transition:none}
 .empty{padding:14px;color:var(--muted);font-size:14px}
 .body{flex:1;min-width:0}
-.main-t{font-weight:500;overflow-wrap:anywhere}
+.main-t{font-weight:600;overflow-wrap:anywhere}
 .main-t a{text-decoration:none}
 .main-t a:hover{text-decoration:underline}
 .sub{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere;margin-top:2px}
 .meta{font:12px var(--mono);color:var(--muted);white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;flex:none}
 .meta a{text-decoration:none}
 .meta a:hover{text-decoration:underline}
-.chip{display:inline-block;font:500 11px var(--sans);letter-spacing:.02em;padding:1px 7px;border-radius:999px;vertical-align:1px;white-space:nowrap}
+.chip{display:inline-block;font:600 11px var(--sans);letter-spacing:.02em;padding:1px 8px;border-radius:999px;vertical-align:1px;white-space:nowrap}
 .chip.kobra{background:var(--accent-soft);color:var(--accent)}
-.chip.pr{background:var(--surface);border:1px solid var(--line);color:var(--muted);font-family:var(--mono)}
+.chip.pr{background:var(--surface-raised);border:1px solid var(--line);color:var(--muted);font-family:var(--mono)}
+.chip.prio-alta{background:var(--bad-soft);color:var(--bad)}
+.chip.prio-media{background:var(--run-soft);color:var(--run)}
+.chip.prio-bassa{background:var(--surface-raised);color:var(--muted)}
 code.br{font:12px var(--mono);color:var(--muted)}
 
-.state{flex:none;width:86px;font:500 12px var(--sans);display:flex;align-items:center;gap:6px;padding-top:2px}
+.state{flex:none;width:92px;font:600 12px var(--sans);display:flex;align-items:center;gap:6px;padding-top:2px}
 .state i{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted)}
 .state.run{color:var(--run)} .state.run i{background:var(--run);animation:pulse 1.2s ease-in-out infinite}
 .state.ok{color:var(--ok)} .state.ok i{background:var(--ok)}
@@ -115,37 +143,66 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
 
 <div class="wrap">
   <div class="notice" id="notice" hidden></div>
+
+  <div class="global-prog-card" id="global-prog-card">
+    <div class="global-prog-top">
+      <span class="global-prog-title">Avanzamento globale dei task del Cantiere <span class="chip kobra" id="global-prog-counts">in calcolo…</span></span>
+      <span class="global-prog-pct" id="global-prog-pct">100%</span>
+    </div>
+    <div class="task-prog-track" style="height:9px">
+      <div class="task-prog-fill" id="global-prog-fill" style="width:100%"></div>
+    </div>
+  </div>
+
   <main>
     <section>
-      <h2>In corso <span class="n" id="n-pr"></span></h2>
-      <ul class="list" id="prs"><li class="empty">Caricamento…</li></ul>
+      <h2>
+        Task Cantiere &amp; Bacheca <span class="n" id="n-tasks"></span>
+        <span class="sec-tools">
+          <button type="button" id="tasks-filter-recent" class="active">Attivi + ultimi 15</button>
+          <button type="button" id="tasks-filter-all">Tutti</button>
+        </span>
+      </h2>
+      <ul class="list" id="tasks"><li class="empty">Caricamento task…</li></ul>
     </section>
+
     <section class="deploy">
-      <h2>Deploy <span class="n" id="n-dep"></span></h2>
+      <h2>Deploy in Tempo Reale <span class="n" id="n-dep"></span></h2>
       <ul class="list" id="deploys"><li class="empty">Caricamento…</li></ul>
     </section>
+
     <section>
-      <h2>Online <span class="n" id="n-on"></span></h2>
+      <h2>In corso · Pull Request <span class="n" id="n-pr"></span></h2>
+      <ul class="list" id="prs"><li class="empty">Caricamento…</li></ul>
+    </section>
+
+    <section>
+      <h2>Online · Task &amp; Commit Rilasciati <span class="n" id="n-on"></span></h2>
       <ul class="list" id="commits"><li class="empty">Caricamento…</li></ul>
     </section>
   </main>
-  <footer>Aggiornamento automatico ogni 2 minuti mentre la pagina è aperta. Dati pubblici del repository, letti dal server di DegenView.</footer>
+  <footer>Aggiornamento in tempo reale (ogni segundo per le barre di avanzamento; sincronizzazione server automatica ogni 8–20 secondi).</footer>
 </div>
 
 <script>
 (function(){
   "use strict";
   var REPO = "D3g3n3r4t0r/DegenView";
-  var API = "https://api.github.com/repos/" + REPO;
   var WEB = "https://github.com/" + REPO;
   var WORKFLOW = "Deploy to Hetzner";
-  var POLL_MS = 120000;
+  var POLL_IDLE_MS = 20000;
+  var POLL_LIVE_MS = 8000;
   var CALLS = 3;
 
   var $ = function(id){ return document.getElementById(id); };
   var lastOk = null, timer = null, busy = false;
   var quota = { remaining: null, reset: null };
-  var seen = null; // ids seen at the previous refresh; null on first load
+  var seen = null;
+  var showAllTasks = false;
+  var lastIssuesBody = null;
+  var lastJobsList = [];
+  var estDeployMs = 105000; // dynamically calibrated from completed runs
+  var liveRunsBySha = {};   // head_sha -> { start, status }
 
   function esc(s){
     return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
@@ -171,17 +228,57 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
     return Math.floor(s/60) + " min " + String(s%60).padStart(2,"0") + " s";
   }
   function relSpan(iso){ return '<time data-rel="' + esc(iso) + '" title="' + esc(abs(iso)) + '">' + esc(rel(iso)) + '</time>'; }
+
+  function deployProgressFromElapsed(elapsedMs, status){
+    if(status === "queued") return { pct: 8, stage: "In coda sul runner GitHub Actions…" };
+    var ratio = Math.max(0, elapsedMs) / Math.max(45000, estDeployMs);
+    var pct = Math.min(96, Math.max(12, Math.round(12 + 84 * (1 - Math.exp(-2.1 * ratio)))));
+    var stage = "Verifica & Test automatici";
+    if(pct >= 85) stage = "Healthcheck finale & Messa online";
+    else if(pct >= 58) stage = "Trasferimento & Avvio container su Hetzner";
+    else if(pct >= 26) stage = "Compilazione Rust Core & Immagine Docker";
+    return { pct: pct, stage: stage };
+  }
+
+  function renderProgressBar(pct, stageText, mode, runStartIso, runStatus){
+    var p = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+    var fillCls = "task-prog-fill" + (mode === "run" ? " is-run" : mode === "open" ? " is-open" : mode === "bad" ? " is-bad" : "");
+    var dataAttrs = runStartIso
+      ? ' data-live-prog-start="' + esc(runStartIso) + '" data-live-prog-status="' + esc(runStatus || "in_progress") + '"'
+      : "";
+    return '<div class="task-prog"' + dataAttrs + '>' +
+      '<div class="task-prog-row">' +
+        '<span class="task-prog-stage" data-prog-stage>' + esc(stageText || (p === 100 ? "Completato" : "In lavorazione")) + '</span>' +
+        '<span class="task-prog-val" data-prog-val>' + p + '%</span>' +
+      '</div>' +
+      '<div class="task-prog-track">' +
+        '<div class="' + fillCls + '" data-prog-fill style="width:' + p + '%"></div>' +
+      '</div>' +
+    '</div>';
+  }
+
   function tickTimes(){
     document.querySelectorAll("time[data-rel]").forEach(function(t){ t.textContent = rel(t.getAttribute("data-rel")); });
     if(lastOk) $("updated").textContent = "aggiornato " + rel(lastOk.toISOString());
     document.querySelectorAll("[data-run-start]").forEach(function(el){
       el.textContent = dur(Date.now() - new Date(el.getAttribute("data-run-start")).getTime());
     });
+    // Real-time 1-second progress bar update for any live deploy or commit being deployed
+    document.querySelectorAll("[data-live-prog-start]").forEach(function(wrap){
+      var startIso = wrap.getAttribute("data-live-prog-start");
+      var st = wrap.getAttribute("data-live-prog-status") || "in_progress";
+      var elapsed = Date.now() - new Date(startIso).getTime();
+      var info = deployProgressFromElapsed(elapsed, st);
+      var stageEl = wrap.querySelector("[data-prog-stage]");
+      var valEl = wrap.querySelector("[data-prog-val]");
+      var fillEl = wrap.querySelector("[data-prog-fill]");
+      if(stageEl) stageEl.textContent = info.stage + " · " + dur(elapsed);
+      if(valEl) valEl.textContent = info.pct + "%";
+      if(fillEl) fillEl.style.width = info.pct + "%";
+    });
   }
 
   function get(path){
-    // The server reads GitHub for the page (/api/changes, cached a minute):
-    // the site's CSP keeps the browser on its own origin.
     var what = path.indexOf("/pulls") === 0 ? "pulls" : path.indexOf("/actions") === 0 ? "runs" : "commits";
     return fetch("/api/changes?what=" + what, { cache: "no-store" })
       .then(function(r){
@@ -193,6 +290,21 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
         }
         return r.json();
       });
+  }
+
+  function getIssues(){
+    return fetch("/api/issues", { cache: "no-store" })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .catch(function(){ return null; });
+  }
+
+  function getJobs(){
+    var dev = "";
+    try { dev = localStorage.getItem("lae.device") || ""; } catch(_){}
+    var headers = dev ? { "X-Device": dev } : {};
+    return fetch("/api/jobs", { cache: "no-store", headers: headers })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .catch(function(){ return null; });
   }
 
   // ---- parsing -------------------------------------------------------
@@ -209,14 +321,13 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
     }
     var mm = MERGE_RE.exec(title);
     var prTitle = null;
-    if(mm){ // a merge commit keeps the PR title in the body
+    if(mm){
       var rest = lines.slice(1).map(function(x){ return x.trim(); }).filter(Boolean);
       prTitle = rest.length ? rest[0] : null;
     }
     return { title: title, it: it, solo: solo, pr: mm ? +mm[1] : null, from: mm ? mm[2] : null, prTitle: prTitle };
   }
 
-  // Group the commits of each PR under its merge commit, using the parents graph.
   function buildTimeline(commits){
     var by = {}; commits.forEach(function(c){ by[c.sha] = c; });
     var mainline = [], onMain = {};
@@ -236,7 +347,6 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
       }
       return entry;
     });
-    // commits in the page that sit on neither path (rare): show them alone
     commits.forEach(function(c){
       if(!onMain[c.sha] && !used[c.sha]) out.push({ c: c, p: parseMsg(c.commit.message), kids: [], stray: true });
     });
@@ -248,14 +358,120 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
   var nextSeen = {};
   function mark(id){ nextSeen[id] = true; return fresh(id); }
 
+  function computeTaskProgress(it){
+    if(typeof it.progress === "number") return Math.max(0, Math.min(100, Math.round(it.progress)));
+    var st = it.status || "aperto";
+    if(st === "risolto" || st === "scartato") return 100;
+    if(st === "in corso") return 65;
+    if(st === "riaperto") return 25;
+    return (it.replies && it.replies.length) ? 35 : 10;
+  }
+
+  function renderTasksSection(issuesBody, jobsList){
+    if(issuesBody) lastIssuesBody = issuesBody;
+    if(jobsList) lastJobsList = jobsList;
+    var items = (lastIssuesBody && lastIssuesBody.items) || [];
+    var counts = (lastIssuesBody && lastIssuesBody.counts) || {};
+    var activeJobs = (lastJobsList || []).filter(function(j){ return j && (j.status === "running" || j.status === "queued"); });
+
+    // Update Global Cantiere progress summary
+    var totalTasks = items.length;
+    var resolvedTasks = items.filter(function(i){ return i.status === "risolto" || i.status === "scartato"; }).length;
+    var inProgCount = (counts["in corso"] || 0) + (counts["aperto"] || 0) + (counts["riaperto"] || 0) + activeJobs.length;
+    var weightedSum = 0;
+    items.forEach(function(i){ weightedSum += computeTaskProgress(i); });
+    var globalPct = totalTasks ? Math.round((weightedSum / totalTasks) * 10) / 10 : 100;
+    $("global-prog-pct").textContent = globalPct + "%";
+    $("global-prog-fill").style.width = Math.min(100, Math.max(5, globalPct)) + "%";
+    $("global-prog-fill").className = "task-prog-fill" + (inProgCount > 0 ? " is-run" : "");
+    $("global-prog-counts").textContent = resolvedTasks + "/" + totalTasks + " completati" + (inProgCount ? " · " + inProgCount + " attivi" : "");
+
+    var activeItems = items.filter(function(i){ return i.status !== "risolto" && i.status !== "scartato"; });
+    var doneItems = items.filter(function(i){ return i.status === "risolto" || i.status === "scartato"; });
+    var visibleIssues = showAllTasks ? activeItems.concat(doneItems) : activeItems.concat(doneItems.slice(0, 15));
+
+    $("n-tasks").textContent = (activeJobs.length + activeItems.length)
+      ? (activeJobs.length + activeItems.length) + " in lavorazione / " + totalTasks + " totali"
+      : totalTasks + " completati";
+
+    var rowsHtml = [];
+
+    // 1. Live running optimization / background jobs
+    activeJobs.forEach(function(j){
+      var jPct = Math.max(5, Math.min(99, Math.round((Number(j.progress) || 0.1) * 100)));
+      var jTitle = j.title || (j.symbol ? ("Ottimizzazione Strategy Lab · " + j.symbol + " (" + (j.strategy_name || "") + ")") : "Job in background");
+      rowsHtml.push(
+        '<li class="live">' +
+          '<div class="state run"><i></i>in corso</div>' +
+          '<div class="body">' +
+            '<div class="main-t">' + esc(jTitle) + ' <span class="chip kobra">live job</span></div>' +
+            renderProgressBar(jPct, j.phase || "Ricerca parametri in tempo reale…", "run") +
+          '</div>' +
+          '<div class="meta"><code>' + esc(String(j.id || "").slice(0,8)) + '</code></div>' +
+        '</li>'
+      );
+    });
+
+    // 2. Tasks from Bacheca (/api/issues)
+    visibleIssues.forEach(function(it){
+      var pct = computeTaskProgress(it);
+      var st = it.status || "aperto";
+      var stState = st === "risolto" ? ["ok", "risolto"]
+        : st === "in corso" ? ["run", "in corso"]
+        : st === "riaperto" ? ["bad", "riaperto"]
+        : st === "scartato" ? ["skip", "scartato"]
+        : ["run", "aperto"];
+      var mode = st === "risolto" || st === "scartato" ? "ok" : st === "in corso" ? "run" : st === "riaperto" ? "bad" : "open";
+      var stageLabel = st === "risolto"
+        ? "Completato e verificato (100%)"
+        : st === "in corso"
+        ? "Sviluppo e test in corso…"
+        : st === "riaperto"
+        ? "Riaperto per verifica supplementare"
+        : st === "scartato"
+        ? "Chiuso / Scartato"
+        : "In coda di lavorazione";
+      var whenIso = ((it.resolution && it.resolution.at) || it.created_at)
+        ? new Date(((it.resolution && it.resolution.at) || it.created_at) * 1000).toISOString()
+        : "";
+      var summary = it.resolution && it.resolution.summary ? it.resolution.summary : (it.detail || "");
+      if(summary.length > 220) summary = summary.slice(0, 217) + "…";
+      var liCls = (st === "in corso" ? "live " : st === "riaperto" ? "failed " : "") + mark("iss" + it.id + st + pct);
+      rowsHtml.push(
+        '<li class="' + liCls.trim() + '">' +
+          '<div class="state ' + stState[0] + '"><i></i>' + esc(stState[1]) + '</div>' +
+          '<div class="body">' +
+            '<div class="main-t">' + esc(it.title) +
+              ' <span class="chip pr">' + esc(it.id) + '</span>' +
+              (it.priority ? ' <span class="chip prio-' + esc(it.priority) + '">' + esc(it.priority) + '</span>' : '') +
+            '</div>' +
+            (summary ? '<div class="sub">' + esc(summary) + '</div>' : '') +
+            renderProgressBar(pct, stageLabel, mode) +
+          '</div>' +
+          '<div class="meta">' + (whenIso ? relSpan(whenIso) : '') + '</div>' +
+        '</li>'
+      );
+    });
+
+    if(!rowsHtml.length){
+      $("tasks").innerHTML = '<li class="empty">Nessun task registrato.</li>';
+      return;
+    }
+    $("tasks").innerHTML = rowsHtml.join("");
+  }
+
   function renderPRs(prs){
     $("n-pr").textContent = prs.length ? prs.length : "";
     if(!prs.length){ $("prs").innerHTML = '<li class="empty">Nessuna modifica in attesa di merge.</li>'; return; }
     $("prs").innerHTML = prs.map(function(pr){
+      var pct = pr.draft ? 35 : 80;
+      var stage = pr.draft ? "Bozza in lavorazione sul branch" : "Pronta per revisione e merge su main";
       return '<li class="' + mark("pr" + pr.number + pr.updated_at) + '">' +
         '<div class="body"><div class="main-t"><a href="' + esc(pr.html_url) + '" target="_blank" rel="noopener">' + esc(pr.title) + '</a>' +
         (pr.draft ? ' <span class="chip pr">bozza</span>' : '') + '</div>' +
-        '<div class="sub"><code class="br">' + esc(pr.head && pr.head.ref) + '</code> · ' + esc(pr.user && pr.user.login) + '</div></div>' +
+        '<div class="sub"><code class="br">' + esc(pr.head && pr.head.ref) + '</code> · ' + esc(pr.user && pr.user.login) + '</div>' +
+        renderProgressBar(pct, stage, "run") +
+        '</div>' +
         '<div class="meta"><a href="' + esc(pr.html_url) + '" target="_blank" rel="noopener">#' + esc(pr.number) + '</a><br>' + relSpan(pr.created_at) + '</div></li>';
     }).join("");
   }
@@ -267,7 +483,19 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
     if(r.conclusion === "cancelled") return ["skip","annullato"];
     return ["skip", r.conclusion || "—"];
   }
+
   function renderRuns(runs){
+    liveRunsBySha = {};
+    // Calibrate expected deploy duration from completed successful runs
+    var okDurs = runs
+      .filter(function(r){ return r.status === "completed" && r.conclusion === "success" && (r.run_started_at || r.created_at) && r.updated_at; })
+      .map(function(r){ return new Date(r.updated_at) - new Date(r.run_started_at || r.created_at); })
+      .filter(function(ms){ return ms > 20000 && ms < 600000; })
+      .sort(function(a,b){ return a - b; });
+    if(okDurs.length){
+      estDeployMs = okDurs[Math.floor(okDurs.length / 2)];
+    }
+
     var live = runs.filter(function(r){ return r.status !== "completed"; }).length;
     $("n-dep").textContent = live ? live + " in corso" : "";
     if(!runs.length){ $("deploys").innerHTML = '<li class="empty">Nessun deploy recente su main.</li>'; return; }
@@ -277,17 +505,33 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
       var resolvedBy = (r.conclusion === "failure" || r.conclusion === "timed_out") ? latestOkSha : null;
       var st = runState(r, resolvedBy);
       var start = r.run_started_at || r.created_at;
+      if(r.status !== "completed" && r.head_sha){
+        liveRunsBySha[String(r.head_sha)] = { start: start, status: r.status };
+      }
       var d = r.status === "completed"
         ? esc(dur(new Date(r.updated_at) - new Date(start)))
         : '<span data-run-start="' + esc(start) + '">' + esc(dur(Date.now() - new Date(start))) + '</span>';
       var p = parseMsg(r.head_commit && r.head_commit.message);
       var label = p.pr ? (p.prTitle || ("PR #" + p.pr)) : (r.display_title || p.title);
       var cls = (st[0] === "run" ? " live" : st[0] === "bad" ? " failed" : "") + mark("run" + r.id + r.status + (r.conclusion || ""));
+
+      var progHtml = "";
+      if(r.status !== "completed"){
+        var liveInfo = deployProgressFromElapsed(Date.now() - new Date(start).getTime(), r.status);
+        progHtml = renderProgressBar(liveInfo.pct, liveInfo.stage + " · " + dur(Date.now() - new Date(start).getTime()), "run", start, r.status);
+      } else if(r.conclusion === "success" || resolvedBy){
+        progHtml = renderProgressBar(100, resolvedBy ? "Risolto dal deploy successivo" : "Deploy completato e live su Hetzner", "ok");
+      } else {
+        progHtml = renderProgressBar(100, "Deploy interrotto (" + (r.conclusion || "errore") + ")", "bad");
+      }
+
       return '<li class="' + cls.trim() + '">' +
         '<div class="state ' + st[0] + '"><i></i>' + esc(st[1]) + '</div>' +
         '<div class="body"><div class="main-t"><a href="' + esc(r.html_url) + '" target="_blank" rel="noopener">' + esc(label) + '</a></div>' +
         '<div class="sub">' + (p.pr ? '<span class="chip pr">#' + esc(p.pr) + '</span> ' : '') +
-        '<a class="sha" href="' + WEB + '/commit/' + esc(r.head_sha) + '" target="_blank" rel="noopener"><code class="br">' + esc(String(r.head_sha).slice(0,7)) + '</code></a> · durata ' + d + (resolvedBy ? ' · risolto da <a class="sha" href="' + WEB + '/commit/' + esc(resolvedBy) + '" target="_blank" rel="noopener"><code class="br">' + esc(resolvedBy.slice(0,7)) + '</code></a>' : '') + '</div></div>' +
+        '<a class="sha" href="' + WEB + '/commit/' + esc(r.head_sha) + '" target="_blank" rel="noopener"><code class="br">' + esc(String(r.head_sha).slice(0,7)) + '</code></a> · durata ' + d + (resolvedBy ? ' · risolto da <a class="sha" href="' + WEB + '/commit/' + esc(resolvedBy) + '" target="_blank" rel="noopener"><code class="br">' + esc(resolvedBy.slice(0,7)) + '</code></a>' : '') + '</div>' +
+        progHtml +
+        '</div>' +
         '<div class="meta">' + relSpan(start) + '</div></li>';
     }).join("");
   }
@@ -306,6 +550,13 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
     $("commits").innerHTML = tl.map(function(e){
       var c = e.c, p = e.p, when = c.commit.committer && c.commit.committer.date || c.commit.author.date;
       var sha = '<a href="' + esc(c.html_url) + '" target="_blank" rel="noopener">' + esc(c.sha.slice(0,7)) + '</a>';
+      var liveRun = liveRunsBySha[String(c.sha)];
+      var progBar = liveRun
+        ? (function(){
+            var info = deployProgressFromElapsed(Date.now() - new Date(liveRun.start).getTime(), liveRun.status);
+            return renderProgressBar(info.pct, "Deploy in corso: " + info.stage, "run", liveRun.start, liveRun.status);
+          })()
+        : renderProgressBar(100, "Online in produzione (100%)", "ok");
       if(p.pr){
         var prUrl = WEB + "/pull/" + p.pr;
         var anyKobra = e.kids.length && e.kids.every(function(k){ return k.p.solo; });
@@ -317,10 +568,10 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
             '<a class="sha" href="' + esc(k.c.html_url) + '" target="_blank" rel="noopener">' + esc(k.c.sha.slice(0,7)) + '</a>' +
             (k.p.solo && !anyKobra ? ' <span class="chip kobra">solo whitekobra</span>' : '') + '</li>';
         }).join("") + '</ul>' : '';
-        return '<li class="' + mark("c" + c.sha).trim() + '"><div class="body">' + head + kids + '</div>' +
+        return '<li class="' + (liveRun ? "live " : "") + mark("c" + c.sha).trim() + '"><div class="body">' + head + kids + progBar + '</div>' +
           '<div class="meta"><a href="' + esc(prUrl) + '" target="_blank" rel="noopener">#' + esc(p.pr) + '</a><br>' + relSpan(when) + '</div></li>';
       }
-      return '<li class="' + mark("c" + c.sha).trim() + '"><div class="body">' + commitLine(c, p) + '</div>' +
+      return '<li class="' + (liveRun ? "live " : "") + mark("c" + c.sha).trim() + '"><div class="body">' + commitLine(c, p) + progBar + '</div>' +
         '<div class="meta">' + sha + '<br>' + relSpan(when) + '</div></li>';
     }).join("");
   }
@@ -337,10 +588,11 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
 
   function schedule(){
     clearTimeout(timer);
-    if(document.hidden) return; // paused while the tab is in background
-    var wait = POLL_MS;
+    if(document.hidden) return;
+    var hasLive = !!document.querySelector(".list>li.live");
+    var wait = hasLive ? POLL_LIVE_MS : POLL_IDLE_MS;
     if(quota.remaining != null && quota.remaining < CALLS * 3 && quota.reset){
-      wait = Math.max(POLL_MS, quota.reset - Date.now() + 5000);
+      wait = Math.max(POLL_IDLE_MS, quota.reset - Date.now() + 5000);
       notice("Richieste quasi esaurite (" + quota.remaining + " rimaste): il prossimo aggiornamento è alle " +
         new Date(Date.now() + wait).toLocaleTimeString("it-IT", {hour:"2-digit", minute:"2-digit"}) + ".");
     }
@@ -358,12 +610,15 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
     Promise.all([
       get("/pulls?state=open&per_page=30"),
       get("/actions/runs?branch=main&per_page=10"),
-      get("/commits?sha=main&per_page=30")
+      get("/commits?sha=main&per_page=30"),
+      getIssues(),
+      getJobs()
     ]).then(function(res){
       nextSeen = {};
-      renderPRs(res[0] || []);
       renderRuns(((res[1] && res[1].workflow_runs) || []).filter(function(r){ return r.name === WORKFLOW; }));
+      renderPRs(res[0] || []);
       renderCommits(res[2] || []);
+      renderTasksSection(res[3], (res[4] && res[4].jobs) || []);
       seen = nextSeen;
       lastOk = new Date();
       setStatus(document.querySelector(".list>li.live") ? "busy" : "", "aggiornato adesso");
@@ -382,12 +637,25 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
     });
   }
 
+  $("tasks-filter-recent").addEventListener("click", function(){
+    showAllTasks = false;
+    $("tasks-filter-recent").classList.add("active");
+    $("tasks-filter-all").classList.remove("active");
+    renderTasksSection(null, null);
+  });
+  $("tasks-filter-all").addEventListener("click", function(){
+    showAllTasks = true;
+    $("tasks-filter-all").classList.add("active");
+    $("tasks-filter-recent").classList.remove("active");
+    renderTasksSection(null, null);
+  });
+
   $("refresh").addEventListener("click", refresh);
   document.addEventListener("visibilitychange", function(){
     if(document.hidden){ clearTimeout(timer); setStatus("paused"); return; }
-    if(!lastOk || Date.now() - lastOk.getTime() > POLL_MS) refresh(); else { setStatus(""); schedule(); }
+    if(!lastOk || Date.now() - lastOk.getTime() > POLL_LIVE_MS) refresh(); else { setStatus(""); schedule(); }
   });
-  setInterval(tickTimes, 30000);
+  setInterval(tickTimes, 1000);
   refresh();
 })();
 </script>

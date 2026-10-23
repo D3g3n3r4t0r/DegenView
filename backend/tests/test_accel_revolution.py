@@ -14,7 +14,7 @@ import pandas as pd
 
 from app import perf
 from app.accel import fast_json, ram_cache, rust_bridge
-from app.analysis import indicators, strategies
+from app.analysis import fibonacci, indicators, smc_engine, strategies
 from app.pine import parser as pine_parser
 
 
@@ -118,8 +118,29 @@ def test_perf_snapshot_exposes_accel_telemetry_and_wasm_asset():
     assert "rust_core" in snap["accel"]
     assert "simd_json" in snap["accel"]
     assert "ram_snapshot_cache" in snap["accel"]
+    assert "smc_cache" in snap["accel"]
     assert snap["accel"]["wasm_engine"]["enabled"] is True
 
     wasm_js = (Path(__file__).resolve().parents[2] / "frontend" / "static" / "wasm-engine.js").read_text(encoding="utf-8")
     assert "WebAssembly.Module" in wasm_js
     assert "WasmQuantEngine" in wasm_js
+
+
+def test_smc_and_fib_fingerprint_caching_and_fast_json_response():
+    df = _sample_df(160)
+    before = smc_engine.smc_cache_stats()
+    sw1 = smc_engine.compute_swings(df, "ltf")
+    sw2 = smc_engine.compute_swings(df, "ltf")
+    lvl1 = smc_engine.compute_levels(df, sw1)
+    lvl2 = smc_engine.compute_levels(df, sw2)
+    fib1 = fibonacci.compute_fib_zones(df, "ltf", "1h")
+    fib2 = fibonacci.compute_fib_zones(df, "ltf", "1h")
+    after = smc_engine.smc_cache_stats()
+    assert after["swings_hits"] >= before["swings_hits"] + 1
+    assert after["levels_hits"] >= before["levels_hits"] + 1
+    assert lvl1 == lvl2
+    assert fib1 == fib2
+
+    resp = fast_json.FastJSONResponse({"ok": True, "count": 42})
+    assert resp.media_type == "application/json"
+    assert fast_json.loads(resp.body) == {"ok": True, "count": 42}

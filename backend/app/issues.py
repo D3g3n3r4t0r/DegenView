@@ -165,6 +165,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0402l", "Barra di percentuale di completamento in tempo reale per ogni task nel Cantiere (/cantiere) e nella Bacheca",
+     "Lorenzo, 23/10: 'nel cantiere voglio vedere barra di percentuale di completamento di ogni task in tempo reale'.",
+     "alta"),
+    ("seed-0401l", "Accelerazione estrema del caricamento dei grafici (5 ottimizzazioni client + server: SWR 0 ms, hover prefetch, cache SMC/Fibonacci, FastJSONResponse SIMD e cache deep backtest)",
+     "Lorenzo, 23/10: 'cambio drastico di performance... altre cose del sito che possiamo velocizzare? tipo il caricamento dei grafici..', 'procedi'.",
+     "alta"),
     ("seed-0400l", "Sezione wallet on-chain che chiede il saldo di un wallet che non esiste",
      "Lorenzo, 23/10, dopo la scansione del sito classico (seed-0399l): 'sistema il wallet per tutti'. In Trading > On-chain wallet, senza wallet su Solana, la pagina chiedeva comunque il saldo: errore 404 all'apertura e un nuovo tentativo ogni 30 secondi.",
      "media"),
@@ -1403,6 +1409,18 @@ def list_issues() -> list[dict]:
         thread = [dict(x, side="loro") for x in _replies if x.get("issue_id") == it["id"]]
         thread += [dict(x, side="claude") for x in mine.get(it["id"], [])]
         merged["replies"] = sorted(thread, key=lambda x: x.get("created_at", 0))
+        st = merged.get("status", "aperto")
+        explicit_prog = it.get("progress") if isinstance(it.get("progress"), (int, float)) else (r or {}).get("progress")
+        if isinstance(explicit_prog, (int, float)) and st not in ("risolto", "scartato"):
+            merged["progress"] = max(0, min(100, int(explicit_prog)))
+        elif st in ("risolto", "scartato"):
+            merged["progress"] = 100
+        elif st == "in corso":
+            merged["progress"] = 65
+        elif st == "riaperto":
+            merged["progress"] = 25
+        else:
+            merged["progress"] = 35 if merged["replies"] else 10
         out.append(merged)
     return sorted(out, key=lambda x: x.get("created_at", 0), reverse=True)
 

@@ -14,9 +14,8 @@ never anchors on the still-forming last bar.
 """
 
 import pandas as pd
-from smartmoneyconcepts import smc
 
-from app.analysis.smc_engine import SWING_LENGTH_BY_TIMEFRAME
+from app.analysis.smc_engine import _df_smc_key, compute_swings
 from app.models import FibZone
 from app.timeframes import drop_unclosed_candle
 
@@ -27,10 +26,12 @@ EXTENSION_RATIOS = [1.272, 1.414, 1.618, 2.0, 2.618]
 # a tradeable impulse — skip it rather than draw a fib on a wiggle.
 MIN_LEG_PCT = 0.008  # 0.8%
 
+_FIB_CACHE_MAX = 192
+_FIB_CACHE: dict[tuple, list[FibZone]] = {}
+
 
 def _get_swing_pivots(df: pd.DataFrame, timeframe_key: str) -> list[dict]:
-    swing_length = SWING_LENGTH_BY_TIMEFRAME.get(timeframe_key, 8)
-    swings = smc.swing_highs_lows(df, swing_length=swing_length)
+    swings = compute_swings(df, timeframe_key)
     valid = swings.dropna(subset=["HighLow"])
     return [
         {"pos": pos, "HighLow": row["HighLow"], "Level": float(row["Level"]), "ts": int(df.index[int(pos)].timestamp())}
@@ -48,6 +49,11 @@ def compute_fib_zones(df: pd.DataFrame, timeframe_key: str, interval: str) -> li
     # high/low can keep moving for days, so the fib zone would shift under
     # the user candle by candle instead of describing a confirmed turn.
     df = drop_unclosed_candle(df, interval)
+    key = _df_smc_key(df, f"{timeframe_key}:{interval}")
+    if key is not None:
+        cached = _FIB_CACHE.get(key)
+        if cached is not None:
+            return list(cached)
     pivots = _get_swing_pivots(df, timeframe_key)
     if len(pivots) < 2:
         return []
@@ -72,7 +78,7 @@ def compute_fib_zones(df: pd.DataFrame, timeframe_key: str, interval: str) -> li
     # the retracement was already describing.
     extension_levels = {str(r): a["Level"] + leg_size * r for r in EXTENSION_RATIOS}
 
-    return [
+    zones = [
         FibZone(
             kind="retracement",
             direction=direction,
@@ -88,3 +94,8 @@ def compute_fib_zones(df: pd.DataFrame, timeframe_key: str, interval: str) -> li
             label=f"Fib extension {'bullish' if bullish else 'bearish'}",
         ),
     ]
+    if key is not None:
+        if len(_FIB_CACHE) >= _FIB_CACHE_MAX:
+            _FIB_CACHE.pop(next(iter(_FIB_CACHE)), None)
+        _FIB_CACHE[key] = zones
+    return list(zones)

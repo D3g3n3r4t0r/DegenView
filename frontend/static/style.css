@@ -3693,6 +3693,21 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
 .issue-card.is-in-corso { border-left-color: #b8860b; }
 .issue-card.is-risolto { border-left-color: var(--bull, #00c97d); opacity: .72; }
 .issue-card.is-scartato { opacity: .5; }
+.issue-prog-wrap {
+  display: inline-flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0;
+}
+.issue-prog-bar {
+  width: 54px; height: 5px; border-radius: 999px; background: var(--bg-sunk, #e4dfd3); overflow: hidden; display: inline-block;
+}
+.issue-prog-fill {
+  display: block; height: 100%; border-radius: 999px; background: var(--bull, #2f7a4a); transition: width .35s ease;
+}
+.issue-card.is-in-corso .issue-prog-fill { background: var(--warn, #8f6417); }
+.issue-card.is-aperto .issue-prog-fill,
+.issue-card.is-riaperto .issue-prog-fill { background: var(--bear, #b4472f); }
+.issue-prog-pct {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; color: var(--ink-dim); min-width: 28px; text-align: right;
+}
 
 /* ── Bacheca: board a tre colonne invece della lista piatta ──
    Stessa card di prima (issue-card, invariata) e stesso form di risposta;
