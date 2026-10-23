@@ -234,20 +234,29 @@
   const cls = (v) => (v == null || v === 0 ? "" : v > 0 ? "ct-up" : "ct-down");
   let pnlRun = 0;
 
+  const hold = (sec) => (sec == null ? "—" : sec < 3600 ? `${Math.max(1, Math.round(sec / 60))} min` : sec < 86400 ? `${(sec / 3600).toFixed(1)} h` : `${(sec / 86400).toFixed(1)} d`);
+  const tokenLink = (t, c) => `<a class="ct-mono" href="https://dexscreener.com/solana/${esc(t.mint)}" target="_blank" rel="noopener">${short(t.mint)}</a> <span class="${c}">${signed(t.pnl_usd)}</span>`;
+
   function pnlCard(key, label, w) {
     const rows = [
-      ["Realized profit", `<b class="${cls(w.realized_usd)}">${signed(w.realized_usd) || "$0"}</b>`],
-      ["Return on sold", `<b class="${cls(w.roi_pct)}">${pct(w.roi_pct)}</b>`],
-      ["Opened and closed in the period", `<span class="${cls(w.opened_and_closed_usd)}">${signed(w.opened_and_closed_usd) || "$0"}</span>`],
-      ["Tokens closed", `${w.tokens_closed}`],
-      ["Win rate", w.win_rate_pct == null ? "—" : `${w.win_rate_pct}% <span class="ct-dim">(${w.wins}/${w.tokens_closed})</span>`],
-      ["Buys", `${w.buys} · ${usd(w.bought_usd)}`],
-      ["Sells", `${w.sells} · ${usd(w.sold_usd)}`],
-      ["Best token", w.best ? `<a class="ct-mono" href="https://dexscreener.com/solana/${esc(w.best.mint)}" target="_blank" rel="noopener">${short(w.best.mint)}</a> <span class="ct-up">${signed(w.best.pnl_usd)}</span>` : "—"],
-      ["Worst token", w.worst ? `<a class="ct-mono" href="https://dexscreener.com/solana/${esc(w.worst.mint)}" target="_blank" rel="noopener">${short(w.worst.mint)}</a> <span class="ct-down">${signed(w.worst.pnl_usd)}</span>` : "—"],
+      ["Profit on closed trades", `<b class="${cls(w.pnl_usd)}">${signed(w.pnl_usd) || "$0"}</b>`],
+      ["Return", `<b class="${cls(w.roi_pct)}">${pct(w.roi_pct)}</b>`],
+      ["Closed trades", `${w.trades}`],
+      ["Win rate", w.win_rate_pct == null ? "—" : `${w.win_rate_pct}% <span class="ct-dim">(${w.wins}/${w.trades})</span>`],
+      ["Average win", w.avg_win_usd == null ? "—" : `<span class="ct-up">${signed(w.avg_win_usd)}</span>`],
+      ["Average loss", w.avg_loss_usd == null ? "—" : `<span class="ct-down">${signed(w.avg_loss_usd)}</span>`],
+      ["Put in", usd(w.invested_usd)],
+      ["Got back", usd(w.returned_usd)],
+      ["Median holding time", hold(w.median_hold_s)],
+      ["Best trade", w.best ? tokenLink(w.best, "ct-up") : "—"],
+      ["Worst trade", w.worst ? tokenLink(w.worst, "ct-down") : "—"],
     ];
+    const out = [];
+    if (w.excluded_open) out.push(`${w.excluded_open} still open`);
+    if (w.excluded_opened_before) out.push(`${w.excluded_opened_before} opened before the period`);
+    if (w.sells_without_cost) out.push(`${w.sells_without_cost} sells with no buy in the history`);
     return `<section class="ct-pnl-card" data-window="${key}"><h4>${label}</h4><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
-      ${w.sells_without_cost ? `<p class="ct-reason">${w.sells_without_cost} sells of tokens with no buy in the history: left out of the profit</p>` : ""}</section>`;
+      ${out.length ? `<p class="ct-reason"><span>Not counted:</span> ${out.map((x) => `<span>${x}</span>`).join(" · ")}</p>` : ""}</section>`;
   }
 
   function renderPnl(r) {
@@ -257,23 +266,22 @@
     if (c.partial) notes.push(`<p class="ct-warn">Too many transactions: only the latest ${c.transactions} were read.</p>`);
     if (c.unread) notes.push(`<p class="ct-reason">${c.unread} transactions could not be read and are missing.</p>`);
     if (!c.sol_history) notes.push(`<p class="ct-reason">No SOL price history: today's price was used.</p>`);
-    const open = r.open.length ? `<ul class="ct-list">${r.open.map((o) => `
-      <li class="ct-row"><span class="ct-grow"><a class="ct-mono" href="https://dexscreener.com/solana/${esc(o.mint)}" target="_blank" rel="noopener">${short(o.mint)}</a> <span class="ct-dim">${ago(o.opened_at)}</span></span>
-        <span class="ct-dim">paid for it</span> ${usd(o.cost_usd)} <span class="ct-dim">worth now</span> ${usd(o.value_usd)}
-        <b class="${cls(o.unrealized_usd)}">${o.unrealized_usd == null ? "no route" : signed(o.unrealized_usd)}</b></li>`).join("")}</ul>` : `<p class="ct-empty">No open position.</p>`;
+    const open = r.still_open.length ? `<ul class="ct-list">${r.still_open.map((o) => `
+      <li class="ct-row is-muted"><span class="ct-grow"><a class="ct-mono" href="https://dexscreener.com/solana/${esc(o.mint)}" target="_blank" rel="noopener">${short(o.mint)}</a> <span class="ct-dim">${ago(o.opened_at)}</span></span>
+        <span class="ct-dim">put in</span> ${usd(o.invested_usd)}</li>`).join("")}</ul>` : "";
     const toks = r.tokens.length ? `<ul class="ct-list">${r.tokens.slice(0, 12).map((t) => `
-      <li class="ct-row"><span class="ct-grow"><a class="ct-mono" href="https://dexscreener.com/solana/${esc(t.mint)}" target="_blank" rel="noopener">${short(t.mint)}</a>${t.holding ? ` <span class="ct-badge">holding</span>` : ""}</span>
-        <span class="ct-dim">${t.buys} buys · ${t.sells} sells</span> <b class="${cls(t.realized_usd)}">${signed(t.realized_usd) || "$0"}</b></li>`).join("")}</ul>` : "";
+      <li class="ct-row"><span class="ct-grow"><a class="ct-mono" href="https://dexscreener.com/solana/${esc(t.mint)}" target="_blank" rel="noopener">${short(t.mint)}</a></span>
+        <span class="ct-dim">${t.trades} closed · ${t.wins} won</span> <b class="${cls(t.pnl_usd)}">${signed(t.pnl_usd) || "$0"}</b></li>`).join("")}</ul>` : "";
     const followed = state?.follows?.some((f) => f.address === r.address);
     $("ct-pnl-out").innerHTML = `
       <p class="ct-dim ct-pnl-head"><a class="ct-mono" href="https://solscan.io/account/${esc(r.address)}" target="_blank" rel="noopener">${short(r.address)}</a>
         · ${c.swaps} swaps in ${c.transactions} transactions · ${ago(r.generated_at)} ago
         ${followed ? "" : `<button type="button" class="section-action-btn" id="ct-pnl-follow">Copy this wallet</button>`}</p>
+      <p class="ct-reason">Only trades opened and closed inside each period count: from the first buy to the last sell. Positions still open are left out.</p>
       ${notes.join("")}
       <div class="ct-pnl-grid">${WINDOWS.map(([k, l]) => pnlCard(k, l, r.windows[k])).join("")}</div>
-      <div class="section-title-row"><span class="section-eyebrow">Still open now</span><span class="section-count ${cls(r.unrealized_usd)}">${signed(r.unrealized_usd) || "$0"}</span></div>
-      ${open}
-      ${toks ? `<div class="section-title-row"><span class="section-eyebrow">Tokens, 30 days</span></div>${toks}` : ""}`;
+      ${toks ? `<div class="section-title-row"><span class="section-eyebrow">Closed trades by token, 30 days</span></div>${toks}` : ""}
+      ${open ? `<div class="section-title-row"><span class="section-eyebrow">Still open, not counted</span><span class="section-count">${r.still_open_count}</span></div>${open}` : ""}`;
     $("ct-pnl-follow")?.addEventListener("click", () => {
       reset();
       $("ct-address").value = r.address;

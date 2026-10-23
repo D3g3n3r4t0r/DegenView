@@ -9,13 +9,15 @@ in considerazione [...] ultime 24 ore, ultimi 7 giorni, ultimi 30 giorni".
   sees exactly the trades the copier would have seen;
 - dollars at the time: SOL legs priced with the SOLUSDT hourly close of the
   trade's hour (MEXC), not today's price;
-- positions per token at average cost: a sell realizes proceeds minus the
-  average cost of what it sold. Tokens sold without a known buy (bought
-  before the history, or received by transfer) are counted apart, never
-  given a made-up cost;
-- per window: realized P&L and ROI of the sells inside it, win rate per
-  token, volumes, best and worst token, and the stricter "opened and
-  closed inside the window" figure; plus the open positions valued now.
+- closed trades only (asked on 23/10: "soltanto i trade aperti e chiusi
+  [...] non prendere in considerazione le transazioni ancora in corso"): a
+  trade starts with a buy on an empty position and ends when the wallet has
+  sold it all (a dust rest under DUST_SHARE of the most it held counts as
+  sold). Its result is everything it got back minus everything it put in.
+  A period counts the trades opened and closed inside it; positions still
+  open, and trades opened before the period, are only shown as excluded;
+- tokens sold without a known buy (bought before the history, or received
+  by transfer) are counted apart, never given a made-up cost.
 """
 from __future__ import annotations
 
@@ -33,7 +35,7 @@ DAY = 86_400
 WINDOWS = {"24h": DAY, "7d": 7 * DAY, "30d": 30 * DAY}
 MAX_SIGS = 5_000           # a wallet busier than this in 30 days is a bot: say how far back we got
 BATCH = 20                 # getTransaction calls per JSON-RPC batch
-MAX_OPEN_VALUED = 15       # open positions priced with a live quote
+DUST_SHARE = 0.01          # under 1% of the most it held left: the trade is closed
 BOT_SWAPS_PER_DAY = 150
 CACHE_S = 15 * 60
 _cache: dict[str, tuple[float, dict]] = {}
@@ -54,88 +56,83 @@ def price_at(hours: list[int], closes: list[float], t: float, fallback: float) -
     return closes[max(0, i)]
 
 
-def realize(swaps: list[dict]) -> tuple[list[dict], dict[str, dict], list[dict]]:
-    """Average-cost positions from swaps sorted by time, each with "usd".
-
-    Returns (closes, open positions by mint, sells with no known cost)."""
+def round_trips(swaps: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+    """Closed trades, positions still open, sells with no known buy; swaps
+    sorted by time, each with "usd"."""
     pos: dict[str, dict] = {}
-    closes: list[dict] = []
+    trades: list[dict] = []
     orphan: list[dict] = []
     for s in swaps:
-        p = pos.setdefault(s["mint"], {"qty": 0.0, "cost": 0.0, "opened_at": None, "buys": 0})
+        p = pos.setdefault(s["mint"], {"qty": 0.0, "peak": 0.0, "trip": None})
         if s["side"] == "buy":
-            if p["qty"] <= 1e-12:
-                p["opened_at"] = s["t"]
+            if p["trip"] is None:
+                p["trip"] = {"mint": s["mint"], "opened_at": s["t"], "invested": 0.0, "returned": 0.0,
+                             "buys": 0, "sells": 0}
+                p["qty"] = p["peak"] = 0.0
             p["qty"] += s["units"]
-            p["cost"] += s["usd"]
-            p["buys"] += 1
+            p["peak"] = max(p["peak"], p["qty"])
+            p["trip"]["invested"] += s["usd"]
+            p["trip"]["buys"] += 1
             continue
-        known = min(s["units"], p["qty"])
-        if known <= 1e-12:
+        known = min(s["units"], p["qty"]) if p["trip"] else 0.0
+        if known <= 0:
             orphan.append(s)
             continue
         share = known / s["units"]
-        cost = p["cost"] * known / p["qty"]
-        proceeds = s["usd"] * share
-        closes.append({"t": s["t"], "mint": s["mint"], "cost": cost, "proceeds": proceeds,
-                       "pnl": proceeds - cost, "opened_at": p["opened_at"], "sig": s.get("sig")})
+        trip = p["trip"]
+        trip["returned"] += s["usd"] * share
+        trip["sells"] += 1
         if share < 1:
-            orphan.append({**s, "units": s["units"] - known, "usd": s["usd"] - proceeds})
+            orphan.append({**s, "units": s["units"] - known, "usd": s["usd"] * (1 - share)})
         p["qty"] -= known
-        p["cost"] -= cost
-        if p["qty"] <= 1e-9 * max(1.0, known):
-            p["qty"], p["cost"] = 0.0, 0.0
-    open_ = {m: p for m, p in pos.items() if p["qty"] > 0 and p["cost"] > 0}
-    return closes, open_, orphan
+        if p["qty"] <= DUST_SHARE * p["peak"]:
+            trades.append({**trip, "closed_at": s["t"], "pnl": trip["returned"] - trip["invested"],
+                           "hold_s": s["t"] - trip["opened_at"]})
+            p["qty"], p["peak"], p["trip"] = 0.0, 0.0, None
+    still = [{**p["trip"], "share_left": p["qty"] / p["peak"] if p["peak"] else 1.0}
+             for p in pos.values() if p["trip"] is not None]
+    return trades, still, orphan
 
 
-def window(swaps: list[dict], closes: list[dict], orphan: list[dict], since: float) -> dict:
-    cs = [c for c in closes if c["t"] >= since]
-    by_mint: dict[str, float] = {}
-    for c in cs:
-        by_mint[c["mint"]] = by_mint.get(c["mint"], 0.0) + c["pnl"]
-    wins = sum(1 for v in by_mint.values() if v > 0)
-    pnl = sum(c["pnl"] for c in cs)
-    cost = sum(c["cost"] for c in cs)
-    inside = [c for c in cs if c["opened_at"] is not None and c["opened_at"] >= since]
-    in_cost = sum(c["cost"] for c in inside)
-    ws = [s for s in swaps if s["t"] >= since]
-    best = max(by_mint.items(), key=lambda kv: kv[1], default=None)
-    worst = min(by_mint.items(), key=lambda kv: kv[1], default=None)
+def window(trades: list[dict], still: list[dict], orphan: list[dict], since: float) -> dict:
+    ts = [t for t in trades if t["opened_at"] >= since]
+    wins = [t for t in ts if t["pnl"] > 0]
+    losses = [t for t in ts if t["pnl"] <= 0]
+    pnl = sum(t["pnl"] for t in ts)
+    invested = sum(t["invested"] for t in ts)
+    holds = sorted(t["hold_s"] for t in ts)
+    best = max(ts, key=lambda t: t["pnl"], default=None)
+    worst = min(ts, key=lambda t: t["pnl"], default=None)
     return {
-        "realized_usd": round(pnl, 2),
-        "roi_pct": round(pnl / cost * 100, 1) if cost > 0 else None,
-        "sold_cost_usd": round(cost, 2),
-        "tokens_closed": len(by_mint), "wins": wins, "losses": len(by_mint) - wins,
-        "win_rate_pct": round(wins / len(by_mint) * 100) if by_mint else None,
-        "buys": sum(1 for s in ws if s["side"] == "buy"),
-        "sells": sum(1 for s in ws if s["side"] == "sell"),
-        "bought_usd": round(sum(s["usd"] for s in ws if s["side"] == "buy"), 2),
-        "sold_usd": round(sum(s["usd"] for s in ws if s["side"] == "sell"), 2),
-        "tokens_traded": len({s["mint"] for s in ws}),
-        "opened_and_closed_usd": round(sum(c["pnl"] for c in inside), 2),
-        "opened_and_closed_roi_pct": round(sum(c["pnl"] for c in inside) / in_cost * 100, 1) if in_cost > 0 else None,
-        "best": {"mint": best[0], "pnl_usd": round(best[1], 2)} if best and best[1] > 0 else None,
-        "worst": {"mint": worst[0], "pnl_usd": round(worst[1], 2)} if worst and worst[1] < 0 else None,
+        "trades": len(ts), "wins": len(wins), "losses": len(losses),
+        "win_rate_pct": round(len(wins) / len(ts) * 100) if ts else None,
+        "pnl_usd": round(pnl, 2),
+        "roi_pct": round(pnl / invested * 100, 1) if invested > 0 else None,
+        "invested_usd": round(invested, 2),
+        "returned_usd": round(sum(t["returned"] for t in ts), 2),
+        "avg_win_usd": round(sum(t["pnl"] for t in wins) / len(wins), 2) if wins else None,
+        "avg_loss_usd": round(sum(t["pnl"] for t in losses) / len(losses), 2) if losses else None,
+        "median_hold_s": holds[len(holds) // 2] if holds else None,
+        "tokens": len({t["mint"] for t in ts}),
+        "best": {"mint": best["mint"], "pnl_usd": round(best["pnl"], 2)} if best and best["pnl"] > 0 else None,
+        "worst": {"mint": worst["mint"], "pnl_usd": round(worst["pnl"], 2)} if worst and worst["pnl"] < 0 else None,
+        "excluded_open": sum(1 for o in still if o["opened_at"] >= since),
+        "excluded_opened_before": sum(1 for t in trades if t["closed_at"] >= since > t["opened_at"]),
         "sells_without_cost": sum(1 for o in orphan if o["t"] >= since),
     }
 
 
-def tokens(swaps: list[dict], closes: list[dict], open_: dict, limit: int = 25) -> list[dict]:
+def tokens(trades: list[dict], limit: int = 25) -> list[dict]:
     rows: dict[str, dict] = {}
-    for s in swaps:
-        r = rows.setdefault(s["mint"], {"mint": s["mint"], "buys": 0, "sells": 0, "bought_usd": 0.0,
-                                        "sold_usd": 0.0, "realized_usd": 0.0, "last_t": 0})
-        r["buys" if s["side"] == "buy" else "sells"] += 1
-        r["bought_usd" if s["side"] == "buy" else "sold_usd"] += s["usd"]
-        r["last_t"] = max(r["last_t"], s["t"])
-    for c in closes:
-        rows[c["mint"]]["realized_usd"] += c["pnl"]
-    for m, r in rows.items():
-        r["holding"] = m in open_
-        for k in ("bought_usd", "sold_usd", "realized_usd"):
-            r[k] = round(r[k], 2)
-    return sorted(rows.values(), key=lambda r: abs(r["realized_usd"]), reverse=True)[:limit]
+    for t in trades:
+        r = rows.setdefault(t["mint"], {"mint": t["mint"], "trades": 0, "wins": 0, "pnl_usd": 0.0, "invested_usd": 0.0})
+        r["trades"] += 1
+        r["wins"] += t["pnl"] > 0
+        r["pnl_usd"] += t["pnl"]
+        r["invested_usd"] += t["invested"]
+    for r in rows.values():
+        r["pnl_usd"], r["invested_usd"] = round(r["pnl_usd"], 2), round(r["invested_usd"], 2)
+    return sorted(rows.values(), key=lambda r: abs(r["pnl_usd"]), reverse=True)[:limit]
 
 
 # ── network ───────────────────────────────────────────────────────────────
@@ -246,31 +243,18 @@ async def analyze(address: str, say: Callable[[str], None] = lambda m: None) -> 
         if not helius:
             await asyncio.sleep(1.0)          # the public node limits bursts
     swaps.sort(key=lambda s: s["t"])
-    closes, open_, orphan = realize(swaps)
-
-    say("Valuing open positions")
-    dec = {s["mint"]: s["decimals"] for s in swaps}
-    opened = []
-    for mint, p in sorted(open_.items(), key=lambda kv: -kv[1]["cost"])[:MAX_OPEN_VALUED]:
-        value = None
-        try:
-            q = await ct.quote(mint, ct.WSOL, int(p["qty"] * 10 ** dec[mint]), 1000)
-            value = q["out_amount"] / 1e9 * sol_now
-        except RuntimeError:
-            pass                              # no route: worth nothing we could sell
-        opened.append({"mint": mint, "cost_usd": round(p["cost"], 2), "opened_at": p["opened_at"],
-                       "value_usd": round(value, 2) if value is not None else None,
-                       "unrealized_usd": round(value - p["cost"], 2) if value is not None else None})
+    trades, still, orphan = round_trips(swaps)
     span_days = max(1.0, (now - (swaps[0]["t"] if swaps else now)) / DAY)
     result = {
         "address": address, "generated_at": now, "sol_price": sol_now,
         "coverage": {"from": sigs[-1].get("blockTime") if sigs else None, "transactions": len(sigs),
                      "swaps": len(swaps), "partial": partial, "unread": unread, "sol_history": bool(hours)},
-        "windows": {k: window(swaps, closes, orphan, now - v) for k, v in WINDOWS.items()},
-        "open": opened,
-        "open_count": len(open_),
-        "unrealized_usd": round(sum(o["unrealized_usd"] or 0 for o in opened), 2),
-        "tokens": tokens(swaps, closes, open_),
+        "windows": {k: window(trades, still, orphan, now - v) for k, v in WINDOWS.items()},
+        "still_open": sorted(({"mint": o["mint"], "opened_at": o["opened_at"], "invested_usd": round(o["invested"], 2),
+                               "returned_usd": round(o["returned"], 2)} for o in still),
+                             key=lambda o: -o["opened_at"])[:20],
+        "still_open_count": len(still),
+        "tokens": tokens(trades),
         "swaps_per_day": round(len(swaps) / span_days, 1),
         "bot_like": len(swaps) / span_days > BOT_SWAPS_PER_DAY or partial,
     }

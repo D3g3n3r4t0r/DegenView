@@ -894,7 +894,6 @@
   "his trade": "suo trade",
   "our copy": "nostra copia",
   "Wallet profitability": "Profittabilita' del wallet",
-  "Before copying a wallet, see how its trades went: realized profit in the last 24 hours, 7 and 30 days, read from its own swaps on chain.": "Prima di copiare un wallet, guarda com'e' andato: profitto realizzato nelle ultime 24 ore, 7 e 30 giorni, letto dai suoi swap on-chain.",
   "Starting": "Avvio",
   "Last 24 hours": "Ultime 24 ore",
   "Last 7 days": "Ultimi 7 giorni",
@@ -919,7 +918,23 @@
   "Too many transactions: only the latest": "Troppe transazioni: lette solo le ultime",
   "No SOL price history: today's price was used.": "Nessuno storico del prezzo di SOL: usato il prezzo di oggi.",
   "paid for it": "pagato",
-  "worth now": "vale ora"
+  "worth now": "vale ora",
+  "Profit on closed trades": "Profitto sui trade chiusi",
+  "Return": "Rendimento",
+  "Closed trades": "Trade chiusi",
+  "Average win": "Guadagno medio",
+  "Average loss": "Perdita media",
+  "Put in": "Investito",
+  "Got back": "Incassato",
+  "Median holding time": "Durata mediana",
+  "Best trade": "Trade migliore",
+  "Worst trade": "Trade peggiore",
+  "Not counted:": "Esclusi:",
+  "put in": "investito",
+  "Closed trades by token, 30 days": "Trade chiusi per token, 30 giorni",
+  "Still open, not counted": "Ancora aperti, esclusi",
+  "Only trades opened and closed inside each period count: from the first buy to the last sell. Positions still open are left out.": "Contano solo i trade aperti e chiusi dentro ogni periodo: dal primo acquisto all'ultima vendita. Le posizioni ancora aperte restano fuori.",
+  "Before copying a wallet, see how its closed trades went (entry and exit) in the last 24 hours, 7 and 30 days, read from its own swaps on chain.": "Prima di copiare un wallet, guarda come sono andati i suoi trade chiusi (ingresso e uscita) nelle ultime 24 ore, 7 e 30 giorni, letti dai suoi swap on-chain."
  },
  "patterns": [
   [
@@ -1061,6 +1076,22 @@
   [
    "^· (\\d+) swaps in (\\d+) transactions · (.+) ago$",
    "· $1 swap in $2 transazioni · $3 fa"
+  ],
+  [
+   "^(\\d+) still open$",
+   "$1 ancora aperti"
+  ],
+  [
+   "^(\\d+) opened before the period$",
+   "$1 aperti prima del periodo"
+  ],
+  [
+   "^(\\d+) sells with no buy in the history$",
+   "$1 vendite senza acquisto nello storico"
+  ],
+  [
+   "^(\\d+) closed · (\\d+) won$",
+   "$1 chiusi · $2 vinti"
   ]
  ]
 }
