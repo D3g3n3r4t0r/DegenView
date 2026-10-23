@@ -6193,51 +6193,11 @@ body > .bg-hint, body > .hide-toast, body > .fx-burst { display: none !important
 .subtab-panel .telegram-setup, .subtab-panel .tg-pause { max-width: 720px; }
 
 
-/* === DESIGN 01: TODAY EDITORIAL PILL (/app#today) === */
+/* === DESIGN 01: TODAY EDITORIAL PILL (/app#today) — MOBILE & DESKTOP === */
 :root { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
 
-.toolbar {
-  background: var(--bg-panel);
-  border-bottom: 1px solid var(--border);
-}
-
-.sidenav {
-  background: var(--bg);
-  border-right: 1px solid var(--border);
-}
-.sidenav-item {
-  border-radius: 999px;
-  margin: 1px 8px;
-  padding: 8px 14px;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.sidenav-item:hover {
-  background: var(--bg-raised);
-}
-.sidenav-item.active {
-  background: var(--c-sage, #c9d4c0);
-  color: var(--c-on-sage, #2f3a32);
-  font-weight: 700;
-}
-
-.subtabs {
-  border-bottom: 1px solid var(--border);
-}
-.subtabs > button[aria-selected="true"] {
-  color: var(--ink);
-  border-bottom-color: var(--ink);
-  font-weight: 700;
-}
-.subtabs > .subtabs-chart {
-  border-radius: 999px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border-strong);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-/* Impostazione Mobile Design 01: Grafico a tutto schermo + Barra Pollice + 5 Tab Inferiori */
+/* 1. Impostazione Mobile Design 01: Grafico a tutto schermo + Barra Pollice + 5 Tab Inferiori */
 @media (max-width: 760px) {
   .mobile-chart-strip {
     background: var(--bg-panel);
@@ -6303,5 +6263,421 @@ body > .bg-hint, body > .hide-toast, body > .fx-burst { display: none !important
     color: var(--ink);
     font-weight: 700;
     border-top: 2.5px solid var(--ink);
+  }
+}
+
+/* 2. Impostazione Desktop Design 01: Editorial Quant Workstation (/app#today) */
+@media (min-width: 761px) {
+  /* Top Editorial Command Bar */
+  .toolbar {
+    min-height: 54px;
+    padding: 8px 18px;
+    gap: 10px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 2px 12px rgba(47, 58, 50, 0.04);
+  }
+  .toolbar .brand {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--c-on-sage, #2f3a32);
+    background: var(--c-sage, #c9d4c0);
+    padding: 5px 13px;
+    border-radius: 999px;
+    margin-right: 4px;
+  }
+  .toolbar .ticker-field input {
+    height: 36px;
+    border-radius: 999px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    padding: 0 14px;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ink);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .toolbar .ticker-field input:focus {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+    outline: none;
+  }
+  .toolbar select,
+  .toolbar .toolbar-indicators-btn,
+  .toolbar .theme-toggle-btn,
+  .toolbar .toolbar-guide-btn {
+    height: 34px;
+    border-radius: 999px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    padding: 0 13px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink);
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .toolbar select:hover,
+  .toolbar .toolbar-indicators-btn:hover,
+  .toolbar .theme-toggle-btn:hover,
+  .toolbar .toolbar-guide-btn:hover {
+    border-color: var(--ink);
+    background: var(--bg-panel);
+  }
+  #search-btn {
+    height: 34px;
+    border-radius: 999px;
+    background: var(--c-ink, #2f3a32);
+    color: var(--c-on-ink, #f3efe6);
+    border: 1px solid var(--c-ink, #2f3a32);
+    padding: 0 16px;
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  #search-btn:hover {
+    opacity: 0.92;
+  }
+
+  /* Floating Deep Forest Ink Left Navigation Rail (inspired by /app#today Sidebar.tsx) */
+  .sidenav {
+    width: 214px;
+    flex: 0 0 214px;
+    margin: 12px 0 12px 12px;
+    padding: 18px 12px 14px;
+    border-radius: 24px;
+    background: var(--c-ink, #2f3a32);
+    color: #aeb7a9;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 12px 30px -10px rgba(47, 58, 50, 0.28);
+    gap: 6px;
+  }
+  .sidenav-group {
+    padding: 0;
+    gap: 2px;
+  }
+  .sidenav-group + .sidenav-group {
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    padding-top: 12px;
+    margin-top: 6px;
+  }
+  .sidenav-label {
+    color: #aeb7a9;
+    opacity: 0.65;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 4px 12px 4px;
+    text-transform: uppercase;
+  }
+  .sidenav-item {
+    width: 100%;
+    margin: 1px 0;
+    padding: 9px 14px;
+    border-radius: 9999px;
+    color: #aeb7a9;
+    font-size: 13.5px;
+    font-weight: 500;
+    gap: 10px;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .sidenav-item::before,
+  .sidenav-item.active::before {
+    display: none !important;
+  }
+  .sidenav-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f3efe6;
+  }
+  .sidenav-item.active {
+    background: var(--c-sage, #c9d4c0);
+    color: var(--c-on-sage, #2f3a32);
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  }
+  .sidenav-item.active .sidenav-ico {
+    opacity: 1;
+    color: var(--c-on-sage, #2f3a32);
+  }
+  .sidenav-foot {
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    padding: 12px 8px 2px;
+    margin-top: auto;
+    color: #aeb7a9;
+  }
+  .sidenav-user {
+    color: #f3efe6;
+    font-weight: 600;
+  }
+  .sidenav-logout {
+    color: #aeb7a9;
+    border-color: rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    padding: 4px 11px;
+  }
+  .sidenav-logout:hover {
+    background: rgba(255, 255, 255, 0.10);
+    color: #f3efe6;
+    border-color: rgba(255, 255, 255, 0.30);
+  }
+
+  /* Protagonist Chart Stage — Il Grafico è SEMPRE la cosa principale */
+  .chart-area {
+    margin: 12px 10px 12px 12px;
+    border-radius: 24px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 12px 32px -14px rgba(47, 58, 50, 0.14);
+    overflow: hidden;
+  }
+  .cockpit[data-area="analizza"] .chart-area,
+  .cockpit[data-area="livelli"] .chart-area,
+  .cockpit[data-area="lab"] .chart-area,
+  .cockpit[data-area="alert"] .chart-area,
+  .cockpit[data-area="strategie"] .chart-area,
+  .cockpit[data-area="trading"] .chart-area,
+  .cockpit[data-area="analisi"] .chart-area,
+  .cockpit[data-area="saldi"] .chart-area {
+    flex: 1 1 58%;
+    max-width: none;
+    min-width: 440px;
+  }
+  .cockpit[data-area="alert"] .right-panel,
+  .cockpit[data-area="strategie"] .right-panel,
+  .cockpit[data-area="trading"] .right-panel,
+  .cockpit[data-area="analisi"] .right-panel,
+  .cockpit[data-area="saldi"] .right-panel,
+  .cockpit[data-area="lab"] .right-panel {
+    flex: 0 1 42%;
+    max-width: 580px;
+    min-width: 360px;
+  }
+  .cockpit.chart-mini .right-panel {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .cockpit[data-area="livelli"] #levels-panel,
+  .cockpit[data-area="analizza"] #levels-panel.open {
+    display: flex !important;
+    flex: 0 0 360px;
+  }
+
+  /* Left Draw Rail & Bottom Chart Stats */
+  .draw-rail {
+    flex: 0 0 46px;
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    padding: 12px 0;
+    gap: 4px;
+  }
+  .draw-tool-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    color: var(--ink-dim);
+  }
+  .draw-tool-btn:hover {
+    background: var(--bg-raised);
+    color: var(--ink);
+    border-color: var(--border-strong);
+  }
+  .draw-tool-btn.selected {
+    background: var(--c-ink, #2f3a32);
+    color: var(--c-on-ink, #f3efe6);
+    border-color: var(--c-ink, #2f3a32);
+    box-shadow: 0 2px 6px rgba(47, 58, 50, 0.22);
+  }
+  .chart-stats {
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    padding: 4px 10px;
+  }
+  .chart-stats .cs-cell {
+    padding: 6px 12px;
+  }
+  .chart-stats .cs-k {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--ink-faint);
+  }
+  .chart-stats .cs-v {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Right-Hand Editorial Cards & Panels (Undo Quiet Pass flattening) */
+  .right-panel {
+    padding: 12px 14px 12px 4px;
+    background: transparent;
+    border-left: none;
+  }
+  .right-panel .panel,
+  .levels-panel .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 6px 20px -10px rgba(47, 58, 50, 0.08);
+  }
+  .levels-panel {
+    margin: 12px 12px 12px 2px;
+    border-radius: 24px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 12px 32px -14px rgba(47, 58, 50, 0.12);
+    padding: 16px;
+  }
+  .panel-head h2,
+  .panel-title {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+
+  /* Strategy Lab & 4-Figures Monumental Serif Numerals */
+  .four-fig {
+    gap: 10px;
+    margin: 10px 0;
+  }
+  .four-fig .ff-cell {
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 18px;
+    padding: 14px 16px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+  .four-fig .ff-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .four-fig .ff-val {
+    font-family: var(--font-num);
+    font-size: 28px;
+    font-weight: 400;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  #lab-stat-chips > div {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 10px 12px;
+  }
+  .lab-tf-row {
+    background: var(--bg-raised);
+    padding: 4px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    gap: 4px;
+  }
+  .lab-tf-btn {
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    padding: 6px 10px;
+    font-weight: 600;
+    color: var(--ink-dim);
+  }
+  .lab-tf-btn.active {
+    background: var(--c-ink, #2f3a32);
+    color: var(--c-on-ink, #f3efe6);
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(47, 58, 50, 0.18);
+  }
+  #lab-run-btn.lab-btn-run {
+    border-radius: 999px;
+    background: var(--c-ink, #2f3a32);
+    color: var(--c-on-ink, #f3efe6);
+    border: 1px solid var(--c-ink, #2f3a32);
+    font-weight: 700;
+    padding: 10px 18px;
+  }
+  #lab-optimize-btn.lab-btn-opt {
+    border-radius: 999px;
+    background: var(--c-sage, #c9d4c0);
+    color: var(--c-on-sage, #2f3a32);
+    border: 1px solid var(--c-ink, #2f3a32);
+    font-weight: 700;
+    padding: 10px 18px;
+  }
+
+  /* Watchlist Rows, Squircle Avatars & Strategy Cards */
+  #favorite-rows .wl-row,
+  .tick-card,
+  .arch-card,
+  .pa-card,
+  .ct-row,
+  .StratCard {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  #favorite-rows .wl-row:hover,
+  .tick-card:hover,
+  .arch-card:hover,
+  .pa-card:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 4px 12px -6px rgba(47, 58, 50, 0.12);
+  }
+  #favorite-rows .wl-row.active {
+    background: var(--bg-panel);
+    border-color: var(--c-ink, #2f3a32);
+    box-shadow: 0 4px 14px -6px rgba(47, 58, 50, 0.16);
+  }
+  .wl-avatar {
+    border-radius: 30%;
+  }
+
+  /* Alert & Trading Sub-Tabs Editorial Pill Bar */
+  .subtabs {
+    background: var(--bg-raised);
+    padding: 5px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    gap: 4px;
+    margin: 0 0 16px;
+    align-items: center;
+  }
+  .subtabs > button {
+    border-radius: 999px;
+    border: none;
+    padding: 7px 14px;
+    margin-bottom: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-dim);
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .subtabs > button:hover {
+    color: var(--ink);
+    background: rgba(47, 58, 50, 0.06);
+  }
+  .subtabs > button[aria-selected="true"] {
+    background: var(--c-ink, #2f3a32);
+    color: var(--c-on-ink, #f3efe6);
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(47, 58, 50, 0.16);
+  }
+  .subtabs > .subtabs-chart {
+    margin-left: auto;
+    margin-bottom: 0;
+    border-radius: 999px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    color: var(--ink);
+    padding: 6px 13px;
+    font-size: 12px;
+    font-weight: 700;
   }
 }

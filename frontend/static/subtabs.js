@@ -76,7 +76,7 @@
     const cockpit = document.querySelector(".cockpit");
     if (!cockpit) return;
     const buttons = [...document.querySelectorAll("[data-chart-toggle]")];
-    const mini = () => store.get(CHART_KEY) !== "0";
+    const mini = () => store.get(CHART_KEY) === "1";
     const apply = () => {
       const on = mini() && CHART_AREAS.has(cockpit.dataset.area);
       const was = cockpit.classList.contains("chart-mini");

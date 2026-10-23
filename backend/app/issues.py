@@ -165,6 +165,15 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0396l", "Rifacimento completo della versione Desktop con il Design 01 (Today Editorial Pill) e Grafico protagonista",
+     "Lorenzo, 23/10: 'e rifai anche la versione desktop , SU QUESTA DEVI DARE IL MASSIMO', 'ricordati che il grafico e\' la cosa principale'.",
+     "alta"),
+    ("seed-0394", "Applicazione del Design 01 (Today Editorial Pill /app#today) con impostazione mobile invariata",
+     "Lorenzo, 23/10: 'come palette ispirati a questo: https://liquidityengine.app/app#today', 'si\' ma l\'app deve essere cosi\' come impostazione da mobile', 'applica 01'.",
+     "alta"),
+    ("seed-0393", "Unificazione dell'App delle Gemme (/app) per whitekobra, lorenzo e tutti gli utenti",
+     "Lorenzo, 23/10: 'white korea non deve avere una versione parallalea dell\'app delle gemme , dovra\' esistere un unica visualizzazione per tutti', 'comunque devi pushare il commit per unificare le versioni di whitekobra e di lorenzo, stessa APP.'",
+     "alta"),
     ("seed-0395g", "Id delle voci in bacheca che si sovrappongono fra due account Claude",
      "Richiesta in chat, 23/10: 'Visto che lavoriamo in due persone da due account Claude diversi puoi gestire meglio i nomi delle voci seed per evitare sovrapposizioni? Magari puoi aggiungere una lettera ai numeri'. Due chat in parallelo avevano preso lo stesso id (seed-0377, seed-0388).",
      "bassa"),

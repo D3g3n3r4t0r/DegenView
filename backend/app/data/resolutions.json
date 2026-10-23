@@ -3449,5 +3449,20 @@
     "status": "risolto",
     "at": 1792781599,
     "summary": "Da ora ogni voce nuova della bacheca ha il numero piu' la lettera dell'account da cui lavora la chat: g per un account, l per l'altro (Lorenzo), per esempio seed-0393g e seed-0393l possono esistere insieme. La regola e' scritta in CLAUDE.md, che ogni chat legge all'inizio; la chat capisce da quale account lavora confrontando l'impronta dell'email, che nel repo non compare. Un test blocca gli id nuovi senza lettera o ripetuti, e le schede di deploy su Telegram riconoscono anche gli id con la lettera. Le voci vecchie restano come sono."
+  },
+  "seed-0393": {
+    "status": "risolto",
+    "at": 1792780800,
+    "summary": "Unificata l'App delle Gemme (/app) per tutti gli account autenticati: rimossa la separazione tra whitekobra e lorenzo (onchain_v1_emails svuotato e onchain_full_score_emails impostato a '*'), cosi' tutti gli utenti vedono la stessa identica app (/api/onchain/top, /api/onchain/sectors, /api/onchain/token, /api/onchain/quality, /api/onchain/coordinated-sells/*, /api/onchain/dev-payments/*, /api/onchain/scan)."
+  },
+  "seed-0394": {
+    "status": "risolto",
+    "at": 1792781200,
+    "summary": "Applicato il Design 01 (Today Editorial Pill — Warm Paper & Forest Ink, ispirato a /app#today) a style.css e app.js mantenendo intatta l'impostazione mobile (grafico verticale a tutto schermo + barra del pollice con ticker, pillola strategia, ruota 2d/3d/5d e 3 bottoni rapidi + barra inferiore a 5 schede)."
+  },
+  "seed-0396l": {
+    "status": "risolto",
+    "at": 1792782500,
+    "summary": "Rifatta la versione Desktop con il Design 01 (Today Editorial Pill — Editorial Quant Workstation): sidebar flottante in Forest Ink (#2f3a32) con pillole attive in salvia (#c9d4c0) in stile /app#today, top bar editoriale a pillole, grafico incorniciato e sempre protagonista (58%+ della larghezza in tutte le sezioni e aperto di default anche in Alert e Trading), card destre sopraelevate (#f8f5ef), 4-figures del backtest in Instrument Serif monumentale (28px), righe Watchlist con avatar squircle e sotto-schede a pillola."
   }
 }
