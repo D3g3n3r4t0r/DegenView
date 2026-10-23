@@ -7,6 +7,17 @@ import httpx
 BITSTAMP_BASE = "https://www.bitstamp.net"
 
 
+
+def _check(resp: httpx.Response) -> None:
+    """An HTTP error from Bitstamp as a readable RuntimeError: raise_for_status
+    gave an httpx error no caller caught, so a refused order was a 500 and
+    never reached the order log (Trading tab check, 23/10)."""
+    if resp.status_code >= 400:
+        body = resp.text.strip()
+        if body.startswith("<"):            # an HTML error page, not an API answer
+            body = resp.reason_phrase or "error page"
+        raise RuntimeError(f"Bitstamp HTTP {resp.status_code}: {body[:200] or resp.reason_phrase}")
+
 def _bitstamp_pair(symbol: str) -> str:
     """BTCUSDT -> btcusdt"""
     return symbol.lower()
@@ -23,7 +34,7 @@ async def _get_balance(client: httpx.AsyncClient, pair: str, api_key: str, api_s
     url = f"{BITSTAMP_BASE}/api/v2/balance/{pair}/"
     params = _auth_params(api_key, api_secret)
     resp = await client.post(url, data=params)
-    resp.raise_for_status()
+    _check(resp)
     data = resp.json()
     if "error" in data:
         raise RuntimeError(f"Bitstamp balance error: {data}")
@@ -35,7 +46,7 @@ async def _get_last_price(client: httpx.AsyncClient, pair: str, api_key: str, ap
     params = _auth_params(api_key, api_secret)
     params["time"] = "minute"
     resp = await client.post(url, data=params)
-    resp.raise_for_status()
+    _check(resp)
     data = resp.json()
     if not data:
         raise RuntimeError(f"Bitstamp: no recent transactions for {pair}")
@@ -72,7 +83,7 @@ async def place_order(
             params = _auth_params(api_key, api_secret)
             params["amount"] = str(amount)
             resp = await client.post(url, data=params)
-            resp.raise_for_status()
+            _check(resp)
             result = resp.json()
             if result.get("status") == "error" or "error" in result:
                 raise RuntimeError(f"Bitstamp buy error: {result}")
@@ -97,7 +108,7 @@ async def place_order(
             params = _auth_params(api_key, api_secret)
             params["amount"] = str(amount)
             resp = await client.post(url, data=params)
-            resp.raise_for_status()
+            _check(resp)
             result = resp.json()
             if result.get("status") == "error" or "error" in result:
                 raise RuntimeError(f"Bitstamp sell error: {result}")

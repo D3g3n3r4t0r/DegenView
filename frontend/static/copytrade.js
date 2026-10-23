@@ -47,6 +47,7 @@
       `<b class="${s.real_enabled ? "ct-up" : "ct-down"}">${s.real_enabled ? "Real execution switched on on the server" : "Real execution switched off on the server"}</b>`,
       w.address ? `<span class="ct-dim">Copy wallet</span> <span class="ct-mono">${short(w.address)}</span> <b>${w.sol == null ? "—" : `${w.sol.toFixed(3)} SOL`}</b>`
         : `<span class="ct-down">No Solana wallet: create it in On-chain wallet below</span>`,
+      w.address && !w.enabled && state.follows.some((f) => f.mode === "real") ? `<b class="ct-down">Wallet switched off: Real copies are skipped. Turn on "Wallet active" in On-chain wallet → Limits</b>` : "",
       `<span class="ct-dim">Spent today</span> <b>${usd(state.spent_today)} / ${usd(state.limits.max_day_usd)}</b>`,
     ];
     $("ct-status").innerHTML = parts.filter(Boolean).join(" ");

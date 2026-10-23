@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0384", "Scheda Trading: errori 500, ordini saltati annunciati come eseguiti, saldo con le chiavi del server",
+     "Controllo della scheda Trading del 23/10, con il sito in locale e ordini veri con chiavi finte: (1) un rifiuto di Bitstamp o un errore di rete su un ordine manuale dava errore 500 e non finiva nel diario; (2) Binance Futures dava 500 su anteprima e ordine, e l'elenco delle posizioni saltava per tutti gli exchange; (3) i bot scrivevano 'eseguito' e mandavano 'Ordine ESEGUITO' anche per ordini mai partiti; (4) il copy trading Reale falliva sul wallet spento senza dirlo; (5) il saldo libero del Manual order veniva dalle chiavi del server. Richiesta in chat: 'Si, sistema tutto'.",
+     "alta"),
     ("seed-0383", "Saldo del wallet on-chain fermo nella scheda Trading del sito classico",
      "Controllo della scheda Trading del 23/10: dallo spegnimento del trading on-chain (07/10) la sezione 'On-chain wallet' del sito classico mostrava '—' e 'waiting for first balance' per sempre, anche con il wallet creato. Richiesta in chat: 'Riaccendi la lettura del saldo'.",
      "media"),

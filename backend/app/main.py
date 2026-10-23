@@ -620,6 +620,33 @@ def _alert_chats(seen: set[str], user: User) -> str:
     return chat
 
 
+# Skips that are not news: a spot "close the short" (on spot a short is
+# already cash) or a futures exit with nothing open.
+_QUIET_SKIPS = ("no-op signal type", "no open position to close")
+
+
+def _bot_skipped(owner, entry, strategy_name: str, signal, result: dict, futures: bool = False) -> bool:
+    """True when the executor sent nothing ({"skipped": True}): logged as
+    "saltato" with its reason, never as "eseguito" with an "Ordine ESEGUITO"
+    message, as it was until the Trading tab check of 23/10. A kill switch or
+    an open circuit breaker is still said on Telegram, as an order NOT sent."""
+    if not (isinstance(result, dict) and result.get("skipped")):
+        return False
+    reason = str(result.get("reason") or "skipped")
+    trading_log.record(
+        owner.id, symbol=entry.symbol, exchange=entry.exchange,
+        strategy_name=strategy_name, signal_type=signal.type,
+        outcome="saltato", detail=reason, price=signal.price,
+    )
+    if reason not in _QUIET_SKIPS and _signal_chat(owner) and _telegram_allowed(owner):
+        kind = "FUTURES " if futures else ""
+        _fire(telegram.send_to(
+            _signal_chat(owner),
+            f"⏸ Ordine {kind}NON inviato <b>{entry.symbol}</b> [{signal.type}] su {entry.exchange}: {reason}",
+        ))
+    return True
+
+
 async def _watchlist_alert_loop() -> None:
     """Background loop, independent of any browser tab: evaluates every
     watchlist ticker against each of its enabled strategies and fires
@@ -777,6 +804,8 @@ async def _watchlist_alert_loop() -> None:
                                         api_key, api_secret, passphrase, max_usdt=cap,
                                     )
                                     logger.info("Futures order placed for %s %s: %s", entry.symbol, signal.type, result)
+                                    if _bot_skipped(owner, entry, strategy_name, signal, result, futures=True):
+                                        continue
                                     trading_log.record(
                                         owner.id, symbol=entry.symbol, exchange=entry.exchange,
                                         strategy_name=strategy_name, signal_type=signal.type,
@@ -833,6 +862,8 @@ async def _watchlist_alert_loop() -> None:
                                         api_key, api_secret, passphrase, max_usdt=cap,
                                     )
                                     logger.info("Order placed for %s %s: %s", entry.symbol, signal.type, result)
+                                    if _bot_skipped(owner, entry, strategy_name, signal, result):
+                                        continue
                                     trading_log.record(
                                         owner.id, symbol=entry.symbol, exchange=entry.exchange,
                                         strategy_name=strategy_name, signal_type=signal.type,
@@ -2288,6 +2319,19 @@ class ManualOrderRequest(BaseModel):
     size_value: float
 
 
+# Every failure an exchange call can end in, as a readable 502 that also
+# reaches the order log: a Bitstamp 403 or a network timeout was an httpx
+# error no handler caught, so the order became a 500 (Trading tab check, 23/10).
+_EXCHANGE_ERRORS = (RuntimeError, ValueError, OSError, asyncio.TimeoutError, httpx.HTTPError)
+_FUTURES_ERRORS = (FuturesExecutionError, OSError, asyncio.TimeoutError, httpx.HTTPError)
+
+
+def _exchange_error_text(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPError):
+        return f"{type(exc).__name__}: {exc}"[:300] or "network error"
+    return str(exc) or type(exc).__name__
+
+
 @app.post("/api/trading/order")
 async def place_manual_order(body: ManualOrderRequest, user: User = Depends(auth.get_current_user)):
     supported = {"binance", "mexc", "kucoin", "kraken", "coinbase", "bitstamp"}
@@ -2334,7 +2378,7 @@ async def place_manual_order(body: ManualOrderRequest, user: User = Depends(auth
             body.size_mode, body.size_value,
             api_key, api_secret, passphrase,
         )
-    except RuntimeError as exc:
+    except _EXCHANGE_ERRORS as exc:
         # Anche un ordine manuale va nel diario. Era l'unico percorso che non
         # ci finiva, ed e' esattamente quello su cui e' arrivata la
         # segnalazione: il fallimento viveva solo nel riquadro di stato, che
@@ -2342,9 +2386,17 @@ async def place_manual_order(body: ManualOrderRequest, user: User = Depends(auth
         trading_log.record(
             user.id, symbol=symbol, exchange=body.exchange,
             strategy_name="manuale", signal_type=signal_type,
-            outcome="fallito", detail=str(exc),
+            outcome="fallito", detail=_exchange_error_text(exc),
         )
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail=_exchange_error_text(exc)) from exc
+    if result.get("skipped"):
+        # Kill switch, circuit breaker: nothing reached the exchange.
+        trading_log.record(
+            user.id, symbol=symbol, exchange=body.exchange,
+            strategy_name="manuale", signal_type=signal_type,
+            outcome="saltato", detail=str(result.get("reason") or "skipped"),
+        )
+        raise HTTPException(status_code=409, detail=f"Order not sent: {result.get('reason') or 'skipped'}")
     trading_log.record(
         user.id, symbol=symbol, exchange=body.exchange,
         strategy_name="manuale", signal_type=signal_type,
@@ -2401,13 +2453,20 @@ async def close_manual_spot_position(body: ClosePositionRequest, user: User = De
             "pct_balance", 100.0,
             api_key, api_secret, passphrase,
         )
-    except RuntimeError as exc:
+    except _EXCHANGE_ERRORS as exc:
         trading_log.record(
             user.id, symbol=symbol, exchange=body.exchange,
             strategy_name="chiusura manuale", signal_type="exit_long",
-            outcome="fallito", detail=str(exc),
+            outcome="fallito", detail=_exchange_error_text(exc),
         )
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail=_exchange_error_text(exc)) from exc
+    if result.get("skipped"):
+        trading_log.record(
+            user.id, symbol=symbol, exchange=body.exchange,
+            strategy_name="chiusura manuale", signal_type="exit_long",
+            outcome="saltato", detail=str(result.get("reason") or "skipped"),
+        )
+        raise HTTPException(status_code=409, detail=f"Position not closed: {result.get('reason') or 'skipped'}")
     trading_log.record(
         user.id, symbol=symbol, exchange=body.exchange,
         strategy_name="chiusura manuale", signal_type="exit_long",
@@ -6135,7 +6194,7 @@ async def list_futures_positions(user: User = Depends(auth.get_current_user)):
         creds = FuturesCreds(api_key=api_key, api_secret=api_secret, passphrase=passphrase)
         try:
             positions = await adapter.open_positions(creds)
-        except FuturesExecutionError:
+        except _FUTURES_ERRORS:
             # Un exchange che non risponde non deve nascondere gli altri.
             continue
         out.extend(p.as_dict() for p in positions)
@@ -6167,8 +6226,8 @@ async def quote_futures_order(body: FuturesQuoteRequest, user: User = Depends(au
     try:
         mark = await adapter.mark_price(symbol, creds)
         available = await adapter.available_margin(creds)
-    except FuturesExecutionError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except _FUTURES_ERRORS as exc:
+        raise HTTPException(status_code=502, detail=_exchange_error_text(exc)) from exc
 
     if body.size_mode == "fixed_usdt":
         margin_used = body.size_value
@@ -6191,7 +6250,7 @@ async def quote_futures_order(body: FuturesQuoteRequest, user: User = Depends(au
             symbol, margin_used * body.leverage, mark, creds,
         )
         margin_used = effective / body.leverage
-    except FuturesExecutionError:
+    except _FUTURES_ERRORS:
         # L'anteprima resta utile anche se la specifica del contratto non e'
         # leggibile: meglio il numero teorico che nessun numero.
         pass
@@ -6259,8 +6318,8 @@ async def place_manual_futures_order(body: FuturesOrderRequest, user: User = Dep
     # dall'exchange, non dalla cache.
     try:
         available = await adapter.available_margin(creds)
-    except FuturesExecutionError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except _FUTURES_ERRORS as exc:
+        raise HTTPException(status_code=502, detail=_exchange_error_text(exc)) from exc
     if body.size_mode == "fixed_usdt":
         margin_needed = body.size_value
     elif body.size_mode == "base_qty":
@@ -6274,8 +6333,8 @@ async def place_manual_futures_order(body: FuturesOrderRequest, user: User = Dep
         # separate del margine (mai una cache condivisa fra le due).
         try:
             mark = await adapter.mark_price(symbol, creds)
-        except FuturesExecutionError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except _FUTURES_ERRORS as exc:
+            raise HTTPException(status_code=502, detail=_exchange_error_text(exc)) from exc
         margin_needed = (body.size_value * mark) / body.leverage
     else:
         margin_needed = available * body.size_value / 100
@@ -6295,13 +6354,20 @@ async def place_manual_futures_order(body: FuturesOrderRequest, user: User = Dep
             body.size_mode, body.size_value, body.leverage,
             api_key, api_secret, passphrase=passphrase,
         )
-    except RuntimeError as exc:
+    except _EXCHANGE_ERRORS as exc:
         trading_log.record(
             user.id, symbol=symbol, exchange=body.exchange,
             strategy_name="manuale futures", signal_type=signal_type,
-            outcome="fallito", detail=detail_prefix + str(exc),
+            outcome="fallito", detail=detail_prefix + _exchange_error_text(exc),
         )
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail=_exchange_error_text(exc)) from exc
+    if result.get("skipped"):
+        trading_log.record(
+            user.id, symbol=symbol, exchange=body.exchange,
+            strategy_name="manuale futures", signal_type=signal_type,
+            outcome="saltato", detail=detail_prefix + str(result.get("reason") or "skipped"),
+        )
+        raise HTTPException(status_code=409, detail=f"Order not sent: {result.get('reason') or 'skipped'}")
     trading_log.record(
         user.id, symbol=symbol, exchange=body.exchange,
         strategy_name="manuale futures", signal_type=signal_type,
@@ -6342,13 +6408,13 @@ async def close_manual_futures_position(body: ClosePositionRequest, user: User =
     creds = FuturesCreds(api_key=api_key, api_secret=api_secret, passphrase=passphrase)
     try:
         result = await adapter.close_position(symbol, creds)
-    except FuturesExecutionError as exc:
+    except _FUTURES_ERRORS as exc:
         trading_log.record(
             user.id, symbol=symbol, exchange=body.exchange,
             strategy_name="chiusura manuale futures", signal_type="exit",
-            outcome="fallito", detail=str(exc),
+            outcome="fallito", detail=_exchange_error_text(exc),
         )
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail=_exchange_error_text(exc)) from exc
 
     # close_position() torna None quando non c'e' niente da chiudere: dirlo
     # com'e', invece di un "chiusa" che farebbe credere di essere usciti da

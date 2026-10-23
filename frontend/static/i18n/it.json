@@ -934,7 +934,11 @@
   "Closed trades by token, 30 days": "Trade chiusi per token, 30 giorni",
   "Still open, not counted": "Ancora aperti, esclusi",
   "Only trades opened and closed inside each period count: from the first buy to the last sell. Positions still open are left out.": "Contano solo i trade aperti e chiusi dentro ogni periodo: dal primo acquisto all'ultima vendita. Le posizioni ancora aperte restano fuori.",
-  "Before copying a wallet, see how its closed trades went (entry and exit) in the last 24 hours, 7 and 30 days, read from its own swaps on chain.": "Prima di copiare un wallet, guarda come sono andati i suoi trade chiusi (ingresso e uscita) nelle ultime 24 ore, 7 e 30 giorni, letti dai suoi swap on-chain."
+  "Before copying a wallet, see how its closed trades went (entry and exit) in the last 24 hours, 7 and 30 days, read from its own swaps on chain.": "Prima di copiare un wallet, guarda come sono andati i suoi trade chiusi (ingresso e uscita) nelle ultime 24 ore, 7 e 30 giorni, letti dai suoi swap on-chain.",
+  "Wallet switched off: Real copies are skipped. Turn on \"Wallet active\" in On-chain wallet → Limits": "Wallet spento: le copie Reali vengono saltate. Accendi \"Wallet active\" in On-chain wallet → Limits",
+  "the Solana wallet is switched off: turn on \"Wallet active\" in On-chain wallet → Limits": "il wallet Solana e' spento: accendi \"Wallet active\" in On-chain wallet → Limits",
+  "No API key saved for this exchange: add it in Auto-trading.": "Nessuna chiave API salvata per questo exchange: aggiungila in Auto-trading.",
+  "No USDT, USDC or USD balance on this exchange.": "Nessun saldo USDT, USDC o USD su questo exchange."
  },
  "patterns": [
   [
@@ -1092,6 +1096,14 @@
   [
    "^(\\d+) closed · (\\d+) won$",
    "$1 chiusi · $2 vinti"
+  ],
+  [
+   "^Free balance: (.+)$",
+   "Saldo libero: $1"
+  ],
+  [
+   "^Balance not readable: (.+)$",
+   "Saldo non leggibile: $1"
   ]
  ]
 }

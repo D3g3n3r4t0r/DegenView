@@ -3399,5 +3399,10 @@
     "status": "risolto",
     "at": 1792753416,
     "summary": "Nella scheda Trading del sito classico, sezione 'On-chain wallet', il saldo del wallet si legge di nuovo e si aggiorna da solo ogni 30 secondi mentre la sezione e' aperta: chi deposita SOL per il copy trading lo vede arrivare. Solo la lettura: preventivi, swap e ordini restano spenti come dal 07/10, e l'app on-chain non cambia."
+  },
+  "seed-0384": {
+    "status": "risolto",
+    "at": 1792754588,
+    "summary": "Sistemati tutti e cinque. (1) Un ordine manuale o una chiusura rifiutati dall'exchange, o caduti per la rete, ora danno un messaggio leggibile e finiscono nel diario come 'fallito'; Bitstamp spiega il proprio errore. (2) Binance Futures traduce tutti i suoi errori: anteprima e ordine dicono il motivo, e un exchange che non risponde non nasconde piu' le posizioni degli altri. (3) Un ordine che non parte (kill switch, circuit breaker, segnale che su spot non richiede nulla, niente da chiudere) e' 'saltato' nel diario con il motivo, mai 'eseguito'; su Telegram arriva 'Ordine NON inviato' solo quando c'e' un blocco vero. Lo stesso per gli ordini manuali, che rispondono 'Order not sent'. (4) Il copy trading controlla l'interruttore del wallet prima di un ordine vero e la sezione dice dove accenderlo (On-chain wallet → Limits → Wallet active). (5) Il saldo libero del Manual order si legge con la chiave salvata dall'utente, su tutti e sei gli exchange spot, e dice se la chiave manca o e' rifiutata. Provato dal vivo con chiavi finte su Bitstamp e Binance Futures; un ordine eseguito davvero resta da vedere, servono chiavi vere o di testnet."
   }
 }
