@@ -48,6 +48,11 @@ const $ = (selector) => ROOT.querySelector(selector);
 const $$ = (selector) => ROOT.querySelectorAll(selector);
 // Trading and automatic strategies: off unless <html data-trading="on"> (see VIEWS).
 const TRADING = document.documentElement.dataset.trading === "on";
+// The wallet inside the classic site's Trading tab (#onchain-embed): it keeps
+// reading the balance with trading off, since copy trading pays from this
+// wallet ("riaccendi la lettura del saldo", 23/10). The on-chain app does not.
+const EMBEDDED = ROOT !== document;
+const EMBED_BALANCE_MS = 30_000;
 // Trading-only modules are imported on demand, so with trading off the
 // browser never downloads them (main.py leaves them out of modulepreload).
 
@@ -205,7 +210,7 @@ async function selectChain(next) {
 function loadChainData() {
   // Trading off (07/10): no balance, holdings or chart to read — the reads
   // failed for accounts with no wallet and retried every 5 s for ever.
-  if (!TRADING) return;
+  if (!TRADING && !EMBEDDED) return;
   if (view.empty.hidden === false) return;  // nessun wallet: niente da chiedere
   refreshBalance();
   refreshStatus();
@@ -741,6 +746,12 @@ async function boot() {
 
   paintChainStatic();
   loadChainData();
+  // A deposit shows up without reloading the page; only while the section is open and on screen.
+  if (EMBEDDED && !TRADING) {
+    setInterval(() => {
+      if (document.visibilityState === "visible" && ROOT.closest("details")?.open !== false && view.empty.hidden) refreshBalance();
+    }, EMBED_BALANCE_MS);
+  }
   // A finished task's notification (bg.js) puts you back where it started;
   // otherwise a shared or Telegram link to a token opens it once signed in,
   // so the destination survives the login screen.

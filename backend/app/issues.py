@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0383", "Saldo del wallet on-chain fermo nella scheda Trading del sito classico",
+     "Controllo della scheda Trading del 23/10: dallo spegnimento del trading on-chain (07/10) la sezione 'On-chain wallet' del sito classico mostrava '—' e 'waiting for first balance' per sempre, anche con il wallet creato. Richiesta in chat: 'Riaccendi la lettura del saldo'.",
+     "media"),
     ("seed-0382", "Copy trading di wallet Solana nel sito classico",
      "Richiesta in chat, 22/10: 'vorrei riuscire a fare copy trading di alcuni wallet su rete Solana [...] scrivendo l'indirizzo del wallet, si puo' fare copy trading praticamente quasi istantaneo [...] scegliere se copiare solo l'ingresso o sia ingresso che uscita [...] una percentuale [...] rispetto al trade originale [...] oppure una quota fissa, per esempio 50 dollari ogni posizione che si apre nuova'. Scelte: ricompre ignorate con la quota fissa, tetti $100 a trade (dal 23/10 $50) e $500 al giorno, 10 posizioni, per tutti gli account con il Reale dietro conferma, prima in Simulato.",
      "media"),
