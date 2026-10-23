@@ -1,4 +1,10 @@
 {
+  "seed-0400l": {
+    "status": "risolto",
+    "at": 1792787799,
+    "summary": "La sezione wallet on-chain non chiede piu' il saldo di un wallet che non esiste. Con il trading spento il riquadro 'nessun wallet' resta sempre nascosto, quindi il controllo che doveva fermare le letture non scattava mai: per ogni account senza wallet partiva un 404 all'apertura e un altro tentativo ogni 30 secondi. Ora l'app usa l'elenco dei wallet restituito dal server: se la chain non ha un wallet, non chiede niente; appena il wallet esiste, il saldo torna a essere letto.",
+    "detail": "static/onchain/main.js e la copia static/onchain-v1/main.js (stessa protezione, nessun cambio grafico): noWalletHere() in loadChainData() e nel controllo periodico della versione incorporata. Verificato nel browser: senza wallet 0 richieste in 40 s; con un wallet di prova la lettura del saldo riparte."
+  },
   "seed-0399l": {
     "status": "risolto",
     "at": 1792786868,

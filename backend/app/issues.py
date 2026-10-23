@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0400l", "Sezione wallet on-chain che chiede il saldo di un wallet che non esiste",
+     "Lorenzo, 23/10, dopo la scansione del sito classico (seed-0399l): 'sistema il wallet per tutti'. In Trading > On-chain wallet, senza wallet su Solana, la pagina chiedeva comunque il saldo: errore 404 all'apertura e un nuovo tentativo ogni 30 secondi.",
+     "media"),
     ("seed-0399l", "Scansione completa del sito classico: sotto-schede irraggiungibili, menu suggerimenti, registro ordini perso a ogni deploy e altri difetti",
      "Lorenzo, 23/10: 'vorrei tu facessi una riscansione completa del sito classico con tutte le sue funzionalita' per capire dove poter intervenire se ci sono degli errori, delle criticita', dei malfunzionamenti. Deve funzionare tutto perfettamente', poi 'fai tutti i miglioramenti, anche i suggerimenti'.",
      "alta"),
