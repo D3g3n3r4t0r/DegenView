@@ -4145,18 +4145,35 @@ async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends
     if not (_full_score(user) or _next_for(user)):
         raise HTTPException(status_code=404, detail="Not found.")
     chain, token = str(body.get("chain") or "").lower(), str(body.get("token") or "").strip()
-    if chain == "layer":
+    from app.trading.onchain import layer_clusters
+    custom_url = str(body.get("url") or "").strip()
+    if token.startswith(("http://", "https://")) and not custom_url:
+        custom_url = token
+        parsed = layer_clusters.parse_explorer_url(custom_url)
+        chain = parsed["chain"] if chain in ("", "url", "layer") else chain
+        token = parsed["token"]
+    if custom_url:
+        try:
+            parsed = layer_clusters.parse_explorer_url(custom_url)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not chain or chain == "url":
+            chain = parsed["chain"]
+        if not token:
+            token = parsed["token"]
+        layer_clusters.set_custom_url(chain, token, custom_url)
+    elif chain == "layer":
         from app.trading.onchain import layer_clusters
         token, _ = layer_clusters.resolve_layer_token(token, str(body.get("symbol") or ""))
-    if chain not in wallet_clusters.CHAINS:
+    if not custom_url and chain not in wallet_clusters.CHAINS:
         raise HTTPException(status_code=400, detail=f"chain: one of {', '.join(wallet_clusters.CHAINS)}")
-    if not sync_watch._ok(token, chain):
+    if not custom_url and not sync_watch._ok(token, chain):
         raise HTTPException(status_code=400, detail="token: not an address of that chain")
     st = wallet_clusters.token_status(chain, token)
     if not st["queued"] and not _full_score(user) and not wallet_clusters.account_take(str(user.id)):
         raise HTTPException(status_code=429, detail=f"{wallet_clusters.PER_ACCOUNT_PER_DAY} checks a day per account")
     started = wallet_clusters.start_manual(chain, token, str(body.get("symbol") or ""))
-    return {"queued": started, "started": started, **wallet_clusters.token_status(chain, token)}
+    return {"queued": started, "started": started, "chain": chain, "token": token, **wallet_clusters.token_status(chain, token)}
 
 
 @app.get("/api/onchain/coordinated-sells/check")
@@ -4164,9 +4181,15 @@ async def onchain_coordinated_check_status(chain: str, token: str, user: User = 
     from app.trading.onchain import wallet_clusters
     if not (_full_score(user) or _next_for(user)):
         raise HTTPException(status_code=404, detail="Not found.")
-    if (chain or "").lower() == "layer":
-        from app.trading.onchain import layer_clusters
+    from app.trading.onchain import layer_clusters
+    if token.startswith(("http://", "https://")):
+        parsed = layer_clusters.parse_explorer_url(token)
+        chain = parsed["chain"] if (chain or "").lower() in ("", "url", "layer") else chain
+        token = parsed["token"]
+    elif (chain or "").lower() == "layer" and not layer_clusters.get_custom_url(chain, token):
         token, _ = layer_clusters.resolve_layer_token(token)
+    if (chain or "").lower() not in wallet_clusters.CHAINS and not layer_clusters.get_custom_url(chain, token):
+        raise HTTPException(status_code=400, detail="chain not covered")
     return wallet_clusters.token_status(chain, token)
 
 

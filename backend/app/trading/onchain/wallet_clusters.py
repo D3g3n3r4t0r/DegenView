@@ -568,6 +568,9 @@ async def _stamp(rpc, transfers: list[dict], blocks: set[int], anchors: dict[int
 
 
 async def build(chain: str, token: str, symbol: str = "", created_at: float | None = None, rpc=None) -> dict:
+    from app.trading.onchain import layer_clusters as _lc
+    if (_u := _lc.get_custom_url(chain, token)):
+        return await _lc.build_from_url(_u, out_chain=chain, token=token, symbol=symbol)
     if chain == "solana":
         return await _build_solana(token, symbol)
     if chain == "layer":

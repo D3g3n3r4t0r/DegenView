@@ -90,10 +90,10 @@ def test_security_hardening_invariants(tmp_path):
     # 1. Rightmost X-Forwarded-For IP (Caddy appends real client IP at the end)
     scope = {
         "type": "http",
-        "headers": [(b"x-forwarded-for", b"1.2.3.4, 198.51.100.7")],
+        "headers": [(b"x-forwarded-for", b"1.1.1.1, 8.8.8.8")],
         "client": ("172.18.0.2", 12345),
     }
-    assert web_common._client_ip(Request(scope)) == "198.51.100.7"
+    assert web_common._client_ip(Request(scope)) == "8.8.8.8"
 
     # 2. On-chain phone approval endpoints are in _PUBLIC_PATHS
     for p in (
@@ -131,7 +131,7 @@ def test_layer_clusters_kaspa_and_injective(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
     assert wallet_clusters.request("layer", "kas-kaspa", "KAS") is True
     assert wallet_clusters.request("layer", "inj-injective-protocol", "INJ") is True
-    assert wallet_clusters.report_state("layer", "kas-kaspa") == "pending"
+    assert wallet_clusters.token_status("layer", "kas-kaspa")["queued"] is True
 
     # Mock Kaspa REST API + Injective Cosmos LCD
     def handler(req: httpx.Request) -> httpx.Response:
@@ -185,6 +185,13 @@ def test_layer_clusters_kaspa_and_injective(tmp_path, monkeypatch):
                     }],
                 })
             return httpx.Response(200, json={"tx_responses": txs})
+        if "explorer.custom.org/api/v2/tokens/" in u and "/transfers" in u:
+            return httpx.Response(200, json={"items": [
+                {"block_number": 100, "tx_hash": "0xtx1", "log_index": 0, "from": {"hash": "0x" + "a" * 40}, "to": {"hash": "0x" + "b" * 40}, "total": {"value": "500000"}},
+                {"block_number": 101, "tx_hash": "0xtx2", "log_index": 0, "from": {"hash": "0x" + "a" * 40}, "to": {"hash": "0x" + "c" * 40}, "total": {"value": "400000"}},
+            ]})
+        if "explorer.custom.org/api/v2/tokens/" in u:
+            return httpx.Response(200, json={"total_supply": "1000000", "items": []})
         return httpx.Response(404)
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -198,6 +205,13 @@ def test_layer_clusters_kaspa_and_injective(tmp_path, monkeypatch):
         assert res_inj["chain"] == "layer" and res_inj["token"] == "inj-injective-protocol"
         assert len(res_inj["clusters"]) >= 1
         assert sync_sells.report_path("layer", "inj-injective-protocol").exists()
+
+        tok = "0x" + "1" * 40
+        res_url = asyncio.run(layer_clusters.build_from_url(
+            f"https://explorer.custom.org/token/{tok}", out_chain="custom", token=tok, symbol="CST", client=client,
+        ))
+        assert res_url["chain"] == "custom" and len(res_url["clusters"]) >= 1
+        assert sync_sells.report_path("custom", tok).exists()
     finally:
         asyncio.run(client.aclose())
 

@@ -655,6 +655,7 @@ def _finalize_layer_build(
     balances_override: dict[str, int] | None,
     source: str,
     block_s: float = 2.0,
+    out_chain: str = "layer",
 ) -> dict:
     """Runs wallet_clusters.cluster() on normalized transfers, writes both the
     wallet_clusters file and the sync_watch / sync_sells report under
@@ -713,7 +714,7 @@ def _finalize_layer_build(
     last_b = transfers[-1]["block"]
     first_ts = transfers[0].get("ts")
     res.update(
-        chain="layer",
+        chain=out_chain,
         token=token,
         symbol=symbol,
         built_at=int(time.time()),
@@ -738,7 +739,7 @@ def _finalize_layer_build(
     from app.atomic_write import write_text_atomic
     import json
 
-    write_text_atomic(wallet_clusters._dir() / f"{wallet_clusters._key('layer', token)}.json", json.dumps(res))
+    write_text_atomic(wallet_clusters._dir() / f"{wallet_clusters._key(out_chain, token)}.json", json.dumps(res))
 
     clusters = [
         {"id": c["id"], "wallets": c["wallets"], "links": c["links"], "edges": c["edges"]}
@@ -750,22 +751,23 @@ def _finalize_layer_build(
         ws = set(wallets)
         cut = time.time() - sync_watch.KEEP_S
         mine = [dict(t) for t in transfers if t["from"] in ws and (t.get("ts") is None or t["ts"] >= cut)]
-        cfg = sync_watch.save({
-            "chain": "layer",
-            "token": token,
-            "symbol": symbol,
-            "pools": sorted(contracts) or ["pool"],
-            "wallets": wallets,
-            "shares": {w: res["shares"].get(w, 0.0) for w in wallets},
-            "clusters": clusters,
-            "source": "auto",
-            "coverage": res["coverage"],
-            "supply": str(supply),
-        })
-        if cfg:
-            sync_watch.seed(cfg, mine, last_b + 1)
+        if out_chain in sync_watch.CHAINS:
+            cfg = sync_watch.save({
+                "chain": out_chain,
+                "token": token,
+                "symbol": symbol,
+                "pools": sorted(contracts) or ["pool"],
+                "wallets": wallets,
+                "shares": {w: res["shares"].get(w, 0.0) for w in wallets},
+                "clusters": clusters,
+                "source": "auto",
+                "coverage": res["coverage"],
+                "supply": str(supply),
+            })
+            if cfg:
+                sync_watch.seed(cfg, mine, last_b + 1)
         rep = sync_sells.report(
-            "layer",
+            out_chain,
             token,
             mine,
             clusters,
@@ -779,8 +781,11 @@ def _finalize_layer_build(
     return res
 
 
-async def build(token: str, symbol: str = "", created_at: float | None = None, client: httpx.AsyncClient | None = None) -> dict:
+async def build(token: str, symbol: str = "", created_at: float | None = None, client: httpx.AsyncClient | None = None, out_chain: str = "layer") -> dict:
     """Main entry point called by `wallet_clusters.build('layer', ...)`."""
+    custom_url = get_custom_url(out_chain, token) or (token if str(token).startswith(("http://", "https://")) else "")
+    if custom_url:
+        return await build_from_url(custom_url, out_chain=out_chain, token=token, symbol=symbol, client=client)
     norm_cid, norm_sym = resolve_layer_token(token, symbol)
     keep_token = (token or norm_cid).strip().lower()
 
@@ -806,7 +811,7 @@ async def build(token: str, symbol: str = "", created_at: float | None = None, c
 
             res = await solana_clusters.build(contract_addr)
             res.update(
-                chain="layer",
+                chain=out_chain,
                 token=keep_token,
                 symbol=norm_sym,
                 built_at=int(time.time()),
@@ -836,9 +841,356 @@ async def build(token: str, symbol: str = "", created_at: float | None = None, c
             balances_override=None,
             source=source,
             block_s=2.0,
+            out_chain=out_chain,
         )
 
     raise RuntimeError(f"layer {keep_token}: no public transfer source answered")
+
+
+# --- Custom link / Explorer URL analyzer (Lorenzo, 23/10) -------------------
+
+_HOST_CHAIN_MAP: dict[str, str] = {
+    "etherscan.io": "ethereum",
+    "eth.blockscout.com": "ethereum",
+    "arbiscan.io": "arbitrum",
+    "arbitrum.blockscout.com": "arbitrum",
+    "optimistic.etherscan.io": "optimism",
+    "optimism.blockscout.com": "optimism",
+    "basescan.org": "base",
+    "base.blockscout.com": "base",
+    "bscscan.com": "bsc",
+    "polygonscan.com": "polygon",
+    "polygon.blockscout.com": "polygon",
+    "snowtrace.io": "avalanche",
+    "avascan.info": "avalanche",
+    "lineascan.build": "linea",
+    "explorer.linea.build": "linea",
+    "scrollscan.com": "scroll",
+    "scroll.blockscout.com": "scroll",
+    "blastscan.io": "blast",
+    "blast.blockscout.com": "blast",
+    "mantlescan.xyz": "mantle",
+    "explorer.mantle.xyz": "mantle",
+    "explorer.zksync.io": "zksync",
+    "zksync.blockscout.com": "zksync",
+    "celoscan.io": "celo",
+    "celo.blockscout.com": "celo",
+    "gnosisscan.io": "gnosis",
+    "gnosis.blockscout.com": "gnosis",
+    "ftmscan.com": "fantom",
+}
+
+
+def _custom_urls_file():
+    from app.trading.onchain import storage
+    return storage.data_file("cluster_custom_urls.json")
+
+
+def set_custom_url(chain: str, token: str, url: str) -> None:
+    """Stores a user-supplied explorer/DEX link for `(chain, token)` on the volume."""
+    import json
+    from app.atomic_write import write_text_atomic
+    from app.trading.onchain import sync_watch
+
+    u = (url or "").strip()
+    if not u.startswith(("http://", "https://")):
+        raise ValueError("URL must start with https:// or http://")
+    path = _custom_urls_file()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            data = {}
+    except (OSError, ValueError):
+        data = {}
+    k = f"{(chain or 'layer').lower()}:{sync_watch._n(token or '')}"
+    data[k] = u[:500]
+    write_text_atomic(path, json.dumps(data))
+
+
+def get_custom_url(chain: str, token: str) -> str | None:
+    import json
+    from app.trading.onchain import sync_watch
+
+    try:
+        data = json.loads(_custom_urls_file().read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            k = f"{(chain or 'layer').lower()}:{sync_watch._n(token or '')}"
+            return data.get(k)
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def parse_explorer_url(url: str) -> dict:
+    """Extracts `(chain, token, symbol, base_origin)` from an explorer or DEX URL."""
+    from urllib.parse import urlparse
+    import hashlib
+
+    u = (url or "").strip()
+    parsed = urlparse(u)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError("Invalid URL")
+    host = parsed.netloc.lower().split(":")[0]
+    if host in ("localhost", "127.0.0.1", "0.0.0.0", "::1") or host.startswith(("10.", "192.168.", "169.254.")):
+        raise ValueError("Private URLs are not allowed")
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    path_q = f"{parsed.path}?{parsed.query}" if parsed.query else parsed.path
+
+    # 1. Kaspa explorer
+    if "kaspa.org" in host or "kas.fyi" in host:
+        return {"chain": "layer", "token": "kas-kaspa", "symbol": "KAS", "origin": origin, "url": u}
+    # 2. Injective explorer / Mintscan
+    if "injective" in host or "mintscan.io/injective" in u.lower():
+        return {"chain": "layer", "token": "inj-injective-protocol", "symbol": "INJ", "origin": origin, "url": u}
+    for cid in COSMOS_CHAINS:
+        short_c = cid.split("-")[0]
+        if f"mintscan.io/{short_c}" in u.lower():
+            return {"chain": "layer", "token": cid, "symbol": short_c.upper(), "origin": origin, "url": u}
+
+    # 3. EVM 0x address in URL
+    m_evm = re.search(r"0x[0-9a-fA-F]{40}", path_q)
+    if m_evm:
+        addr = m_evm.group(0).lower()
+        mapped_chain = next((v for k, v in _HOST_CHAIN_MAP.items() if host == k or host.endswith("." + k)), "layer")
+        return {"chain": mapped_chain, "token": addr, "symbol": addr[:6].upper(), "origin": origin, "url": u}
+
+    # 4. Solana explorer / Solscan / Birdeye
+    if any(k in host for k in ("solscan.io", "solana.com", "solana.fm", "birdeye.so")):
+        m_sol = re.search(r"/([1-9A-HJ-NP-Za-km-z]{32,44})", parsed.path)
+        if m_sol:
+            mint = m_sol.group(1)
+            return {"chain": "solana", "token": mint, "symbol": mint[:6], "origin": origin, "url": u}
+
+    # 5. Generic URL slug
+    slug = "url-" + hashlib.sha1(u.encode("utf-8")).hexdigest()[:12]
+    return {"chain": "layer", "token": slug, "symbol": host.split(".")[0][:8].upper(), "origin": origin, "url": u}
+
+
+async def _fetch_custom_explorer_transfers(origin: str, contract: str, client: httpx.AsyncClient) -> tuple[list[dict], dict[str, int], int, str]:
+    """Queries any Blockscout v2 or Etherscan-compatible v1 explorer at `origin`."""
+    from urllib.parse import urlparse
+    host = urlparse(origin).netloc
+    transfers: list[dict] = []
+    holders_override: dict[str, int] = {}
+    supply = 0
+
+    # Try Blockscout v2 API first (`/api/v2/tokens/{contract}/transfers` & `/holders`)
+    try:
+        r_tok = await client.get(f"{origin}/api/v2/tokens/{contract}")
+        if r_tok.status_code == 200:
+            td = r_tok.json() or {}
+            if td.get("total_supply"):
+                supply = int(str(td["total_supply"]).split(".")[0] or 0)
+        r_tr = await client.get(f"{origin}/api/v2/tokens/{contract}/transfers")
+        if r_tr.status_code == 200:
+            items = (r_tr.json() or {}).get("items") or []
+            for idx, it in enumerate(items):
+                frm = ((it.get("from") or {}).get("hash") or "").lower()
+                to = ((it.get("to") or {}).get("hash") or "").lower()
+                val = int(((it.get("total") or {}).get("value")) or 0)
+                blk = int(it.get("block_number") or (idx + 1))
+                ts_raw = it.get("timestamp")
+                ts_val = None
+                if isinstance(ts_raw, str):
+                    try:
+                        ts_val = int(datetime.fromisoformat(ts_raw.replace("Z", "+00:00")).timestamp())
+                    except ValueError:
+                        pass
+                if frm and to and val > 0:
+                    transfers.append({
+                        "block": blk,
+                        "ts": ts_val,
+                        "tx": str(it.get("tx_hash") or f"bs-{idx}"),
+                        "log_index": int(it.get("log_index") or idx),
+                        "from": frm,
+                        "to": to,
+                        "amount": val,
+                    })
+        r_h = await client.get(f"{origin}/api/v2/tokens/{contract}/holders")
+        if r_h.status_code == 200:
+            for it in (r_h.json() or {}).get("items") or []:
+                addr = ((it.get("address") or {}).get("hash") or "").lower()
+                val = int(it.get("value") or 0)
+                if addr and val > 0:
+                    holders_override[addr] = val
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Fallback: Etherscan / Blockscout v1 `?module=account&action=tokentx`
+    if not transfers:
+        try:
+            r_v1 = await client.get(
+                f"{origin}/api",
+                params={"module": "account", "action": "tokentx", "contractaddress": contract, "page": 1, "offset": 2000, "sort": "asc"},
+            )
+            if r_v1.status_code == 200:
+                rows = (r_v1.json() or {}).get("result")
+                if isinstance(rows, list):
+                    for idx, row in enumerate(rows):
+                        frm = str(row.get("from") or "").lower()
+                        to = str(row.get("to") or "").lower()
+                        val = int(row.get("value") or 0)
+                        blk = int(row.get("blockNumber") or (idx + 1))
+                        ts_val = int(row.get("timeStamp") or 0) or None
+                        if frm and to and val > 0:
+                            transfers.append({
+                                "block": blk,
+                                "ts": ts_val,
+                                "tx": str(row.get("hash") or f"v1-{idx}"),
+                                "log_index": int(row.get("logIndex") or row.get("transactionIndex") or idx),
+                                "from": frm,
+                                "to": to,
+                                "amount": val,
+                            })
+        except Exception:  # noqa: BLE001
+            pass
+
+    transfers.sort(key=lambda t: (t["block"], t["log_index"]))
+    return transfers, holders_override, supply, host
+
+
+async def build_from_url(
+    url: str,
+    out_chain: str = "layer",
+    token: str = "",
+    symbol: str = "",
+    client: httpx.AsyncClient | None = None,
+) -> dict:
+    """Analyzes a user-supplied explorer, DexScreener, or GeckoTerminal link
+    and saves the resulting cluster report under `(out_chain, token)`."""
+    info = parse_explorer_url(url)
+    keep_chain = (out_chain or info["chain"] or "layer").lower()
+    keep_token = (token or info["token"]).strip()
+    if keep_token.startswith("0x"):
+        keep_token = keep_token.lower()
+    keep_sym = (symbol or info["symbol"] or keep_token[:8]).upper()
+
+    if info["token"] == "kas-kaspa":
+        res = await build_kaspa(keep_token, keep_sym, client=client)
+        return res
+    if info["token"] in COSMOS_CHAINS:
+        cosmos_res = await build_cosmos(keep_token, keep_sym, COSMOS_CHAINS[info["token"]], client=client)
+        if cosmos_res is not None:
+            return cosmos_res
+
+    own_client = client is None
+    if own_client:
+        client = httpx.AsyncClient(timeout=20.0, follow_redirects=True)
+
+    try:
+        assert client is not None
+        u_low = url.lower()
+        target_chain = info["chain"]
+        contract_addr = info["token"] if info["token"].startswith("0x") else ""
+
+        # DexScreener link: resolve pair or token via DexScreener API
+        if "dexscreener.com/" in u_low:
+            parts = [p for p in urlparse_path(url) if p]
+            if len(parts) >= 2:
+                ds_chain, ds_id = parts[0].lower(), parts[1]
+                r = await client.get(f"https://api.dexscreener.com/latest/dex/pairs/{ds_chain}/{ds_id}")
+                pairs = (r.json() or {}).get("pairs") if r.status_code == 200 else None
+                if not pairs:
+                    r2 = await client.get(f"https://api.dexscreener.com/latest/dex/tokens/{ds_id}")
+                    pairs = (r2.json() or {}).get("pairs") if r2.status_code == 200 else None
+                if pairs and isinstance(pairs, list):
+                    p0 = pairs[0]
+                    target_chain = str(p0.get("chainId") or ds_chain).lower()
+                    base_tok = p0.get("baseToken") or {}
+                    contract_addr = str(base_tok.get("address") or "").strip()
+                    if base_tok.get("symbol") and not symbol:
+                        keep_sym = str(base_tok["symbol"]).upper()
+
+        # GeckoTerminal link: resolve pool or token via GeckoTerminal API
+        elif "geckoterminal.com/" in u_low:
+            parts = [p for p in urlparse_path(url) if p]
+            if len(parts) >= 3 and parts[1] in ("pools", "tokens"):
+                gt_net, gt_kind, gt_id = parts[0].lower(), parts[1], parts[2]
+                target_chain = _PAPRIKA_PLATFORM_CHAIN.get(gt_net, gt_net)
+                if gt_kind == "tokens":
+                    contract_addr = gt_id
+                else:
+                    r = await client.get(f"https://api.geckoterminal.com/api/v2/networks/{gt_net}/pools/{gt_id}")
+                    if r.status_code == 200:
+                        rel = (((r.json() or {}).get("data") or {}).get("relationships") or {}).get("base_token") or {}
+                        tid = str((rel.get("data") or {}).get("id") or "")
+                        if "_" in tid:
+                            contract_addr = tid.split("_", 1)[1]
+
+        # If we still don't have a contract address, fetch the page and look for 0x...
+        if not contract_addr and target_chain != "solana":
+            r_page = await client.get(url)
+            if r_page.status_code == 200:
+                m0x = re.search(r"0x[0-9a-fA-F]{40}", r_page.text)
+                if m0x:
+                    contract_addr = m0x.group(0).lower()
+
+        if target_chain == "solana" or (contract_addr and not contract_addr.startswith("0x") and len(contract_addr) >= 32):
+            from app.trading.onchain import solana_clusters, wallet_clusters
+            import json
+            from app.atomic_write import write_text_atomic
+
+            mint = contract_addr or info["token"]
+            res = await solana_clusters.build(mint)
+            res.update(
+                chain=keep_chain,
+                token=keep_token,
+                symbol=keep_sym,
+                built_at=int(time.time()),
+                partial=True,
+                transfers=res["coverage"]["transfers"],
+            )
+            res["coverage"]["rules"] = wallet_clusters.RULES
+            wallet_clusters._dir().mkdir(parents=True, exist_ok=True)
+            write_text_atomic(wallet_clusters._dir() / f"{wallet_clusters._key(keep_chain, keep_token)}.json", json.dumps(res))
+            clusters = [
+                {"id": c["id"], "wallets": c["wallets"], "links": c["links"], "edges": c["edges"]}
+                for c in res["clusters"]
+            ] + [{"id": "top", "wallets": res["top"], "links": ["top_holders"]}]
+            rep = sync_sells.report(keep_chain, keep_token, [], clusters, ["pool"], int(res.get("supply") or 0), keep_sym, res.get("shares"))
+            rep["coverage"] = res["coverage"]
+            sync_sells.write_report(rep)
+            return res
+
+        if contract_addr and contract_addr.startswith("0x"):
+            from app.trading.onchain import wallet_clusters
+            transfers: list[dict] = []
+            holders_override: dict[str, int] = {}
+            supply = 0
+            source = info["origin"]
+            if target_chain in transfer_sources.SOURCES:
+                try:
+                    transfers, _partial, source = await transfer_sources.transfers(target_chain, contract_addr, client=client)
+                except Exception:  # noqa: BLE001
+                    transfers = []
+            if not transfers:
+                transfers, holders_override, supply, source = await _fetch_custom_explorer_transfers(
+                    info["origin"], contract_addr, client
+                )
+            if transfers:
+                calc_supply = sum(v for v in wallet_clusters.balances(transfers)[0].values() if v > 0)
+                if holders_override:
+                    calc_supply = max(calc_supply, sum(holders_override.values()))
+                return _finalize_layer_build(
+                    token=keep_token,
+                    symbol=keep_sym,
+                    transfers=transfers,
+                    supply=max(supply, calc_supply, 1),
+                    balances_override=holders_override or None,
+                    source=source,
+                    block_s=2.0,
+                    out_chain=keep_chain,
+                )
+    finally:
+        if own_client and client is not None:
+            await client.aclose()
+
+    raise RuntimeError(f"link {url[:80]}: no public transfer data found at URL")
+
+
+def urlparse_path(url: str) -> list[str]:
+    from urllib.parse import urlparse
+    return [p for p in urlparse(url).path.split("/") if p]
 
 
 async def run_watch_layer(cfg: dict) -> dict:

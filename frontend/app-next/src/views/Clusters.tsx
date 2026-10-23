@@ -113,7 +113,7 @@ function Asked({ chain, token, onOpen, onReady }: { chain: string; token: string
   return (
     <button type="button" onClick={onOpen} className="mt-3 block w-full text-left">
       {rep ? <span className="flex items-center rounded-[16px] bg-card p-4 text-[14px]"><b className="flex-1 font-semibold">{short(token)} · {chain}: {t("ready")}</b><span className="text-[13px] text-text-3">{t("open ›")}</span></span>
-        : <CheckProgress check={check} title={`${short(token)} · ${chain}`} />}
+        : <CheckProgress check={check} title={`${short(token)} · ${chain}`} chain={chain} token={token} />}
     </button>
   );
 }
