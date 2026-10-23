@@ -1,3 +1,6 @@
+# 2026-10-23 — Id della bacheca con la lettera dell'account — `seed-0395g` (Claude, a mano)
+
+Richiesta in chat, 23/10: "lavoriamo in due persone da due account Claude diversi [...] gestire meglio i nomi delle voci seed per evitare sovrapposizioni [...] aggiungere una lettera ai numeri". Scelta: "g = questo account, l = l'altro". Regola in `CLAUDE.md` (sezione della bacheca): id nuovi `seed-NNNN` + `g`/`l`, la lettera si decide dall'SHA-256 dell'email dell'utente della sessione (l'impronta di `g` e' scritta li', nessuna email nel repo), numero = successivo al massimo su `origin/main`. `tests/test_issues.py::test_new_seed_ids_carry_the_account_letter` (unici; dopo 0392 lettera obbligatoria); `notify/deploy_card._SEED_RE` accetta la lettera.
 # 2026-10-23 — Applicato il Design 01 (`Today Editorial Pill — Warm Paper & Forest Ink`, `/app#today`) al sito principale con impostazione mobile invariata — `seed-0394`
 
 Lorenzo, 23/10: "come palette ispirati a questo: https://liquidityengine.app/app#today", "si' ma l'app deve essere cosi' come impostazione da mobile" (screenshot: grafico verticale a tutto schermo + barra del pollice `[DREGG·2X... | TREND EMA | Ruota 2d/3d/5d | 📈 ✏️ 🗑️]` + barra inferiore a 5 tab `[CHART | LEVELS | ALERT | MORE | DISCOVER]`), poi "applica 01".

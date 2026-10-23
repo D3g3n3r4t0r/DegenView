@@ -16,7 +16,8 @@ from pathlib import Path
 from app.notify import weekly_recap
 
 _RESOLUTIONS_FILE = Path(__file__).resolve().parent.parent / "data" / "resolutions.json"
-_SEED_RE = re.compile(r"\b(seed-\d{4})\b", re.IGNORECASE)
+# seed-NNNN, and since 23/10 seed-NNNN + the account letter (g, l: CLAUDE.md).
+_SEED_RE = re.compile(r"\b(seed-\d{4}[a-z]?)\b", re.IGNORECASE)
 
 # Aree funzionali della piattaforma per la figura/mappa di impatto del deploy.
 _AREAS: list[tuple[str, str, tuple[str, ...]]] = [

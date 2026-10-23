@@ -50,6 +50,23 @@ Una risposta con `reopen` riapre la voce: "risolto" lo decide chi ha segnalato.
 Per richiuderla serve una risoluzione con un campo `at` più recente della
 riapertura — senza `at`, la riapertura vince sempre.
 
+**Id delle voci nuove: numero + lettera dell'account** (23/10: "lavoriamo
+in due persone da due account Claude diversi [...] aggiungere una lettera ai
+numeri"). Due chat in parallelo prendevano lo stesso `seed-NNNN` (successo con
+`seed-0377` e `seed-0388`). Da ora ogni voce nuova in `_SEED` e' `seed-NNNN` +
+la lettera dell'account da cui lavori:
+
+- `g` se lo SHA-256 dell'email del tuo utente (minuscolo, come le liste di
+  email in `config.py`) e' `31481b16338555f6c4ee68b1c0f22747f7bdafa5b3def21a9a8fcead8b944c09`;
+- `l` per l'altro account (Lorenzo).
+
+L'email non si scrive mai nel repo (e' pubblico): si confronta l'impronta. Il
+numero e' il successivo al piu' alto su `origin/main`, qualunque lettera abbia;
+`seed-0393g` e `seed-0393l` possono convivere. Le voci vecchie senza lettera
+restano come sono (fino a `seed-0394`). La stessa chiave va in `resolutions.json` e nei messaggi di
+commit (le schede di deploy le riconoscono, `notify/deploy_card.py`); il test
+`test_new_seed_ids_carry_the_account_letter` blocca un id nuovo senza lettera.
+
 L'unione avviene in lettura, per `id`. Un id che non corrisponde a nessuna
 segnalazione è una diagnosi che nessuno vedrà mai — c'è un test che lo verifica.
 
