@@ -254,6 +254,20 @@ oggi come se non esistesse."
 Lorenzo scrive in italiano. Rispondi in italiano; commenti e messaggi di commit
 in inglese, come il resto del codice.
 
+**Ogni spiegazione a Lorenzo e' in italiano, sempre, senza eccezioni**
+(23/10, dopo averlo chiesto tre volte nella stessa chat: "Scrivi sempre in
+italiano le spiegazioni", poi "Scrivi in italiano, salvalo in memoria!!").
+Vale per tutto cio' che legge lui, non solo per le risposte lunghe:
+
+- le risposte brevi, anche quelle agli avvisi automatici (stop hook,
+  notifiche di task in background, errori di permessi);
+- le domande con le opzioni (`AskUserQuestion`): domanda, etichette e
+  descrizioni delle opzioni in italiano;
+- i resoconti di fine lavoro, gli aggiornamenti di avanzamento, i riepiloghi.
+
+Restano in inglese solo il codice, i commenti nel codice, i messaggi di commit
+(con la riga `Aggiornamento:` in italiano) e le descrizioni delle PR.
+
 **Ma le notifiche che legge lui sono in italiano sempre** ("i messaggi degli
 aggiornamenti li voglio in italiano sempre"). L'avviso di deploy e il riepilogo
 settimanale elencano i commit, che sono in inglese: per questo ogni commit

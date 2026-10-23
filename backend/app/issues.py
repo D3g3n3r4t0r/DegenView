@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0411l", "Spiegazioni scritte in inglese invece che in italiano",
+     "Lorenzo, 23/10: 'Scrivi sempre in italiano le spiegazioni', poi 'Scrivi in italiano, salvalo in memoria!!'. Alcune risposte (agli avvisi automatici) e le domande con le opzioni erano in inglese.",
+     "media"),
     ("seed-0410l", "Deploy del copy trading EVM bloccato da due test Kraken, e ricerca Kraken vuota per un'ora dopo un errore",
      "Lorenzo, 23/10: 'unisci la PR' (#25). Il deploy si e' fermato su due test del provider Kraken che dipendevano dall'ordine dei test e dalla rete vera.",
      "alta"),

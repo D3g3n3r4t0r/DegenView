@@ -1,4 +1,9 @@
 {
+  "seed-0411l": {
+    "status": "risolto",
+    "at": 1792793948,
+    "summary": "La regola e' scritta in CLAUDE.md, che ogni chat legge all'inizio: ogni spiegazione a Lorenzo e' in italiano, sempre, comprese le risposte brevi agli avvisi automatici, le domande con le opzioni (domanda, etichette e descrizioni) e i resoconti di fine lavoro. Restano in inglese solo codice, commenti, messaggi di commit (con la riga Aggiornamento in italiano) e descrizioni delle PR."
+  },
   "seed-0410l": {
     "status": "risolto",
     "at": 1792793396,
