@@ -277,11 +277,13 @@ def test_positions_are_converted_from_contracts_to_coins(monkeypatch):
         if p == "/api/v1/private/position/open_positions":
             return _ok([{
                 "symbol": "BTC_USDT", "holdVol": 200, "positionType": 1,
-                "openAvgPrice": 50000, "holdAvgPrice": 51000,
+                "openAvgPrice": 50000, "holdAvgPrice": 50000, "realised": 7.0,
                 "leverage": 3, "im": 333.0, "liquidatePrice": 34000,
             }])
         if p == "/api/v1/contract/detail":
             return _ok({"contractSize": 0.0001})
+        if p == "/api/v1/contract/ticker":           # the mark: fair price, read live
+            return _ok({"fairPrice": 51000, "lastPrice": 51010})
         raise AssertionError(p)
 
     _patch(monkeypatch, handler)
@@ -291,5 +293,7 @@ def test_positions_are_converted_from_contracts_to_coins(monkeypatch):
     assert pos.quantity == pytest.approx(0.02)     # 200 contratti x 0.0001
     assert pos.side == "long"
     assert pos.liquidation_price == 34000
-    # Il long e' in guadagno: 51000 contro 50000 di carico.
-    assert pos.unrealized_pnl > 0
+    # Il long e' in guadagno: 51000 contro 50000 di carico, 0.02 BTC = +20 USDT
+    # (holdAvgPrice e' il carico, non il mark; "realised" e' gia' incassato).
+    assert pos.mark_price == 51000
+    assert pos.unrealized_pnl == pytest.approx(20.0)

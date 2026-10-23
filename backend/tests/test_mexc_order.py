@@ -35,12 +35,31 @@ def _client_with(handler):
     return make
 
 
+# BTCUSDT as MEXC and Binance describe it (MEXC exchangeInfo read on 23/10).
+_INFO = {"symbols": [{"symbol": "BTCUSDT", "status": "1", "baseAssetPrecision": 8, "isSpotTradingAllowed": True,
+                      "quoteAmountPrecisionMarket": "1",
+                      "filters": [{"filterType": "LOT_SIZE", "stepSize": "0.00001"}]}]}
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rules():
+    binance_exec._rules_cache.clear()
+    yield
+
+
+def _info(request):
+    return httpx.Response(200, json={"symbols": [dict(_INFO["symbols"][0], status="TRADING")]}
+                          if "binance" in str(request.url) else _INFO)
+
+
 @pytest.fixture
 def captured(monkeypatch):
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
+        if "exchangeInfo" in str(request.url):
+            return _info(request)
         if "ticker/price" in str(request.url):
             return httpx.Response(200, json={"symbol": "BTCUSDT", "price": "50000"})
         return httpx.Response(200, json={"orderId": 1, "status": "FILLED"})
@@ -82,6 +101,8 @@ def test_mexc_buy_sends_quantity_not_quote_order_qty(monkeypatch):
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
+        if "exchangeInfo" in str(request.url):
+            return _info(request)
         if "ticker/price" in str(request.url):
             return httpx.Response(200, json={"symbol": "BTCUSDT", "price": "50000"})
         return httpx.Response(200, json={"orderId": 1, "status": "FILLED"})
@@ -99,6 +120,8 @@ def test_binance_buy_still_uses_quote_order_qty(monkeypatch):
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
+        if "exchangeInfo" in str(request.url):
+            return _info(request)
         return httpx.Response(200, json={"orderId": 1, "status": "FILLED"})
 
     monkeypatch.setattr(binance_exec.httpx, "AsyncClient", _client_with(handler))
@@ -114,6 +137,8 @@ def test_an_unknown_exchange_is_refused_instead_of_treated_as_mexc(monkeypatch):
 
 def test_the_exchange_error_carries_what_to_do_about_it(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
+        if "exchangeInfo" in str(request.url):
+            return _info(request)
         return httpx.Response(400, json={"code": 400, "msg": "api key required"})
 
     monkeypatch.setattr(binance_exec.httpx, "AsyncClient", _client_with(handler))

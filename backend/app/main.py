@@ -47,7 +47,8 @@ from app.trading.onchain.quant_api import router as quant_router
 from app import guest as guest_links
 from app import issues as issues_store
 from app import rate_limit
-from app.trading.executor import place_futures_order_for_signal, place_order_for_signal
+from app.trading.executor import _signal_to_side, place_futures_order_for_signal, place_order_for_signal
+from app.trading import spot_positions
 from app.trading.futures import registry as futures_registry
 from app.trading.futures.base import FuturesCreds, FuturesExecutionError
 from app.models import MAX_FUTURES_LEVERAGE
@@ -620,9 +621,44 @@ def _alert_chats(seen: set[str], user: User) -> str:
     return chat
 
 
+# Exchanges whose executor can sell an exact quantity (binance_exec "base_qty").
+_EXACT_EXIT_EXCHANGES = ("mexc", "binance")
+_NOTHING_HELD = "nothing bought by this strategy's bot on this pair: nothing to sell"
+# An exit with no record may be a position the bot opened before 23/10, when
+# buys were not recorded: said on Telegram, so it can be closed by hand.
+_NOTHING_HELD_EXIT = ("no buy by this strategy's bot is recorded on this pair, so nothing was sold — "
+                      "if it holds coins bought before 23/10, close them from Trading (Sell all)")
+
+
+def _spot_bot_size(owner, entry, strategy_name: str, signal, cred) -> tuple[str | None, object]:
+    """How much a spot bot order moves. A buy uses the key's sizing (fixed
+    USDT or % of the free USDT); a sell (exit_long, or a short signal, which
+    on spot means "back to cash") sells exactly the coins this strategy's bot
+    bought, from spot_positions. (None, reason) when there is nothing to sell.
+    Before 23/10 a sell re-used the buy's sizing: see spot_positions.py."""
+    side = _signal_to_side(signal.type)
+    if side != "SELL" or entry.exchange not in _EXACT_EXIT_EXCHANGES:
+        return cred.size_mode, cred.size_value
+    qty = spot_positions.held(owner.id, entry.exchange, entry.symbol, strategy_name)
+    if qty <= 0:
+        return None, _NOTHING_HELD_EXIT if signal.type == "exit_long" else _NOTHING_HELD
+    return "base_qty", qty
+
+
+def _spot_bot_filled(owner, entry, strategy_name: str, signal, result: dict) -> None:
+    if entry.exchange not in _EXACT_EXIT_EXCHANGES or not isinstance(result, dict):
+        return
+    side = _signal_to_side(signal.type)
+    if side == "BUY":
+        spot_positions.bought(owner.id, entry.exchange, entry.symbol, strategy_name,
+                              spot_positions.qty_of(result), _time.time())
+    elif side == "SELL":
+        spot_positions.sold(owner.id, entry.exchange, entry.symbol, strategy_name)
+
+
 # Skips that are not news: a spot "close the short" (on spot a short is
 # already cash) or a futures exit with nothing open.
-_QUIET_SKIPS = ("no-op signal type", "no open position to close")
+_QUIET_SKIPS = ("no-op signal type", "no open position to close", _NOTHING_HELD)
 
 
 def _bot_skipped(owner, entry, strategy_name: str, signal, result: dict, futures: bool = False) -> bool:
@@ -856,14 +892,20 @@ async def _watchlist_alert_loop() -> None:
                             for signal in fresh:
                                 try:
                                     cap = entry.size_cap_usdt.get(strategy_name)
+                                    size_mode, size_value = _spot_bot_size(owner, entry, strategy_name, signal, cred)
+                                    if size_mode is None:
+                                        _bot_skipped(owner, entry, strategy_name, signal,
+                                                     {"skipped": True, "reason": size_value})
+                                        continue
                                     result = await place_order_for_signal(
                                         entry.exchange, entry.symbol, signal,
-                                        cred.size_mode, cred.size_value,
+                                        size_mode, size_value,
                                         api_key, api_secret, passphrase, max_usdt=cap,
                                     )
                                     logger.info("Order placed for %s %s: %s", entry.symbol, signal.type, result)
                                     if _bot_skipped(owner, entry, strategy_name, signal, result):
                                         continue
+                                    _spot_bot_filled(owner, entry, strategy_name, signal, result)
                                     trading_log.record(
                                         owner.id, symbol=entry.symbol, exchange=entry.exchange,
                                         strategy_name=strategy_name, signal_type=signal.type,
@@ -2467,6 +2509,7 @@ async def close_manual_spot_position(body: ClosePositionRequest, user: User = De
             outcome="saltato", detail=str(result.get("reason") or "skipped"),
         )
         raise HTTPException(status_code=409, detail=f"Position not closed: {result.get('reason') or 'skipped'}")
+    spot_positions.closed_by_hand(user.id, body.exchange, symbol)
     trading_log.record(
         user.id, symbol=symbol, exchange=body.exchange,
         strategy_name="chiusura manuale", signal_type="exit_long",
