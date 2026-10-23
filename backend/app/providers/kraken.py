@@ -133,7 +133,10 @@ class KrakenProvider(DataProvider):
                 pairs = [v for v in result.values() if not (v.get("status") or "online") != "online"]
             except Exception:  # noqa: BLE001
                 pairs = []
-            _symbols_cache["all"] = pairs
+            # Never an empty list for an hour: one timeout used to leave the
+            # Kraken search and the live feed's symbol map empty that long.
+            if pairs:
+                _symbols_cache["all"] = pairs
         return pairs
 
     async def get_ws_symbol(self, symbol: str) -> str | None:

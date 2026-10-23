@@ -1,4 +1,10 @@
 {
+  "seed-0410l": {
+    "status": "risolto",
+    "at": 1792793396,
+    "summary": "Il deploy del copy trading EVM si era fermato su due test del provider Kraken. La causa non era l'EVM: la lista delle coppie di Kraken (e di Binance) resta in memoria per un'ora, e se l'exchange non rispondeva veniva salvata vuota. Effetto anche sul sito: dopo un solo timeout la ricerca dei ticker Kraken e il feed live restavano vuoti per un'ora. Nei test, la lista lasciata da un test precedente prendeva il posto dei dati finti, quindi passavano o fallivano a seconda dell'ordine e della rete. Ora una lettura fallita non viene salvata (come gia' facevano KuCoin e MEXC) e ogni test parte con le liste vuote.",
+    "detail": "providers/kraken.py e providers/binance.py: _symbols_cache scritto solo con una lista non vuota. tests/conftest.py: fixture _fresh_symbol_lists che svuota le cache di binance, kraken, kucoin e mexc prima di ogni test. Suite completa: 2149 passati, i soli 19 falliti sono i test che chiedono reti vere bloccate nel sandbox."
+  },
   "seed-0409l": {
     "status": "risolto",
     "at": 1792791879,

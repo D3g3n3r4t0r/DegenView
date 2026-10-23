@@ -124,7 +124,8 @@ class BinanceProvider(DataProvider):
                 symbols = payload.get("symbols", []) if isinstance(payload, dict) else []
             except Exception:  # noqa: BLE001
                 symbols = []
-            _symbols_cache["all"] = symbols
+            if symbols:                        # a failed read is retried, not cached for an hour
+                _symbols_cache["all"] = symbols
 
         q = query.upper().replace("/", "")
         all_spot = [s for s in symbols if s.get("isSpotTradingAllowed") and s.get("status") == "TRADING"]
