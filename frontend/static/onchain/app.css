@@ -1336,6 +1336,28 @@ html, body { overflow-x: clip; }
   .ds-deep { margin: 10px 0;
     & h5 { display: flex; justify-content: space-between; margin: 0 0 6px; font: 600 12px var(--sans); letter-spacing: .04em;
       text-transform: uppercase; color: var(--k-text-2); & b { text-transform: none; color: var(--k-text); } } }
+  /* Re-check by facts (22/10, v2): effect, AI opinion, one row per area. */
+  .ds-deep [data-status] { --dd: var(--k-text-3); }
+  .ds-deep [data-status="good"] { --dd: var(--k-green); }
+  .ds-deep [data-status="warn"] { --dd: var(--c-amber, #fbbf24); }
+  .ds-deep [data-status="bad"] { --dd: var(--k-red); }
+  .dd-effect { display: grid; gap: 3px; margin: 0 0 10px; padding: 10px 12px; border-radius: 10px;
+    border-inline-start: 3px solid var(--dd); background: var(--k-surface-2);
+    & b { font-size: 16px; color: var(--dd); } & span { font-size: 14px; line-height: 1.4; }
+    & small { color: var(--k-text-3); font-size: 12.5px; } }
+  .dd-ai { margin: 0 0 10px; font-size: 14px; line-height: 1.45;
+    & > span { font: 600 11px var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--k-text-3); }
+    & p { margin: 3px 0 0; } & .dd-warn { color: var(--c-amber, #fbbf24); } }
+  .dd-areas { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+  .dd-area { display: grid; grid-template-columns: 10px 1fr; gap: 10px; align-items: start;
+    & > i { inline-size: 8px; block-size: 8px; margin-block-start: 6px; border-radius: 50%; background: var(--dd); }
+    & p { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 14px; line-height: 1.4; }
+    & b { font-weight: 600; } & span, & small { grid-column: 1 / -1; }
+    & small { color: var(--k-text-3); font-size: 12px; } }
+  .dd-link { border: 0; padding: 0; background: none; color: var(--k-mint); font: 600 12.5px var(--sans); cursor: pointer; }
+  .dd-counts { margin: 8px 0 0; font-size: 12.5px; }
+  .dd-checked { margin-block-start: 8px; font-size: 13px; color: var(--k-text-2);
+    & summary { cursor: pointer; font-weight: 600; } & ul { margin: 6px 0 0; padding-inline-start: 18px; display: grid; gap: 3px; } }
   .ds-recheck { display: block; inline-size: 100%; block-size: 40px; margin-block-start: 8px; border: 1px solid var(--k-surface-2);
     border-radius: 10px; background: none; color: var(--k-text); font: 600 14px var(--sans); cursor: pointer;
     &:active { scale: .98; }

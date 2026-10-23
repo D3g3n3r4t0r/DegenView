@@ -5,7 +5,7 @@ import time
 import pytest
 
 from app import free_ai
-from app.trading.onchain import deep_recheck, leaderboard, projects_db, scout_recheck
+from app.trading.onchain import coordinated_sells, deep_recheck, depth, leaderboard, projects_db, scout_recheck
 
 
 @pytest.fixture(autouse=True)
@@ -13,6 +13,8 @@ def _tmp(tmp_path, monkeypatch):
     monkeypatch.setattr(deep_recheck, "_STORE", tmp_path / "deep.json")
     deep_recheck.reset_for_tests()
     monkeypatch.setattr(free_ai, "keys", lambda: {"groq": "k"})
+    monkeypatch.setattr(scout_recheck, "gather", _fake_gather({}))
+    monkeypatch.setattr(depth, "analyze_tokenomics", _fake_tokenomics(_TOK))
     yield
     deep_recheck.reset_for_tests()
 
@@ -29,156 +31,146 @@ def _fake_ask(payload):
     return ask
 
 
-def _fake_recheck(rc):
-    async def recheck(entry, item, client, ask=None):
-        return rc
-    return recheck
+_TOK = {"key": "tokenomics", "score": 70, "facts": {"top10_pct": 20, "creator_pct": 0, "mint": False, "freeze": False},
+        "flags": ["linked wallets hold 40% of supply (807 wallets)"]}
 
 
-def test_dropped_token_kept_clears_why(monkeypatch):
+def _fake_gather(extra):
+    async def gather(entry, item, client):
+        return {"found": [], "pages": [], "checked": [{"source": "site", "result": "found", "detail": "x"}],
+                "snippets": [], "gecko": None, **extra}
+    return gather
+
+
+def _fake_tokenomics(pillar):
+    async def analyze(chain, token, client, **kw):
+        return pillar
+    return analyze
+
+
+OK = {"verdict": "ok", "confidence": 0.9, "meme": False, "impersonates": None, "product": "a DEX aggregator",
+      "reason": "live app", "summary": "A working aggregator."}
+
+
+def test_a_kept_token_shows_areas_and_the_ai_opinion(monkeypatch):
     _row("tok1")
-    monkeypatch.setattr(scout_recheck, "recheck", _fake_recheck(
-        {"confirmed": [], "unverified": [], "refuted": [{"text": "x", "note": "ok"}], "found": [], "evidence": "ev"}))
-    ask = _fake_ask({"keep": True, "score": 70, "verdict": "gem", "reason": "real product",
-                     "strengths": ["ships"], "problems": []})
-    res = asyncio.run(deep_recheck.run("solana", "tok1", None, ask=ask))
-    assert res["keep"] is True
-    assert deep_recheck.get("solana", "tok1")["score"] == 70
+    res = asyncio.run(deep_recheck.run("solana", "tok1", None, ask=_fake_ask(OK)))
+    assert res["v"] == 2 and res["keep"] is True and res["effect"] == "not_on_board"
+    keys = [a["key"] for a in res["areas"]]
+    assert keys[:3] == ["holders", "contract", "pool"] and res["ai"]["product"] == "a DEX aggregator"
+    # RugCheck's linked wallets never reach the contract area: the holders are the cluster report's.
+    contract = next(a for a in res["areas"] if a["key"] == "contract")
+    assert "linked" not in contract["line"] and contract["status"] == "good"
+    assert next(a for a in res["areas"] if a["key"] == "holders")["status"] == "unknown"
     row = projects_db.get("solana", "tok1")
     assert not (row.get("why") or "").startswith("DeepSeek")
 
 
-def test_second_call_within_cooldown(monkeypatch):
+def test_a_serious_cluster_report_drops_and_the_ai_cannot_save_it(monkeypatch):
     _row("tok2")
-    monkeypatch.setattr(scout_recheck, "recheck", _fake_recheck(
-        {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ""}))
-    ask = _fake_ask({"keep": False, "score": 10, "verdict": "avoid", "reason": "nothing",
-                     "strengths": [], "problems": ["no product"]})
-    asyncio.run(deep_recheck.run("solana", "tok2", None, ask=ask))
-    with pytest.raises(deep_recheck.TooSoon) as exc:
-        asyncio.run(deep_recheck.run("solana", "tok2", None, ask=ask))
-    assert exc.value.wait_s > 0
+    monkeypatch.setattr(coordinated_sells, "ai_facts", lambda chain, token, now=None: {
+        "risk": 96, "risk_reasons": [], "linked_clusters": 1, "linked_wallets": 23, "linked_supply_pct": 19.1,
+        "biggest_cluster_pct": 19.1, "links": ["same_slot"], "top_holders_supply_pct": None, "sell_waves": 0,
+        "sell_waves_7d": 0, "supply_sold_in_waves_pct": 0, "last_wave_hours_ago": None, "report_age_hours": 1,
+        "coverage": None})
+    res = asyncio.run(deep_recheck.run("solana", "tok2", None, ask=_fake_ask(OK)))
+    assert res["keep"] is False and res["by"] == "holders" and "19.1%" in res["reason"]
+    assert projects_db.get("solana", "tok2")["why"].startswith("Re-check:")
 
 
-def test_daily_max(monkeypatch):
-    _row("tok3")
-    monkeypatch.setattr(scout_recheck, "recheck", _fake_recheck(
-        {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ""}))
-    ask = _fake_ask({"keep": False, "score": 10, "verdict": "avoid", "reason": "nothing",
-                     "strengths": [], "problems": []})
-    day = time.strftime("%Y-%m-%d", time.gmtime())
-    deep_recheck._state["calls"][day] = deep_recheck.DAILY_MAX
-    with pytest.raises(deep_recheck.TooSoon):
-        asyncio.run(deep_recheck.run("solana", "tok3", None, ask=ask))
+def test_a_confident_copy_drops_and_a_later_keep_restores_the_rank(monkeypatch):
+    projects_db.upsert({"chain": "solana", "token_address": "tok3", "symbol": "T"}, "test", now=100)
+    projects_db.record({"chain": "solana", "token_address": "tok3", "pillars": {}}, "studied", score=80, now=100)
+    projects_db.set_standing("solana", "tok3", "ranked", 80, 4)
+    copy = {**OK, "impersonates": "Apple", "reason": "uses the Apple name"}
+    res = asyncio.run(deep_recheck.run("solana", "tok3", None, ask=_fake_ask(copy), limited=False))
+    assert res["keep"] is False and res["by"] == "ai" and res["dropped_from"] == {"status": "ranked", "rank": 4}
+    assert projects_db.get("solana", "tok3")["status"] == "studied"
+    res = asyncio.run(deep_recheck.run("solana", "tok3", None, now=time.time() + 60, ask=_fake_ask(OK), limited=False))
+    row = projects_db.get("solana", "tok3")
+    assert res["keep"] is True and row["status"] == "ranked" and row["rank"] == 4 and not row.get("why")
 
 
-def test_unreadable_json_counts(monkeypatch):
+def test_no_ai_answer_means_a_verdict_from_the_facts(monkeypatch):
     _row("tok4")
-    monkeypatch.setattr(scout_recheck, "recheck", _fake_recheck(
-        {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ""}))
 
     async def ask(messages, **kw):
         return "not json"
-
-    day = time.strftime("%Y-%m-%d", time.gmtime())
-    before = deep_recheck._state["calls"].get(day, 0)
-    with pytest.raises(RuntimeError):
-        asyncio.run(deep_recheck.run("solana", "tok4", None, ask=ask))
-    assert deep_recheck._state["calls"].get(day, 0) == before + 1
+    res = asyncio.run(deep_recheck.run("solana", "tok4", None, ask=ask))
+    assert res["ai"] is None and res["keep"] is True and res["by"] == "facts"
 
 
-def test_board_entry_gets_deep_review(monkeypatch):
-    entry = {"chain": "solana", "token_address": "tok5", "name": "T", "symbol": "T",
-             "pillars": {}, "judge": {"verdict": "watch", "score": 30, "problems": ["p"]}}
+def test_board_entry_gets_deep_review_and_the_effect(monkeypatch):
+    entry = {"chain": "solana", "token_address": "tok5", "name": "T", "symbol": "T", "pillars": {},
+             "review": {"keep": False, "reason": "old", "at": time.time() - 100}}
     leaderboard._entries["solana:tok5"] = entry
-    monkeypatch.setattr(scout_recheck, "recheck", _fake_recheck(
-        {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ""}))
-    ask = _fake_ask({"keep": True, "score": 80, "verdict": "gem", "reason": "good",
-                     "strengths": [], "problems": []})
-    asyncio.run(deep_recheck.run("solana", "tok5", None, ask=ask))
-    assert leaderboard._entries["solana:tok5"]["review"]["deep"] is True
-    leaderboard._entries.pop("solana:tok5", None)
+
+    async def retok(chain, token, client):
+        return _TOK
+    monkeypatch.setattr(leaderboard, "retokenomics", retok)
+    try:
+        res = asyncio.run(deep_recheck.run("solana", "tok5", None, ask=_fake_ask(OK)))
+        assert leaderboard._entries["solana:tok5"]["review"]["deep"] is True
+        assert res["effect"] == "back" and res["before"]["keep"] is False
+    finally:
+        leaderboard._entries.pop("solana:tok5", None)
+
+
+def test_second_call_within_cooldown_and_daily_max(monkeypatch):
+    _row("tok6")
+    asyncio.run(deep_recheck.run("solana", "tok6", None, ask=_fake_ask(OK)))
+    with pytest.raises(deep_recheck.TooSoon):
+        asyncio.run(deep_recheck.run("solana", "tok6", None, ask=_fake_ask(OK)))
+    _row("tok7")
+    deep_recheck._state["calls"][time.strftime("%Y-%m-%d", time.gmtime())] = deep_recheck.DAILY_MAX
+    with pytest.raises(deep_recheck.TooSoon):
+        asyncio.run(deep_recheck.run("solana", "tok7", None, ask=_fake_ask(OK)))
 
 
 def test_double_tap_asks_once(monkeypatch):
-    _row("tok6")
-    monkeypatch.setattr(scout_recheck, "recheck", _fake_recheck(
-        {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ""}))
+    _row("tok8")
     calls = []
 
     async def ask(messages, **kw):
         calls.append(1)
         await asyncio.sleep(0.01)
-        return json.dumps({"keep": True, "score": 60, "verdict": "watch", "reason": "ok"})
+        return json.dumps(OK)
 
     async def both():
-        return await asyncio.gather(deep_recheck.run("solana", "tok6", None, ask=ask),
-                                    deep_recheck.run("solana", "tok6", None, ask=ask), return_exceptions=True)
-
+        return await asyncio.gather(deep_recheck.run("solana", "tok8", None, ask=ask),
+                                    deep_recheck.run("solana", "tok8", None, ask=ask), return_exceptions=True)
     res = asyncio.run(both())
-    assert len(calls) == 1
-    assert sum(isinstance(r, deep_recheck.TooSoon) for r in res) == 1
-
-
-def test_failed_second_search_still_asks(monkeypatch):
-    _row("tok7")
-
-    async def boom(*a, **kw):
-        raise ValueError("network")
-
-    monkeypatch.setattr(scout_recheck, "recheck", boom)
-    res = asyncio.run(deep_recheck.run("solana", "tok7", None, ask=_fake_ask(
-        {"keep": False, "score": 20, "verdict": "avoid", "reason": "thin"})))
-    assert res["unsupported"] is True and res["claims"] == []
-
-
-def test_a_drop_needs_a_problem_backed_by_a_real_quote(monkeypatch):
-    _row("tok8")
-    ev = "Checked sources:\nsite html: found — 200, 900 bytes\nliquidity $3,100 against a $2,400,000 cap"
-    monkeypatch.setattr(scout_recheck, "recheck", _fake_recheck(
-        {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ev}))
-    made_up = {"keep": False, "score": 10, "verdict": "avoid", "reason": "no product",
-               "problems": [{"text": "no product", "evidence": "the product does not exist"}]}
-    res = asyncio.run(deep_recheck.run("solana", "tok8", None, ask=_fake_ask(made_up)))
-    assert res["unsupported"] is True and res["keep"] is True and res["problems"] == []
-    row = projects_db.get("solana", "tok8")
-    assert (row.get("why") or "").startswith("DeepSeek review")       # an unsupported answer changes nothing
-
-    _row("tok9")
-    real = {**made_up, "problems": [{"text": "pool is tiny for the cap",
-                                     "evidence": "liquidity $3,100 against a $2,400,000 cap"}]}
-    res = asyncio.run(deep_recheck.run("solana", "tok9", None, ask=_fake_ask(real)))
-    assert res["keep"] is False and res["problems"][0]["evidence"].startswith("liquidity $3,100")
-
-
-def test_a_drop_on_gaps_alone_changes_nothing(monkeypatch):
-    _row("tok10")
-    ev = "Checked sources:\nGitHub: not found — no public repository found\nhttps://x.io/docs: unreadable — no text"
-    monkeypatch.setattr(scout_recheck, "recheck", _fake_recheck(
-        {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ev}))
-    gaps = {"keep": False, "score": 20, "verdict": "avoid", "reason": "no code",
-            "problems": [{"text": "No public GitHub", "evidence": "GitHub: not found — no public repository found"},
-                         {"text": "Docs not readable", "evidence": "https://x.io/docs: unreadable — no text"}]}
-    res = asyncio.run(deep_recheck.run("solana", "tok10", None, ask=_fake_ask(gaps)))
-    # "Docs not readable" is our reader's gap: not even listed as a problem (08/10).
-    assert res["unsupported"] is True and len(res["problems"]) == 1
+    assert len(calls) == 1 and sum(isinstance(r, deep_recheck.TooSoon) for r in res) == 1
 
 
 def test_account_holders_recheck_whenever_they_want(monkeypatch):
     _row("tok9")
-    monkeypatch.setattr(scout_recheck, "recheck", _fake_recheck(
-        {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ""}))
-    ask = _fake_ask({"keep": True, "score": 60, "verdict": "watch", "reason": "fine",
-                     "strengths": [], "problems": []})
     now = time.time()
-    day = time.strftime("%Y-%m-%d", time.gmtime(now))
-    deep_recheck._state["calls"][day] = deep_recheck.DAILY_MAX
-    asyncio.run(deep_recheck.run("solana", "tok9", None, now=now, ask=ask, limited=False))
+    deep_recheck._state["calls"][time.strftime("%Y-%m-%d", time.gmtime(now))] = deep_recheck.DAILY_MAX
+    asyncio.run(deep_recheck.run("solana", "tok9", None, now=now, ask=_fake_ask(OK), limited=False))
     with pytest.raises(deep_recheck.TooSoon):   # a double tap
-        asyncio.run(deep_recheck.run("solana", "tok9", None, now=now + 2, ask=ask, limited=False))
-    asyncio.run(deep_recheck.run("solana", "tok9", None, now=now + deep_recheck.TAP_GAP_S + 1, ask=ask, limited=False))
+        asyncio.run(deep_recheck.run("solana", "tok9", None, now=now + 2, ask=_fake_ask(OK), limited=False))
     assert deep_recheck.wait_s("solana", "tok9", now + 3600, limited=False) == 0
     assert deep_recheck.wait_s("solana", "tok9", now + 3600) > 0
+
+
+def test_progress_shows_the_real_steps(monkeypatch):
+    _row("tok10")
+    asyncio.run(deep_recheck.run("solana", "tok10", None, ask=_fake_ask(OK), limited=False))
+    p = deep_recheck.progress("solana", "tok10")
+    labels = [s["label"] for s in p["steps"]]
+    assert p["running"] is False and all(s["state"] == "done" for s in p["steps"])
+    assert labels[0] == "Loading the project and its last review"
+    assert "Reading the wallet cluster report" in labels and "Asking the AI about the product" in labels
+    assert labels[-1] == "Verdict" and not any("DeepSeek" in x for x in labels)
+    assert scout_recheck.PROGRESS.get() is None
+
+
+def test_old_results_still_read():
+    res = {"problems": [{"text": "Pool holds 2% of the cap", "evidence": "q"}],
+           "claims": [{"text": "single author", "status": "confirmed"}], "cleared": 0, "unverified": 0, "confirmed": 1}
+    out = deep_recheck.tidy(res)
+    assert out["confirmed"] == 1 and out["problems"][0]["text"] == "Pool holds 2% of the cap"
 
 
 def test_weekly_sweep_walks_the_board_once_a_week():
@@ -198,47 +190,3 @@ def test_a_stalled_sweep_restarts_after_a_week():
     t0 = 1_800_000_000.0
     assert deep_recheck.next_in_sweep(["solana:a"], t0) == "solana:a"
     assert deep_recheck.next_in_sweep(["base:z"], t0 + deep_recheck.WEEK_S) == "base:z"
-
-
-def test_progress_shows_the_real_steps(monkeypatch):
-    _row("tok7")
-    monkeypatch.setattr(scout_recheck, "recheck", _fake_recheck(
-        {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ""}))
-    ask = _fake_ask({"keep": True, "score": 60, "verdict": "watch", "reason": "fine",
-                     "strengths": [], "problems": []})
-    asyncio.run(deep_recheck.run("solana", "tok7", None, ask=ask, limited=False))
-    p = deep_recheck.progress("solana", "tok7")
-    labels = [s["label"] for s in p["steps"]]
-    assert p["running"] is False and all(s["state"] == "done" for s in p["steps"])
-    assert labels[0] == "Loading the project and its last review"
-    assert "Asking DeepSeek for the verdict" in labels and labels[-1] == "Verdict: kept"
-    assert scout_recheck.PROGRESS.get() is None
-
-
-def test_tidy_shows_each_fact_once_with_matching_counts():
-    res = {"problems": [{"text": "SDK repo has a single author", "evidence": "q"},
-                        {"text": "Marketing site is JavaScript-only and unreadable", "evidence": "q"},
-                        {"text": "Pool holds 2% of the cap", "evidence": "q"}],
-           "claims": [{"text": "Only 1 author on the SDK repo", "status": "confirmed"},
-                      {"text": "single author", "status": "confirmed"},
-                      {"text": "site built in JavaScript, not readable", "status": "confirmed"},
-                      {"text": "Site is a JavaScript shell with no mechanisms", "status": "refuted", "evidence": "e"}],
-           "cleared": 1, "unverified": 0, "confirmed": 3}
-    out = deep_recheck.tidy(res)
-    assert [p["text"] for p in out["problems"]] == ["Pool holds 2% of the cap"]
-    assert [c["status"] for c in out["claims"]] == ["confirmed", "refuted"]
-    assert (out["cleared"], out["unverified"], out["confirmed"]) == (1, 0, 1)
-
-
-def test_progress_carries_the_log_of_what_was_opened(monkeypatch):
-    _row("tok8")
-
-    async def rc(entry, item, client, ask=None):
-        scout_recheck.TRACE.get()("GitHub", "github.com/a/b")["code"] = 200
-        return {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ""}
-    monkeypatch.setattr(scout_recheck, "recheck", rc)
-    ask = _fake_ask({"keep": True, "score": 60, "verdict": "watch", "reason": "fine", "strengths": [], "problems": []})
-    asyncio.run(deep_recheck.run("solana", "tok8", None, ask=ask, limited=False))
-    p = deep_recheck.progress("solana", "tok8")
-    assert p["log"] == [{"n": 0, "src": "GitHub", "text": "github.com/a/b", "code": 200}]
-    assert scout_recheck.TRACE.get() is None

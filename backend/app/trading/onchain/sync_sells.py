@@ -286,3 +286,5 @@ def write_report(rep: dict) -> None:
     path = report_path(rep["chain"], rep["token"])
     path.parent.mkdir(parents=True, exist_ok=True)
     write_text_atomic(path, json.dumps(rep, indent=1))
+    from app.trading.onchain import leaderboard
+    leaderboard.clusters_changed(rep["chain"], rep["token"])

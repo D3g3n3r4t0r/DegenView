@@ -34,6 +34,9 @@ import time
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
+import httpx
+
+from app import service_keys
 from app.atomic_write import write_text_atomic
 from app.trading.onchain import storage, sync_sells, sync_watch, transfer_sources
 
@@ -43,7 +46,14 @@ logger = logging.getLogger(__name__)
 # Ethereum public RPCs answer getLogs only for the last hours (22/10, probed:
 # publicnode "archive requests require a token", drpc "free plan").
 CHAINS = ("robinhood", "ethereum", "base", "bsc", "solana")
-MAX_WINDOW = {"robinhood": 5_000_000}     # the RPC takes up to 10M blocks / 10k logs
+MAX_WINDOW = {"robinhood": 5_000_000,     # the RPC takes up to 10M blocks / 10k logs
+              "bsc": 50_000}              # NodeReal free plan; a refusal halves it anyway
+# Chains whose history comes from a keyed archive RPC (Diagnostics) instead
+# of an explorer: BSC has no free keyless source (22/10, Routescan "chain not
+# supported", Etherscan V2 refuses free BSC access).
+KEYED_RPC = {"bsc": "nodereal"}
+# Without the token's launch time the history starts this far back (partial).
+KEYED_LOOKBACK_S = 30 * 86400
 MIN_WINDOW = 500
 MAX_CALLS = 600                           # getLogs calls per token
 MAX_LOGS = 150_000                        # past this the history is cut (partial)
@@ -143,6 +153,27 @@ def _save_state(st: dict) -> None:
 
 def _key(chain: str, token: str) -> str:
     return f"{chain}-{sync_watch._n(token)}"
+
+
+# The rules the clusters are built with. A token built under older rules is
+# built again, every one of them (Lorenzo, 22/10: "fai un ricontrollo completo
+# di tutti i report dei cluster"): 2 = Solana pools excluded like depth.py, no
+# same-slot link from one airdrop sender.
+RULES = 2
+
+
+def rebuild_old_rules(st: dict) -> int:
+    """Forgets when tokens built under older rules were built, so the loop
+    queues each again; returns how many."""
+    if st.get("rules", 1) >= RULES:
+        return 0
+    n = 0
+    for rec in (st.get("tokens") or {}).values():
+        if rec.get("built_at") or rec.get("failed_at"):
+            rec["built_at"] = rec["failed_at"] = None
+            n += 1
+    st["rules"] = RULES
+    return n
 
 
 # --- queue -----------------------------------------------------------------
@@ -276,6 +307,33 @@ async def _call(rpc, method: str, params: list, tries: int = 5):
                     and "failed" not in str(exc).lower():
                 raise
             await asyncio.sleep(2 ** i)
+
+
+def keyed_rpc(chain: str):
+    """The archive RPC of `chain` when its key is set (Diagnostics), else None.
+    Errors never carry the URL: it holds the key."""
+    name = KEYED_RPC.get(chain)
+    key = service_keys.get(name) if name else ""
+    if not key:
+        return None
+    url = service_keys.SERVICES[name][1].replace("{key}", key)
+
+    async def rpc(method: str, params: list):
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                r = await client.post(url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+        except httpx.HTTPError as exc:
+            raise RuntimeError(f"{name} {method} failed ({type(exc).__name__})") from None
+        if r.status_code != 200:
+            raise RuntimeError(f"{name} {method}: HTTP {r.status_code}" + (" rate" if r.status_code == 429 else ""))
+        try:
+            data = r.json()
+        except ValueError:
+            raise RuntimeError(f"{name} {method} failed (not JSON)") from None
+        if "error" in data:
+            raise RuntimeError(f"RPC {chain} ({method}): {data['error']}")
+        return data.get("result")
+    return rpc
 
 
 async def _gather(coros, n: int = 4):
@@ -512,13 +570,23 @@ async def _stamp(rpc, transfers: list[dict], blocks: set[int], anchors: dict[int
 async def build(chain: str, token: str, symbol: str = "", created_at: float | None = None, rpc=None) -> dict:
     if chain == "solana":
         return await _build_solana(token, symbol)
-    rpc = rpc or sync_sells._default_rpc(chain)
+    keyed = None if rpc else keyed_rpc(chain)
+    rpc = rpc or keyed or sync_sells._default_rpc(chain)
     token = token.lower()
     latest = int(await _call(rpc, "eth_blockNumber", []) or "0x0", 16)
     if created_at and created_at > 1e12:
         created_at /= 1000
     progress("transfers", 0)
-    if chain in transfer_sources.SOURCES:
+    if keyed:
+        # Archive RPC with the full log history: read it like Robinhood's.
+        since = created_at - 86400 if created_at else time.time() - KEYED_LOOKBACK_S
+        start = await block_at(rpc, since, latest)
+        transfers, partial = await all_transfers(rpc, chain, token, start, latest)
+        partial = partial or not created_at
+        source = KEYED_RPC[chain]
+    elif chain in KEYED_RPC:
+        raise RuntimeError(f"{chain} needs a {KEYED_RPC[chain]} key (Diagnostics)")
+    elif chain in transfer_sources.SOURCES:
         # History from a free explorer: the free RPCs keep only recent logs.
         transfers, partial, source = await transfer_sources.transfers(chain, token)
         start = transfers[0]["block"] if transfers else 0
@@ -562,7 +630,7 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
                from_block=start, to_block=latest, transfers=len(transfers), supply=str(supply),
                contracts=sorted(contracts), block_s=round(block_s, 4),
                coverage={"source": source, "partial": partial, "from_block": first_b, "to_block": last_b,
-                         "from_ts": anchors.get(first_b), "transfers": len(transfers)})
+                         "from_ts": anchors.get(first_b), "transfers": len(transfers), "rules": RULES})
     _dir().mkdir(parents=True, exist_ok=True)
     write_text_atomic(_dir() / f"{_key(chain, token)}.json", json.dumps(res))
     if res["clusters"] or len(res["top"]) >= 2:
@@ -580,6 +648,7 @@ async def _build_solana(mint: str, symbol: str) -> dict:
                  "clusters": len(res["clusters"]), "waves": len(res.get("waves") or [])})
     res.update(chain="solana", token=mint, symbol=symbol, built_at=int(time.time()),
                partial=True, transfers=res["coverage"]["transfers"])
+    res["coverage"]["rules"] = RULES
     _dir().mkdir(parents=True, exist_ok=True)
     write_text_atomic(_dir() / f"{_key('solana', mint)}.json", json.dumps(res))
     clusters = [{"id": c["id"], "wallets": c["wallets"], "links": c["links"], "edges": c["edges"]}
@@ -617,7 +686,7 @@ async def _hand_to_watch(rpc, res: dict, transfers: list[dict], anchors: dict[in
     # An explorer lags the chain by a few blocks: the watch reads them again.
     # A partial history stops long before today: the watch starts near the head
     # (the free RPCs of these chains keep recent logs only).
-    nxt = latest + 1 if res.get("coverage", {}).get("source") == "rpc" else max(latest - 300, 0)
+    nxt = latest + 1 if res.get("coverage", {}).get("source") in ("rpc", *KEYED_RPC.values()) else max(latest - 300, 0)
     sync_watch.seed(cfg, mine, nxt)
 
 
@@ -681,16 +750,70 @@ def start_manual(chain: str, token: str, symbol: str = "") -> bool:
     rec = (_state().get("tokens") or {}).get(k) or {}
     if rec.get("built_at") and time.time() - rec["built_at"] < 3600:
         return False
+    _spawn(chain, token, symbol, "manual")
+    return True
+
+
+def _spawn(chain: str, token: str, symbol: str, why: str) -> asyncio.Task:
+    k = _key(chain, token)
     item = {"key": k, "chain": chain, "token": token, "symbol": str(symbol or "")[:24], "manual": True}
     _running[k] = {"phase": "waiting", "progress": None, "started_at": int(time.time()), "chain": chain,
                    "token": token, "symbol": item["symbol"], "manual": True}
-    note("queued", item, "manual")
+    note("queued", item, why)
 
     async def go():
         async with _manual_sem:
-            await _build_tracked(item, time.time())
-    asyncio.get_running_loop().create_task(go())
-    return True
+            return await _build_tracked(item, time.time())
+    return asyncio.get_running_loop().create_task(go())
+
+
+# --- the report for the AI checks ------------------------------------------
+# Lorenzo, 22/10: the AI re-check and the AI veto read the cluster report,
+# and a missing one is built first (coordinated_sells.ai_facts).
+FORCE_WAIT_S = 600
+
+
+def report_state(chain: str, token: str, now: float | None = None) -> str:
+    """"ready" (a fresh report), "pending" (none yet, a build can make one),
+    or why there will be none."""
+    from app.trading.onchain import coordinated_sells
+    chain, token = (chain or "").lower(), sync_watch._n(token or "")
+    now = now if now is not None else time.time()
+    if coordinated_sells.fresh_report(chain, token, now):
+        return "ready"
+    if chain not in CHAINS or not sync_watch._ok(token, chain):
+        return "chain not covered"
+    k = _key(chain, token)
+    if k in _running:
+        return "pending"
+    rec = (_state().get("tokens") or {}).get(k) or {}
+    if rec.get("built_at") and now - rec["built_at"] < REBUILD_S:
+        return "built, fewer than two wallets to watch"
+    if rec.get("failed_at") and now - rec["failed_at"] < RETRY_S:
+        return "build failed: " + str(rec.get("error") or "")[:80]
+    return "pending"
+
+
+async def ensure(chain: str, token: str, symbol: str = "", wait_s: float = FORCE_WAIT_S) -> str:
+    """Builds the token's clusters now when the report is missing, waiting
+    up to `wait_s`; returns report_state() afterwards ("timeout" if slower)."""
+    chain, token = (chain or "").lower(), sync_watch._n(token or "")
+    state = report_state(chain, token)
+    if state != "pending":
+        return state
+    k = _key(chain, token)
+    try:
+        if k in _running:
+            async def done():
+                while k in _running:
+                    await asyncio.sleep(2)
+            await asyncio.wait_for(done(), wait_s)
+        else:
+            await asyncio.wait_for(asyncio.shield(_spawn(chain, token, symbol, "AI check")), wait_s)
+    except asyncio.TimeoutError:
+        return "timeout"
+    state = report_state(chain, token)
+    return "build failed" if state == "pending" else state
 
 
 async def loop(candidates, every_s: int = LOOP_S) -> None:
@@ -699,6 +822,11 @@ async def loop(candidates, every_s: int = LOOP_S) -> None:
     between builds the queue one token after another (Lorenzo 22/10: 101
     queued and the engine idle, at one build per 5 minutes)."""
     await asyncio.sleep(60)
+    st = _state()
+    n = rebuild_old_rules(st)
+    if n:
+        _save_state(st)
+        note("rebuild", {}, f"{n} tokens built again under the new rules")
     while True:
         try:
             cands = candidates()

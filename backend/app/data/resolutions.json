@@ -3366,6 +3366,31 @@
     "summary": "Nell'app nuova (/app, dal telefono) ci sono due schermate nuove. Today, che e' quella che si apre, dice cosa e' cambiato da circa un giorno: nuovi campioni dei settori, progetti entrati, usciti e punteggi saliti o scesi di 5 punti o piu'. Sectors ha due mosaici, come scelto (M2 con il tasto per la Mappa): Campioni, che si apre per primo (per ogni settore il primo e chi lo insegue, ordinati per forza, con il bordo verde se il campione e' cambiato) e Mappa (ogni progetto e' un riquadro grande quanto la sua cap, colorato con il 24h o il punteggio). Il dock e' piu' corto: Today, Sectors, Gems, Scout, Profile; Pearl, Early e Top stanno dentro Gems. In cima a Today c'e' anche la tua watchlist (i token con la stella), ognuno con la riga di cosa e' cambiato. Resta la ricerca unica."
   },
   "seed-0377": {
+    "status": "risolto",
+    "at": 1792702581,
+    "summary": "Il re-check approfondito e il veto AI che decide chi entra nella Top ora leggono il report dei cluster del token: rischio, quanti wallet collegati e che quota di supply tengono, ondate di vendita coordinate. Per giudicare holder e rischio rug l'AI usa solo quello, non le sue ipotesi. Una regola nuova: rischio 60 o piu', oppure wallet collegati con il 12% della supply o piu', e' un motivo per scartare. Se il report manca, il re-check lo costruisce subito e lo aspetta (fino a 10 minuti, lo vedi fra i passi dal vivo); il veto mette il token in testa alla coda dei cluster e decide appena il report e' pronto. Se la chain non si puo' leggere, l'AI sa che il rischio dagli holder non e' verificato e non lo usa come motivo."
+  },
+  "seed-0378": {
+    "status": "risolto",
+    "at": 1792705140,
+    "summary": "Il ricontrollo approfondito non conferma piu' una lista di punti rossi scritta da altri: rimisura. Per ogni area c'e' un esito misurato con la fonte: holder e cluster (solo il nostro report, costruito sul momento se manca), contratto (mint, freeze, creatore, liquidita' bloccata, riletti ora), pool e mercato, uso reale, codice, sito e prodotto, social, sviluppatore dove lo seguiamo. L'AI risponde solo a quello che i numeri non dicono (il prodotto e' vero? copia qualcuno? e' una meme travestita?) e scrive un riassunto. Il verdetto lo decidono le regole: un'area grave fa uscire dalla Top per 3 giorni; l'AI fa uscire solo per copia o scam detti con sicurezza, mai un progetto eccellente. In cima alla scheda c'e' l'effetto (resta, torna, fuori fino al...). Se un token rientra, nel database riprende la sua posizione. Una chiamata AI invece di due. Nella Top, per i token Solana, i wallet collegati vengono dal nostro report e non piu' da RugCheck."
+  },
+  "seed-0379": {
+    "status": "risolto",
+    "at": 1792705140,
+    "summary": "Due falsi positivi tolti dai cluster Solana: wallet che ricevono i token nello stesso slot da uno stesso mittente che ne ha riforniti 20 o piu' (un airdrop o una distribuzione) non sono piu' collegati; pool e locker sono esclusi come nel resto del sito (anche i proprietari dei conti di liquidita'). Il rischio struttura ora si ricalcola dai cluster del report, quindi un cluster di wallet collegati al 19% non puo' piu' dare rischio 0. Tutti i cluster gia' costruiti vengono ricostruiti con le regole nuove, uno dopo l'altro, a partire dal deploy: fino ad allora i report vecchi restano come sono, perche' potrebbero contenere un airdrop scambiato per cluster."
+  },
+  "seed-0380": {
+    "status": "risolto",
+    "at": 1792705140,
+    "summary": "Gli avvisi di vendita coordinata partono verso la chat delle gemme di ogni account che ne ha una (la stessa delle gemme nuove e delle uscite, DegeneroTotale), una volta per chat. Se nessun account ha una chat delle gemme, vanno alla chat principale come prima."
+  },
+  "seed-0381": {
+    "status": "risolto",
+    "at": 1792705140,
+    "summary": "Su liquidityengine.app/cantiere c'e' la pagina dei lavori: le modifiche in corso (pull request aperte), i deploy (in corso, riusciti o falliti) e quello che e' gia' online, con la riga in italiano di ogni modifica. Si aggiorna da sola ogni 2 minuti, o col tasto; funziona anche da telefono."
+  },
+  "seed-0382": {
     "status": "in corso",
     "at": 1792705575,
     "summary": "Nel sito classico, scheda Trading, c'e' la sezione 'Copy trading · Solana': si incolla l'indirizzo di un wallet e si sceglie se copiare solo gli ingressi o anche le uscite, e quanto investire (una percentuale del suo trade o una cifra fissa per ogni posizione nuova). Il sito ascolta il wallet dal vivo e copia dopo 3-6 secondi (misurato su trade veri). Le uscite si copiano in proporzione: se lui vende il 40% dei suoi token, si vende il 40% dei nostri. Protezioni sempre attive: niente token con freeze o mint authority attive, niente token che Jupiter non sa rivendere, niente acquisti a un prezzo piu' alto del suo oltre la soglia scelta (15%), niente trade visti con piu' di 90 s di ritardo, niente sotto i $5, piu' i tetti dell'account ($100 a trade, $500 al giorno, 10 posizioni). Per ora funziona in Simulato: prezzi veri, niente inviato. Il Reale c'e' gia' ma serve la conferma nell'account e l'esecuzione reale accesa sul server, che resta spenta finche' non si decide di provarla. Resta 'in corso' fino alla prima prova in Simulato su wallet veri."

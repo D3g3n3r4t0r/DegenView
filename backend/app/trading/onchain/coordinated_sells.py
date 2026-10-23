@@ -110,7 +110,19 @@ def clean(raw: dict) -> dict | None:
                        "txs": [str(t) for t in e.get("txs") or []][:20],
                        "sellers": [_norm(str(a)) for a in e.get("sellers") or []][:200]})
     events.sort(key=lambda e: e["ts"], reverse=True)
-    risk = raw.get("risk") if isinstance(raw.get("risk"), dict) else {}
+    risk = dict(raw.get("risk")) if isinstance(raw.get("risk"), dict) else {}
+    # The structure risk read from the clusters themselves (sync_sells.structure):
+    # a report written before it, or by an older engine, cannot say 0 while
+    # linked wallets hold 19% (Lorenzo, 22/10: "come fa a essere rischio 0?").
+    from app.trading.onchain import sync_sells
+    # Only on clusters built under today's rules (wallet_clusters.RULES): an
+    # older build may hold an airdrop read as a cluster, rebuilt soon anyway.
+    held = sum(c["share"] or 0 for c in clusters if c["id"] != "top" and len(c["wallets"]) >= 2)
+    struct = round(100 * min(1.0, held / sync_sells.STRUCT_FULL))
+    rules = (raw.get("coverage") or {}).get("rules") if isinstance(raw.get("coverage"), dict) else None
+    if (rules or 0) >= 2 and struct > (_num(risk.get("score"), 0, 100) or 0):
+        risk["reasons"] = [f"linked wallets hold {100 * held:.1f}% of supply"] + list(risk.get("reasons") or [])
+        risk["score"] = struct
     return {"version": VERSION, "chain": str(raw.get("chain") or ""), "token": _norm(str(raw["token"])),
             "symbol": str(raw.get("symbol") or ""), "updated_at": _num(raw.get("updated_at")),
             "risk": {"score": _num(risk.get("score"), 0, 100), "reasons": [str(x) for x in risk.get("reasons") or []][:6]},
@@ -123,7 +135,7 @@ def _coverage(c) -> dict | None:
     not hidden behind a risk figure."""
     if not isinstance(c, dict):
         return None
-    return {"source": str(c.get("source") or "")[:40], "partial": bool(c.get("partial")),
+    return {"source": str(c.get("source") or "")[:40], "partial": bool(c.get("partial")), "rules": c.get("rules"),
             "from_ts": _num(c.get("from_ts")), "transfers": int(_num(c.get("transfers"), 0) or 0)}
 
 
@@ -247,6 +259,63 @@ async def notify_once(send, url: str, now: float | None = None) -> int:
 EXCLUDE_RISK = 60
 EXCLUDE_MAX_AGE_S = 7 * 86400
 _excl_cache: tuple[float, dict[str, int]] = (0.0, {})
+
+
+def report_for(chain: str, token: str) -> dict | None:
+    from app.trading.onchain import sync_sells
+    path = sync_sells.report_path((chain or "").lower(), token or "")
+    return _read(path) if path.is_file() else None
+
+
+def fresh_report(chain: str, token: str, now: float | None = None) -> dict | None:
+    rep = report_for(chain, token)
+    now = now if now is not None else time.time()
+    return rep if rep and now - (rep.get("updated_at") or 0) <= EXCLUDE_MAX_AGE_S else None
+
+
+# Lorenzo, 22/10: "il recheck di deepseek o parere ai anti rug deve considerare
+# il report del cluster esclusivamente e se manca lo forza per averlo". The
+# AI's holder and rug judgement rests on this report, measured on chain,
+# never on its own guesses about the holders. No addresses: counts and shares.
+def ai_facts(chain: str, token: str, now: float | None = None) -> dict | None:
+    rep = fresh_report(chain, token, now)
+    if not rep:
+        return None
+    now = now if now is not None else time.time()
+    linked = [c for c in rep["clusters"] if c["id"] != "top"]
+    top = next((c for c in rep["clusters"] if c["id"] == "top"), None)
+    waves = rep["events"]
+    pct = lambda x: round(100 * (x or 0), 2)  # noqa: E731
+    return {"risk": rep["risk"]["score"], "risk_reasons": rep["risk"]["reasons"],
+            "linked_clusters": len(linked), "linked_wallets": sum(len(c["wallets"]) for c in linked),
+            "linked_supply_pct": pct(sum(c["share"] or 0 for c in linked)),
+            "biggest_cluster_pct": pct(max((c["share"] or 0 for c in linked), default=0)),
+            "links": sorted({x for c in linked for x in c["links"]}),
+            "top_holders_supply_pct": pct(top["share"]) if top and top["share"] is not None else None,
+            "sell_waves": len(waves), "sell_waves_7d": sum(now - e["ts"] <= 7 * 86400 for e in waves),
+            "supply_sold_in_waves_pct": pct(sum(e["share_sold"] or 0 for e in waves)),
+            "last_wave_hours_ago": round((now - waves[0]["ts"]) / 3600, 1) if waves else None,
+            "report_age_hours": round((now - (rep.get("updated_at") or now)) / 3600, 1),
+            "coverage": rep.get("coverage")}
+
+
+def ai_text(facts: dict | None, state: str = "") -> str:
+    """The report as one evidence line for the AI's prompt."""
+    if not facts:
+        return (f"Wallet cluster report: not available ({state or 'no report'}); "
+                "holder coordination and rug risk from holders are unverified.")
+    cov = facts.get("coverage") or {}
+    parts = [f"risk {facts['risk']:.0f}/100" if facts.get("risk") is not None else "risk unknown",
+             f"{facts['linked_clusters']} linked clusters, {facts['linked_wallets']} wallets holding "
+             f"{facts['linked_supply_pct']}% of supply (biggest {facts['biggest_cluster_pct']}%)",
+             "links: " + (", ".join(facts["links"]) or "none")]
+    if facts.get("top_holders_supply_pct") is not None:
+        parts.append(f"top holders hold {facts['top_holders_supply_pct']}%")
+    parts.append(f"{facts['sell_waves']} coordinated sell waves ({facts['sell_waves_7d']} in the last 7 days), "
+                 f"{facts['supply_sold_in_waves_pct']}% of supply sold in them")
+    if cov:
+        parts.append(f"history from {cov.get('source') or '?'}" + (", partial" if cov.get("partial") else ""))
+    return "Wallet cluster report (measured on chain by our engine): " + "; ".join(parts) + "."
 
 
 def exclusion(chain: str, token: str, now: float | None = None) -> str:
