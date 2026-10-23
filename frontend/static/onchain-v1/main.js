@@ -199,11 +199,18 @@ async function selectChain(next) {
 
 /* ------------------------------------------------------------------- dati */
 
+// True once the server's wallet list arrived and this chain is not in it.
+// The empty-state banner cannot say it: with trading off it stays hidden
+// even without a wallet, so the embedded section asked for the balance of a
+// wallet that does not exist (404, then retries) for every such account.
+let walletsListed = false;
+const noWalletHere = () => walletsListed && !state.wallets[state.chain];
+
 function loadChainData() {
   // Trading off (07/10): no balance, holdings or chart to read — the reads
   // failed for accounts with no wallet and retried every 5 s for ever.
   if (!TRADING) return;
-  if (view.empty.hidden === false) return;  // nessun wallet: niente da chiedere
+  if (view.empty.hidden === false || noWalletHere()) return;  // nessun wallet: niente da chiedere
   refreshBalance();
   refreshStatus();
   if (TRADING) {
@@ -729,6 +736,7 @@ async function boot() {
   try {
     const wallets = preloaded?.wallets ?? await api.listWallets();
     for (const wallet of wallets) state.wallets[wallet.chain] = wallet;
+    walletsListed = true;
   } catch { /* al primo carico senza rete resta la cache locale, se c'e' */ }
 
   paintChainStatic();
