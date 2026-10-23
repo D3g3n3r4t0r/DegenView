@@ -1,5 +1,9 @@
 """How profitable an EVM wallet's trades were, one network at a time:
-last 24 hours, 7 and 30 days (Trading → Copy trading → Wallet profitability).
+last 24 hours and 7 days (Trading → Copy trading → Wallet profitability).
+
+7 days at most (Lorenzo, 23/10: "si puo' impostare anche solamente 7 giorni
+massimo [...] visti i problemi di lentezza"): 30 days were millions of blocks
+to search on Base or BNB Chain; the Solana analysis keeps its 30 days.
 
 Asked on 23/10: "aggiungi la possibilita' di fare check anche su wallet che
 fanno parte degli EVM, ovvero tutte le reti che sono state integrate nel
@@ -12,7 +16,7 @@ the last sell; open positions and sells with no known buy are shown apart.
 What differs is reading the history:
 - no node lists an address's transactions, so the wallet's ERC-20 Transfers
   (from it and to it) are searched with eth_getLogs over the blocks of the
-  last 30 days, in ranges that shrink when a node refuses one and grow back;
+  last 7 days, in ranges that shrink when a node refuses one and grow back;
 - the public nodes keep no month-old state, so the coin paid or received is
   not a balance difference (copytrade_evm's trick for live trades): it is the
   transaction's value when the wallet sent it, plus the wrapped coin a router
@@ -43,7 +47,8 @@ FIRST_RANGE = {"monad": 100}         # blocks per eth_getLogs to start with; the
 DEFAULT_RANGE = 5_000
 MIN_RANGE, MAX_RANGE = 50, 50_000
 PARALLEL = 4                         # ranges in flight at once
-MAX_TXS = 3_000                      # more trading transactions than this in 30 days: a bot, say how far back
+MAX_TXS = 3_000                      # more trading transactions than this in 7 days: a bot, say how far back
+WINDOWS = {k: base.WINDOWS[k] for k in ("24h", "7d")}
 READ_BUDGET_S = 6 * 60               # per network
 PRICE_PAIR = {"ETH": "ETHUSDT", "BNB": "BNBUSDT", "MON": "MONUSDT"}
 _cache: dict[str, tuple[float, dict]] = {}
@@ -189,9 +194,9 @@ async def analyze(address: str, chain: str, say: Callable[[str], None] = lambda 
     cfg = evm.CHAINS[chain]
     wallet = evm.norm(address)
     now = time.time()
-    since = now - base.WINDOWS["30d"]
+    since = now - WINDOWS["7d"]
     deadline = now + READ_BUDGET_S
-    say(f"{cfg['label']}: finding the block of 30 days ago")
+    say(f"{cfg['label']}: finding the block of 7 days ago")
     try:
         latest = int(await evm.rpc(chain, "eth_blockNumber", []), 16)
         latest_ts = int((await _block(chain, latest)).get("timestamp") or "0x0", 16) or int(now)
@@ -264,7 +269,8 @@ async def analyze(address: str, chain: str, say: Callable[[str], None] = lambda 
         "coverage": {"from": block_time(covered, known), "transactions": len(hashes), "swaps": len(swaps),
                      "partial": partial, "unread": unread, "price_history": bool(hours) or chain == "arc",
                      "native": cfg["native"]},
-        "windows": {k: base.window(trades, still, orphan, now - v) for k, v in base.WINDOWS.items()},
+        "windows": {k: base.window(trades, still, orphan, now - v) for k, v in WINDOWS.items()},
+        "days": 7,
         "still_open": sorted(({"mint": o["mint"], "opened_at": o["opened_at"], "invested_usd": round(o["invested"], 2),
                                "returned_usd": round(o["returned"], 2)} for o in still),
                              key=lambda o: -o["opened_at"])[:20],

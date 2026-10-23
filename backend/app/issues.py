@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0416l", "Redditivita' dei wallet EVM: massimo gli ultimi 7 giorni, per la lentezza",
+     "Lorenzo, 23/10: 'per il check del wallet EVM si puo' impostare anche solamente 7 giorni massimo, gli ultimi 7 giorni massimo, visti i problemi di lentezza per rintracciare le transazioni e trade piu' vecchi'.",
+     "media"),
     ("seed-0415l", "Redditivita' del wallet anche per i wallet EVM, su tutte le reti del wallet EVM",
      "Lorenzo, 23/10: 'nella sottosezione Profittabilita' del Wallet, aggiungi la possibilita' di fare check anche su wallet che fanno parte degli EVM, ovvero tutte le reti che sono state integrate nel wallet EVM'.",
      "media"),

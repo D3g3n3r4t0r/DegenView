@@ -1,6 +1,7 @@
 # 2026-10-23 — Redditivita' dei wallet EVM (Trading → Copy trading) — `seed-0415l`
 
 Lorenzo, 23/10: "nella sottosezione Profittabilita' del Wallet, aggiungi la possibilita' di fare check anche su wallet che fanno parte degli EVM, ovvero tutte le reti che sono state integrate nel wallet EVM".
+- **7 giorni al massimo (`seed-0416l`):** Lorenzo, 23/10, "si puo' impostare anche solamente 7 giorni massimo [...] visti i problemi di lentezza". `wallet_pnl_evm.WINDOWS` = 24h e 7d, ricerca dei blocchi dagli ultimi 7 giorni, risultato con `days: 7`; la pagina mostra solo le schede presenti. Solana resta a 30 giorni.
 - `app/trading/onchain/wallet_pnl_evm.py`, una rete per analisi (selettore accanto all'indirizzo, solo per gli 0x). Riusa la parte pura di `wallet_pnl.py` (trade chiusi, finestre 24h/7g/30g, token).
 - Storico: `eth_getLogs` dei Transfer da/verso il wallet sui blocchi di 30 giorni (blocco iniziale per ricerca binaria), intervalli adattivi (si riducono su "range too large", poi ricrescono), 4 in parallelo, budget di 6 minuti per rete, massimo 3.000 transazioni; se non basta, `coverage.partial` e la data fin dove e' arrivato.
 - Importi senza saldi storici: `native_delta_from_tx` = valore inviato dal wallet + `Withdrawal` del token wrapped nella stessa transazione (cosi' paga un router quando si vende per ETH/BNB). Limite noto: un rimborso di ETH in eccesso fatto con una chiamata interna senza unwrap non si vede; su Monad (wrapped non configurato) le vendite per MON non si riconoscono; su Arc la moneta nativa e' USDC.

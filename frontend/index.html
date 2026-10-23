@@ -1085,7 +1085,7 @@
 
                 <div class="ct-pnl" id="ct-pnl">
                   <div class="section-title-row"><span class="section-eyebrow">Wallet profitability</span></div>
-                  <p class="panel-hint">Before copying a wallet, see how its closed trades went (entry and exit) in the last 24 hours, 7 and 30 days, read from its own swaps on chain. A Solana wallet or an EVM one (0x…): an EVM wallet is read one network at a time, and a busy one takes a few minutes.</p>
+                  <p class="panel-hint">Before copying a wallet, see how its closed trades went (entry and exit) in the last 24 hours, 7 and 30 days, read from its own swaps on chain. A Solana wallet or an EVM one (0x…): an EVM wallet is read one network at a time, over the last 7 days only (24 hours and 7 days), so it stays quick.</p>
                   <form class="ct-actions" id="ct-pnl-form" autocomplete="off">
                     <input id="ct-pnl-address" class="mo-input ct-mono ct-pnl-input" placeholder="Solana or EVM (0x…) address" required minlength="32" maxlength="44" />
                     <select id="ct-pnl-chain" class="mo-select ct-pnl-chain" title="Network to read" hidden></select>
