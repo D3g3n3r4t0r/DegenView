@@ -190,10 +190,18 @@ def reports() -> tuple[list[dict], bool]:
     return ([sample] if sample else []), True
 
 
+# Lorenzo, 23/10 ("Applica A e C"): the "top" group (the 50 biggest holders,
+# no on-chain link between them) stays in the report and its risk, but its
+# waves are not alerts: two big holders selling in the same minutes is the
+# market, not a cluster, and it flooded the gems chats.
+ALERT_SKIP_CLUSTERS = {"top"}
+
+
 def due(report: dict, sent: set[str], now: float) -> list[dict]:
     """The waves of this report worth a Telegram alert and not sent yet."""
     return [e for e in report["events"]
-            if e["id"] not in sent and now - e["ts"] <= ALERT_MAX_AGE_S
+            if e["id"] not in sent and e.get("cluster") not in ALERT_SKIP_CLUSTERS
+            and now - e["ts"] <= ALERT_MAX_AGE_S
             and e["wallets"] >= ALERT_MIN_WALLETS and (e["share_sold"] or 0) >= ALERT_MIN_SHARE]
 
 
@@ -233,9 +241,21 @@ def save_sent(sent: list[str]) -> None:
     write_text_atomic(storage.data_file(_SENT_FILE), json.dumps(sent[-_SENT_KEEP:]))
 
 
-async def notify_once(send, url: str, now: float | None = None) -> int:
+def _addr(v: str) -> str:
+    v = v or ""
+    return v.lower() if v.startswith("0x") else v
+
+
+def shown_key(chain: str, token: str) -> str:
+    return f"{(chain or '').lower()}:{_addr(token)}"
+
+
+async def notify_once(send, url: str, now: float | None = None, shown: set[str] | None = None) -> int:
     """One pass: alerts every new wave of the engine's reports (never the
-    sample's). `send` is telegram.send_message. Returns how many went out."""
+    sample's). `send` is telegram.send_message. Returns how many went out.
+    shown: the tokens on screen now (Top and Early, shown_key), the only ones
+    alerted (Lorenzo, 23/10); a wave of another token is not marked as sent,
+    so it still alerts if the token enters the Top within ALERT_MAX_AGE_S."""
     found, sample = reports()
     if sample:
         return 0
@@ -244,10 +264,18 @@ async def notify_once(send, url: str, now: float | None = None) -> int:
     sent = set(sent_list)
     n = 0
     for r in found:
-        for e in sorted(due(r, sent, now), key=lambda e: e["ts"]):
+        token = shown_key(r.get("chain"), r.get("token"))
+        if shown is not None and token not in shown:
+            continue
+        for e in sorted(due(r, set(), now), key=lambda e: e["ts"]):
+            # A wave id ("c1-<ts>") is unique within its token only: the
+            # sent key carries the token. A bare id is an older entry.
+            key = f"{token}:{e['id']}"
+            if key in sent or e["id"] in sent:
+                continue
             if await send(message(r, e, url)):
-                sent.add(e["id"])
-                sent_list.append(e["id"])
+                sent.add(key)
+                sent_list.append(key)
                 n += 1
     if n:
         save_sent(sent_list)

@@ -3414,5 +3414,10 @@
     "status": "risolto",
     "at": 1792758306,
     "summary": "Nel sito classico, scheda Alert, sezione Telegram, c'e' 'Notifiche Telegram': per ogni gruppo del tuo account (chat principale, chat segnali, chat gemme; per l'amministratore anche i messaggi di sistema) si sceglie per quanto mettere in pausa (1 ora, 8 ore, 24 ore o finche' non riattivi) e lo si riattiva con un tasto. Un gruppo in pausa non riceve nulla; i messaggi non vengono accodati ma contati, e alla ripresa (a mano o alla scadenza) il bot scrive quanti ne sono stati saltati. Le risposte a quello che scrivi al bot arrivano comunque. La pausa vale per la chat: se un gruppo e' condiviso con altri account, tace per tutti."
+  },
+  "seed-0387": {
+    "status": "risolto",
+    "at": 1792759033,
+    "summary": "Gli avvisi di vendita coordinata partono solo dai cluster di wallet legati davvero on-chain (trasferimenti fra loro, stesso mittente, stessa ondata di acquisti): due grandi holder qualsiasi che vendono negli stessi minuti non sono piu' un avviso, anche se restano nel report e nel rischio del token. E solo per i token che in quel momento sono in Top o in Early (Watch no: le stelline vivono nel browser e il server non le vede); se un token entra in Top entro 6 ore da un'ondata, l'avviso parte allora. Il destinatario non cambia: la chat gemme di ogni account che ne ha una impostata. Corretto anche un difetto trovato nel test: due token con un'ondata nello stesso secondo potevano scambiarsi l'avviso."
   }
 }
