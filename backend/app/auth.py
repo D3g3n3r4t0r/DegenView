@@ -17,6 +17,7 @@ import hmac
 import json
 import logging
 import secrets
+import threading
 import time
 from pathlib import Path
 
@@ -38,6 +39,7 @@ SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30  # 30 days
 _PBKDF2_ITERATIONS = 200_000
 
 _users: dict[str, User] = {}
+_save_lock = threading.Lock()
 
 
 def _get_secret() -> bytes:
@@ -165,7 +167,17 @@ def _save_users() -> None:
     if _load_failed:
         raise RuntimeError("users.json could not be read at startup: not overwriting it")
     import os
-    payload = json.dumps([u.model_dump() for u in _users.values()])
+    with _save_lock:
+        payload = json.dumps([u.model_dump() for u in _users.values()])
+        tmp = _USERS_FILE.with_suffix(".json.tmp")
+        with tmp.open("w", encoding="utf-8") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if _USERS_FILE.exists() and _read_users_file(_USERS_FILE) is not None:
+            os.replace(_USERS_FILE, _USERS_FILE.with_suffix(".json.bak"))
+        os.replace(tmp, _USERS_FILE)
+    return
     tmp = _USERS_FILE.with_suffix(".json.tmp")
     with tmp.open("w", encoding="utf-8") as fh:
         fh.write(payload)

@@ -73,7 +73,13 @@
     items.forEach((pk) => {
       const li = document.createElement("li");
       const when = pk.created_at ? new Date(pk.created_at * 1000).toLocaleDateString("en-GB") : "";
-      li.innerHTML = `<span>${pk.label || "Passkey"} <span class="dim">· ${when}</span></span>`;
+      const wrap = document.createElement("span");
+      wrap.textContent = (pk.label || "Passkey") + " ";
+      const dim = document.createElement("span");
+      dim.className = "dim";
+      dim.textContent = `· ${when}`;
+      wrap.appendChild(dim);
+      li.appendChild(wrap);
       const del = document.createElement("button");
       del.textContent = "Remove";
       del.addEventListener("click", async () => {

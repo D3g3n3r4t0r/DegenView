@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from app import auth
 from app import guest as guest_links
 from app import issues as issues_store
+from app.web_common import _is_admin
 from app.models import (
     User,
 )
@@ -122,6 +123,9 @@ async def patch_issue(issue_id: str, body: IssuePatch,
 
 
 async def remove_issue(issue_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+    existing = next((i for i in issues_store.list_issues() if i["id"] == issue_id), None)
+    if existing and "@" in (existing.get("author") or "") and existing["author"].lower() != user.email.lower() and not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Only the author or an admin can delete this report.")
     if not issues_store.delete_issue(issue_id):
         raise HTTPException(status_code=404, detail="Report not found")
     return {"deleted": issue_id}

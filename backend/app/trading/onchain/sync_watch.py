@@ -26,7 +26,7 @@ from app.trading.onchain import storage, sync_sells
 
 logger = logging.getLogger(__name__)
 
-CHAINS = ("robinhood", "ethereum", "base", "bsc", "solana")
+CHAINS = ("robinhood", "ethereum", "base", "bsc", "solana", "layer")
 MAX_WALLETS = 500
 RUN_EVERY_S = 6 * 3600
 # A first run without "from_block" reads this far back (~3 days at the
@@ -38,6 +38,8 @@ _SOL = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
 
 
 def _ok(a: str, chain: str = "") -> bool:
+    if chain == "layer":
+        return bool(re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._:-]{1,90}$", a or ""))
     return bool((_SOL if chain == "solana" else _ADDR).match(a))
 
 
@@ -99,7 +101,7 @@ def clean(raw: dict) -> dict:
             # Solana: each wallet's token account (the watch reads its signatures).
             "accounts": {o: a for o, a in (raw.get("accounts") or {}).items()
                          if o in wallets and isinstance(a, str) and _ok(a, chain)} if chain == "solana" else {},
-            "supply": str(int(raw.get("supply") or 0)) if chain == "solana" else None,
+            "supply": str(int(raw.get("supply") or 0)) if chain in ("solana", "layer") else None,
             "clusters": clusters, "source": "auto" if raw.get("source") == "auto" else "upload", "chain": chain, "token": _n(token), "symbol": str(raw.get("symbol") or "")[:24],
             "decimals": int(raw.get("decimals") or 18), "pools": _addrs(raw.get("pools"), "pools", chain),
             "wallets": wallets, "shares": shares,
@@ -172,6 +174,9 @@ async def run_one(cfg: dict, rpc=None) -> dict:
     """Reads the new blocks, keeps the transfers, rewrites the report."""
     if cfg["chain"] == "solana":
         return await _run_solana(cfg)
+    if cfg["chain"] == "layer":
+        from app.trading.onchain import layer_clusters
+        return await layer_clusters.run_watch_layer(cfg)
     rpc = rpc or sync_sells._default_rpc(cfg["chain"])
     key = _key(cfg["chain"], cfg["token"])
     tpath = _dir() / f"{key}.transfers.json"

@@ -218,6 +218,40 @@ async def send_infra_alert(message: str) -> bool:
     return await send_message(f"⚙️ INFRA: {message}")
 
 
+async def send_photo(photo_bytes: bytes, caption: str = "") -> bool:
+    """Invia un'immagine PNG (es. la card grafica di deploy) a tutte le chat di
+    sistema configurate. Non solleva mai eccezioni."""
+    if not is_configured() or not photo_bytes:
+        return False
+    sent_any = False
+    try:
+        async with http_client.pooled(timeout=20.0) as client:
+            if not hasattr(client, "post"):
+                return False
+            reserved = signal_only_chats()
+            for chat_id in _chat_ids():
+                if chat_id in reserved or await _paused(chat_id):
+                    continue
+                try:
+                    data = {"chat_id": chat_id}
+                    if caption:
+                        data["caption"] = caption[:1024]
+                        data["parse_mode"] = "HTML"
+                    files = {"photo": ("deploy_card.png", photo_bytes, "image/png")}
+                    resp = await client.post(
+                        f"{API_BASE}/bot{settings.telegram_bot_token}/sendPhoto",
+                        data=data,
+                        files=files,
+                    )
+                    resp.raise_for_status()
+                    sent_any = True
+                except Exception:  # noqa: BLE001
+                    logger.warning("Invio foto Telegram fallito per chat_id=%s", chat_id, exc_info=True)
+    except Exception:  # noqa: BLE001
+        logger.warning("Invio foto Telegram non riuscito", exc_info=True)
+    return sent_any
+
+
 async def send_message(text: str) -> bool:
     """Manda a tutti i destinatari configurati. Non solleva mai — un errore qui non
     deve mai far fallire l'analisi in corso. Un destinatario che fallisce (es. ha

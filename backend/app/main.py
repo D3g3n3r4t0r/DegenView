@@ -1111,6 +1111,14 @@ async def _notify_deploy() -> None:
         lines.append(f"• <code>{sha_short}</code> {msg}")
     if not lines and new_commits:
         return              # only "Solo-account:" changes: nothing to announce
+    from app.notify import deploy_card
+    public_commits = [c for c in new_commits if not weekly_recap.private_account(c["commit"]["message"])]
+    card_png = deploy_card.render_deploy_card(public_commits)
+    if card_png:
+        await telegram.send_photo(card_png, caption="🚀 <b>DegenView · Scheda Grafica Nuovo Deploy</b>")
+    rich_text = deploy_card.build_deploy_message(public_commits, repo=_GITHUB_REPO)
+    await telegram.send_message(rich_text)
+    return
     changelog = "\n".join(lines) if lines else "• (nessun commit trovato)"
     await telegram.send_message(f"🚀 <b>Nuovo deploy completato</b>\n\n<b>Modifiche:</b>\n{changelog}")
 
@@ -1751,6 +1759,9 @@ _PUBLIC_PATHS = frozenset({
     "/onchain-app.html",
     "/onchain-approve.html",
     "/onchain-passkey-setup.html",
+    "/api/onchain/reveal/approve",
+    "/api/onchain/reveal/passkey/options",
+    "/api/onchain/reveal/passkey/verify",
     "/app",                 # the React app: the route itself sends anyone not allowed to /onchain-app.html
     "/favicon.ico",
     "/sw.js",               # il service worker delle notifiche: il browser lo scarica da se'
@@ -1819,6 +1830,14 @@ async def require_authentication(request: Request, call_next):
     if app.dependency_overrides:
         return await call_next(request)
 
+    if (
+        request.method not in ("GET", "HEAD", "OPTIONS")
+        and request.headers.get("sec-fetch-site") == "cross-site"
+    ):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Cross-site request blocked."},
+        )
     if auth._verify_session_cookie(request.cookies.get(auth.SESSION_COOKIE) or ""):
         return await call_next(request)
 
@@ -4127,6 +4146,9 @@ async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends
     if not (_full_score(user) or _next_for(user)):
         raise HTTPException(status_code=404, detail="Not found.")
     chain, token = str(body.get("chain") or "").lower(), str(body.get("token") or "").strip()
+    if chain == "layer":
+        from app.trading.onchain import layer_clusters
+        token, _ = layer_clusters.resolve_layer_token(token, str(body.get("symbol") or ""))
     if chain not in wallet_clusters.CHAINS:
         raise HTTPException(status_code=400, detail=f"chain: one of {', '.join(wallet_clusters.CHAINS)}")
     if not sync_watch._ok(token, chain):
@@ -4143,6 +4165,9 @@ async def onchain_coordinated_check_status(chain: str, token: str, user: User = 
     from app.trading.onchain import wallet_clusters
     if not (_full_score(user) or _next_for(user)):
         raise HTTPException(status_code=404, detail="Not found.")
+    if (chain or "").lower() == "layer":
+        from app.trading.onchain import layer_clusters
+        token, _ = layer_clusters.resolve_layer_token(token)
     return wallet_clusters.token_status(chain, token)
 
 
@@ -4400,6 +4425,11 @@ def _cluster_candidates() -> list[dict]:
     # Only what a screen shows (Lorenzo 22/10: 200+ in the queue against ~46
     # in Sectors). The research board and the AI-veto list are not on screen.
     steps = [("top", lambda: _top_entries(ARENA_POOL, full=True), True),
+             ("top", lambda: _top_entries(ARENA_POOL, full=False), True),
+             ("layer", lambda: (onchain_projects_db.search(chain="layer", status="studied", sort="score", limit=100)["items"]
+                                + onchain_projects_db.search(chain="layer", status="ranked", sort="score", limit=100)["items"]
+                                + [{"chain": "layer", "token": "kas-kaspa", "symbol": "KAS"},
+                                   {"chain": "layer", "token": "inj-injective-protocol", "symbol": "INJ"}]), True),
              ("early", lambda: onchain_leaderboard.early_list(), False),
              ("early", lambda: _kobra_early(), False),
              ("quality", lambda: (_quality_view().get("accepted") or []) + (_quality_view().get("waiting") or []), False)]
@@ -8536,6 +8566,13 @@ async def get_deepseek_study(study_id: str) -> dict:
 
 @app.websocket("/ws/live")
 async def live_feed(websocket: WebSocket) -> None:
+    if (
+        not app.dependency_overrides
+        and not auth._verify_session_cookie(websocket.cookies.get(auth.SESSION_COOKIE) or "")
+        and not guest_links.verify_cookie(websocket.cookies.get(guest_links.GUEST_COOKIE))
+    ):
+        await websocket.close(code=4401)
+        return
     params = websocket.query_params
     symbol = params.get("symbol", "").strip()
     if not symbol:
