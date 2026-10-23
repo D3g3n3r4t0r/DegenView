@@ -21,6 +21,21 @@ _RS = "https://api.routescan.io/v2/network/mainnet/evm/{}/etherscan/api"
 SOURCES = {
     "ethereum": ["https://eth.blockscout.com/api", _RS.format(1)],
     "base": ["https://base.blockscout.com/api", _RS.format(8453)],
+    "arbitrum": ["https://arbitrum.blockscout.com/api", _RS.format(42161)],
+    "optimism": ["https://optimism.blockscout.com/api", _RS.format(10)],
+    "polygon": ["https://polygon.blockscout.com/api", _RS.format(137)],
+    "avalanche": [_RS.format(43114)],
+    "mantle": ["https://explorer.mantle.xyz/api", _RS.format(5000)],
+    "metis": ["https://andromeda-explorer.metis.io/api", _RS.format(1088)],
+    "zksync": ["https://zksync.blockscout.com/api", _RS.format(324)],
+    "scroll": ["https://scroll.blockscout.com/api", _RS.format(534352)],
+    "blast": ["https://blast.blockscout.com/api", _RS.format(81457)],
+    "mode": ["https://explorer.mode.network/api", _RS.format(34443)],
+    "taiko": ["https://blockscout.mainnet.taiko.xyz/api", _RS.format(167000)],
+    "linea": ["https://explorer.linea.build/api", _RS.format(59144)],
+    "celo": ["https://celo.blockscout.com/api", _RS.format(42220)],
+    "gnosis": ["https://gnosis.blockscout.com/api", _RS.format(100)],
+    "fantom": [_RS.format(250)],
     # No BSC: Routescan answers "chain not supported" for 56 (22/10); BSC
     # reads its history from the NodeReal archive RPC (wallet_clusters.KEYED_RPC).
 }

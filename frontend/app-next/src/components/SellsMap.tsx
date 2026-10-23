@@ -33,7 +33,8 @@ const tone = (s?: number | null) => (s == null ? "text-text-3" : s >= 70 ? "text
 /** Coordinated sells of one token: its wallet clusters as bubbles and the
  *  waves they sold in; without a report, where its check stands. */
 export function SellsMap({ chain, token, starting = false, bare = false }: { chain: string; token: string; starting?: boolean; bare?: boolean }) {
-  const { rep: done, check } = useClusterCheck(chain, token, starting);
+  const [bump, setBump] = useState(0);
+  const { rep: done, check } = useClusterCheck(chain, token, starting, bump);
   // While the check runs, what it has read so far is drawn and fills in.
   const sig = check?.live ? liveSig(check.live) : "";
   // The last live picture stays until the report replaces it (live goes when the run ends).
@@ -62,7 +63,7 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
     return (
       <section className={bare ? "" : "mt-5"}>
         {!bare && <h3 className="mb-2 text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">{t("Coordinated sells")}</h3>}
-        <CheckProgress check={check} />
+        <CheckProgress check={check} chain={chain} token={token} onStarted={() => setBump((b) => b + 1)} />
         {bare && <div className="cp-empty mt-3 grid h-[280px] place-items-center rounded-[16px] bg-card text-[13px] text-text-3">{t("The map fills in as holders are read")}</div>}
       </section>
     );
@@ -83,7 +84,7 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
       <h3 className="mb-2 flex items-baseline justify-between text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">
         {t("Coordinated sells")}<b className={`num text-[13px] font-semibold normal-case tracking-normal ${tone(rep.risk?.score)}`}>{done ? (rep.risk?.score == null ? t("risk {n}", { n: "—" }) : t("risk {n}/100 · {level}", { n: Math.round(rep.risk.score), level: t(rep.risk.score >= 60 ? "high" : rep.risk.score >= 30 ? "medium" : "low") })) : t("live")}</b>
       </h3>
-      {!done && <div className="mb-3"><CheckProgress check={check} /></div>}
+      {!done && <div className="mb-3"><CheckProgress check={check} chain={chain} token={token} onStarted={() => setBump((b) => b + 1)} /></div>}
       <div ref={host} className="overflow-hidden rounded-[16px] bg-card" aria-label={t("Wallet bubble map")} />
       <p className="mt-1 min-h-[1.4em] text-[12.5px] text-text-3">
         {pick ? (pick.label ? `${t("{n} smaller holders, no link found", { n: pick.others ?? 0 })} · ${t("{p} of supply", { p: pct(pick.share) })}` : `${short(pick.address)} · ${t("{p} of supply", { p: pct(pick.share) })} · ${pick.cluster.id === "top" ? t("top holder, no link found") : name(pick.cluster.id)}`)

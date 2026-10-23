@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 # Chains with a free RPC that serves the whole log history. Base, BSC and
 # Ethereum public RPCs answer getLogs only for the last hours (22/10, probed:
 # publicnode "archive requests require a token", drpc "free plan").
-CHAINS = ("robinhood", "ethereum", "base", "bsc", "solana")
+CHAINS = ("robinhood", "ethereum", "base", "bsc", "solana", "layer")
 MAX_WINDOW = {"robinhood": 5_000_000,     # the RPC takes up to 10M blocks / 10k logs
               "bsc": 50_000}              # NodeReal free plan; a refusal halves it anyway
 # Chains whose history comes from a keyed archive RPC (Diagnostics) instead
@@ -568,8 +568,14 @@ async def _stamp(rpc, transfers: list[dict], blocks: set[int], anchors: dict[int
 
 
 async def build(chain: str, token: str, symbol: str = "", created_at: float | None = None, rpc=None) -> dict:
+    from app.trading.onchain import layer_clusters as _lc
+    if (_u := _lc.get_custom_url(chain, token)):
+        return await _lc.build_from_url(_u, out_chain=chain, token=token, symbol=symbol)
     if chain == "solana":
         return await _build_solana(token, symbol)
+    if chain == "layer":
+        from app.trading.onchain import layer_clusters
+        return await layer_clusters.build(token, symbol, created_at)
     keyed = None if rpc else keyed_rpc(chain)
     rpc = rpc or keyed or sync_sells._default_rpc(chain)
     token = token.lower()

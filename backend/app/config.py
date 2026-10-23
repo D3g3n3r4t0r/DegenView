@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     # tecnologia". /app has a desktop layout; True sends computers there too,
     # not only phones (?classic=1 still opens the current app). Off until
     # Lorenzo confirms the desktop parity list: it moves the gems section.
-    onchain_next_desktop: bool = False
+    onchain_next_desktop: bool = True
     # Accounts whose Top and arenas score the database rows on the whole row,
     # as the token page does (Lorenzo, 17/10: "per ora falla solo per
     # whitekobra"). Everyone else keeps the lighter rows, and the Telegram

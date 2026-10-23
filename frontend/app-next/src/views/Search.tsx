@@ -6,10 +6,10 @@ import { Logo } from "../components/Logo";
 import { usdShort } from "../lib/format";
 import type { Gem } from "../lib/types";
 import { Scan } from "../components/Scan";
-import { ClusterCheck } from "../components/ClusterCheck";
+import { ClusterCheck, ADDRESS } from "../components/ClusterCheck";
 import { t } from "../lib/i18n";
 
-const ADDRESS = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,48})$/;
+
 
 const RECENT_KEY = "search-recent-v1";
 const RECENT_MAX = 8;

@@ -165,9 +165,21 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
-    ("seed-0388", "Alert e Trading affollati: sezioni che saltano da una colonna all'altra",
+    ("seed-0392", "Alert e Trading affollati: sezioni che saltano da una colonna all'altra",
      "Richiesta in chat, 23/10: 'reimpostare a livello grafico l'interno delle sezioni alert e trading, perche' sono quelle piu' affollate, e quando si aprono le varie sezioni interne [...] ci sono dei problemi di visualizzazione, di passaggio di una finestra da una colonna all'altra'. Tre proposte (artifact 1mMR2eH6Aad9rJRjLyDrR8); scelta: 'Applica B per entrambe'.",
      "media"),
+    ("seed-0391", "Scansione cluster per le chain Layer 0, Layer 1 e Layer 2 in classifica (es. Kaspa, Injective)",
+     "Lorenzo, 23/10: 'fai in modo che l'attuale scansione dei cluster sia in grado di rilevare acnhe le chain layer0 layer1 e 2 presenti nelle classifiche dell'app, ovviamente' e 'nello specifico kaspa; injective per esempio'. Il motore dei cluster accettava solo robinhood, ethereum, base, bsc e solana, scartando tutte le righe con chain='layer'.",
+     "alta"),
+    ("seed-0390", "Messaggi di deploy su Telegram piu' belli, completi e con figure",
+     "Lorenzo, 23/10: 'RENDI I messaggi dei nuovi depoly d'ora in poi su telegram; molto piu belli e completi con figure etc'.",
+     "media"),
+    ("seed-0389", "Audit di sicurezza del sito e risoluzione delle vulnerabilita' rilevate",
+     "Lorenzo, 23/10: 'esamina il sito in cerca di vulnerabilita'', poi 'PUOI RISOLVERLE?'. Trovate 8 vulnerabilita' tra cui spoofing X-Forwarded-For sul rate-limit, XSS in onchain-passkey-setup.html, blocco 401 sulle API di approvazione QR da telefono non loggato, CSRF cross-site, path traversal in PineScript storage, WebSocket /ws/live senza controllo cookie, rotte ospite e lock su users.json.",
+     "alta"),
+    ("seed-0388", "La nuova app (/app) non si apriva in automatico da computer dopo la PR #8",
+     "Lorenzo, 23/10: 'c'era poi questa https://github.com/D3g3n3r4t0r/DegenView/pull/8; che dice e' andata operativa ma il sito non risulta aggiornato secondo il nuovo standard (tramite desktop) mentre app tramite mobile funge perfettamente', poi 'PROCEDI'. L'interruttore onchain_next_desktop era rimasto spento in attesa di conferma.",
+     "alta"),
     ("seed-0387", "Troppi avvisi di vendite coordinate nella chat gemme di whitekobra",
      "Domanda in chat, 23/10: 'L'account whitekobra a differenza di Lorenzo sta ricevendo numerose notifiche sulle vendite coordinate nel gruppo Telegram per le gemme. Perche'?'. Gli avvisi vanno alla chat gemme di ogni account che ne ha una (whitekobra si', l'altro account no); erano tanti perche' contava anche il gruppo 'top' (i 50 holder piu' grandi, senza legami) e valeva per ogni token con un cluster. Scelta: 'Applica A e C'.",
      "media"),

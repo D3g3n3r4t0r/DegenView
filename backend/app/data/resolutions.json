@@ -3415,12 +3415,32 @@
     "at": 1792758306,
     "summary": "Nel sito classico, scheda Alert, sezione Telegram, c'e' 'Notifiche Telegram': per ogni gruppo del tuo account (chat principale, chat segnali, chat gemme; per l'amministratore anche i messaggi di sistema) si sceglie per quanto mettere in pausa (1 ora, 8 ore, 24 ore o finche' non riattivi) e lo si riattiva con un tasto. Un gruppo in pausa non riceve nulla; i messaggi non vengono accodati ma contati, e alla ripresa (a mano o alla scadenza) il bot scrive quanti ne sono stati saltati. Le risposte a quello che scrivi al bot arrivano comunque. La pausa vale per la chat: se un gruppo e' condiviso con altri account, tace per tutti."
   },
+  "seed-0388": {
+    "status": "risolto",
+    "at": 1792760600,
+    "summary": "Acceso l'interruttore desktop della nuova app (onchain_next_desktop = True): ora anche chi apre /onchain-app.html da computer viene portato automaticamente sulla nuova /app con la barra laterale e il layout desktop completo (come gia' succedeva da telefono). L'app vecchia resta raggiungibile con ?classic=1."
+  },
+  "seed-0389": {
+    "status": "risolto",
+    "at": 1792762200,
+    "summary": "Risolte tutte le vulnerabilita' emerse dall'audit di sicurezza: (1) il rate-limit legge ora l'ultimo IP di X-Forwarded-For aggiunto da Caddy, impedendo di aggirare il blocco brute-force con un header falsificato; (2) rimossa l'iniezione HTML del nome passkey in onchain-passkey-setup.html (ora usa textContent); (3) aperte nel cancello globale le tre rotte /api/onchain/reveal/approve e /api/onchain/reveal/passkey/* cosi' l'approvazione della chiave privata da un telefono che scansiona il QR funziona anche senza sessione nel browser; (4) bloccate le richieste mutanti cross-site (Sec-Fetch-Site: cross-site); (5) validato l'id degli script Pine contro path traversal; (6) richiesto un cookie di sessione o ospite valido anche sul WebSocket /ws/live; (7) bloccate agli ospiti /api/export, /api/agent/log, /api/agent/calls e /api/perf; (8) protetto il salvataggio di users.json con lock thread-safe e riservata la cancellazione delle segnalazioni in bacheca all'autore o all'admin."
+  },
+  "seed-0390": {
+    "status": "risolto",
+    "at": 1792762260,
+    "summary": "I messaggi di nuovo deploy su Telegram ora inviano sia una scheda grafica PNG generata al volo (con mappa a barre dei moduli toccati, riepilogo in italiano delle modifiche, stato della pipeline e segnalazioni chiuse) sia un messaggio strutturato con diagrammi/figure ASCII-Unicode, dettagli dei commit, segnalazioni della bacheca risolte e link diretti a GitHub."
+  },
+  "seed-0391": {
+    "status": "risolto",
+    "at": 1792762320,
+    "summary": "La scansione dei cluster di wallet e delle vendite coordinate ora copre anche i progetti Layer 0, Layer 1 e Layer 2 presenti nelle classifiche dell'app (chain='layer'), inclusi in modo nativo Kaspa (tramite l'API BlockDAG api.kaspa.org: supply, saldi dei maggiori holder e trasferimenti UTXO), Injective e le chain Cosmos-SDK (tramite LCD REST API + contratto canonico ERC-20) e gli altri L0/L1/L2 tramite gli explorer Blockscout/Routescan estesi (Arbitrum, Optimism, Polygon, Avalanche, Mantle, Metis, zkSync, Scroll, Blast, Mode, Taiko, Linea, Celo, Gnosis, Fantom) o risoluzione automatica del contratto su CoinPaprika e DexScreener."
+  },
   "seed-0387": {
     "status": "risolto",
     "at": 1792759033,
     "summary": "Gli avvisi di vendita coordinata partono solo dai cluster di wallet legati davvero on-chain (trasferimenti fra loro, stesso mittente, stessa ondata di acquisti): due grandi holder qualsiasi che vendono negli stessi minuti non sono piu' un avviso, anche se restano nel report e nel rischio del token. E solo per i token che in quel momento sono in Top o in Early (Watch no: le stelline vivono nel browser e il server non le vede); se un token entra in Top entro 6 ore da un'ondata, l'avviso parte allora. Il destinatario non cambia: la chat gemme di ogni account che ne ha una impostata. Corretto anche un difetto trovato nel test: due token con un'ondata nello stesso secondo potevano scambiarsi l'avviso."
   },
-  "seed-0388": {
+  "seed-0392": {
     "status": "risolto",
     "at": 1792777084,
     "summary": "Alert e Trading sono a sotto-schede: Trading ha Posizioni, Ordine manuale, Bot e chiavi, Futures, Copy trading, Wallet on-chain; Alert ha I tuoi alert, Alert di prezzo, Storico, Telegram. Si vede una sezione alla volta, a tutta larghezza, e non salta piu' niente da una colonna all'altra (le colonne di prima si ribilanciavano a ogni apertura). In queste due schede il grafico parte chiuso e si riapre con 'Mostra grafico'; il sito ricorda la scheda e la scelta. Se Telegram non e' configurato, la sua scheda ha un pallino. Il funzionamento non cambia. Nello stesso giro: aprendo 'Wallet on-chain' nel sito classico, l'app on-chain metteva sulla pagina il suo pulsante dell'agente senza stili (un'icona grande quanto lo schermo) e un pannello che bloccava i clic; ora nel sito classico non compaiono."

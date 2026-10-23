@@ -60,6 +60,10 @@ GUEST_BLOCKED_PREFIXES = (
     "/api/jobs",
     "/api/guest-links",
     "/api/onchain/wallets",
+    "/api/export",
+    "/api/agent/log",
+    "/api/agent/calls",
+    "/api/perf",
 )
 
 
