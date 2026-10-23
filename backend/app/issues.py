@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0388", "Alert e Trading affollati: sezioni che saltano da una colonna all'altra",
+     "Richiesta in chat, 23/10: 'reimpostare a livello grafico l'interno delle sezioni alert e trading, perche' sono quelle piu' affollate, e quando si aprono le varie sezioni interne [...] ci sono dei problemi di visualizzazione, di passaggio di una finestra da una colonna all'altra'. Tre proposte (artifact 1mMR2eH6Aad9rJRjLyDrR8); scelta: 'Applica B per entrambe'.",
+     "media"),
     ("seed-0387", "Troppi avvisi di vendite coordinate nella chat gemme di whitekobra",
      "Domanda in chat, 23/10: 'L'account whitekobra a differenza di Lorenzo sta ricevendo numerose notifiche sulle vendite coordinate nel gruppo Telegram per le gemme. Perche'?'. Gli avvisi vanno alla chat gemme di ogni account che ne ha una (whitekobra si', l'altro account no); erano tanti perche' contava anche il gruppo 'top' (i 50 holder piu' grandi, senza legami) e valeva per ogni token con un cluster. Scelta: 'Applica A e C'.",
      "media"),

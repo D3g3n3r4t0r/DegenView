@@ -3419,5 +3419,10 @@
     "status": "risolto",
     "at": 1792759033,
     "summary": "Gli avvisi di vendita coordinata partono solo dai cluster di wallet legati davvero on-chain (trasferimenti fra loro, stesso mittente, stessa ondata di acquisti): due grandi holder qualsiasi che vendono negli stessi minuti non sono piu' un avviso, anche se restano nel report e nel rischio del token. E solo per i token che in quel momento sono in Top o in Early (Watch no: le stelline vivono nel browser e il server non le vede); se un token entra in Top entro 6 ore da un'ondata, l'avviso parte allora. Il destinatario non cambia: la chat gemme di ogni account che ne ha una impostata. Corretto anche un difetto trovato nel test: due token con un'ondata nello stesso secondo potevano scambiarsi l'avviso."
+  },
+  "seed-0388": {
+    "status": "risolto",
+    "at": 1792777084,
+    "summary": "Alert e Trading sono a sotto-schede: Trading ha Posizioni, Ordine manuale, Bot e chiavi, Futures, Copy trading, Wallet on-chain; Alert ha I tuoi alert, Alert di prezzo, Storico, Telegram. Si vede una sezione alla volta, a tutta larghezza, e non salta piu' niente da una colonna all'altra (le colonne di prima si ribilanciavano a ogni apertura). In queste due schede il grafico parte chiuso e si riapre con 'Mostra grafico'; il sito ricorda la scheda e la scelta. Se Telegram non e' configurato, la sua scheda ha un pallino. Il funzionamento non cambia. Nello stesso giro: aprendo 'Wallet on-chain' nel sito classico, l'app on-chain metteva sulla pagina il suo pulsante dell'agente senza stili (un'icona grande quanto lo schermo) e un pannello che bloccava i clic; ora nel sito classico non compaiono."
   }
 }
