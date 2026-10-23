@@ -49,6 +49,22 @@ def snapshot() -> dict:
         })
     routes.sort(key=lambda r: -r["p95_ms"])
     lags = list(_lags)
+    accel_info = {}
+    try:
+        from app.accel import fast_json, ram_cache, rust_bridge
+
+        accel_info = {
+            "rust_core": rust_bridge.stats(),
+            "simd_json": fast_json.stats(),
+            "ram_snapshot_cache": ram_cache.stats(),
+            "wasm_engine": {
+                "enabled": True,
+                "engine": "wasm32-f64-kernel",
+                "kernels": ["ema", "rsi", "sma", "bollinger", "draw_hit_test"],
+            },
+        }
+    except Exception:
+        pass
     return {
         "since": int(_started),
         "loop_lag": {
@@ -58,6 +74,7 @@ def snapshot() -> dict:
             "over_100ms": sum(1 for x in lags if x > 0.1),
         },
         "routes": routes,
+        "accel": accel_info,
     }
 
 

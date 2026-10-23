@@ -5,6 +5,7 @@ import pandas as pd
 import pandas_ta  # noqa: F401  (registers the .ta accessor on DataFrame)
 from smartmoneyconcepts import smc
 
+from app.accel import rust_bridge
 from app.analysis import btc_regime
 from app.models import StrategySignal, StrategyState
 
@@ -505,26 +506,9 @@ LKI_DEFAULT_PARAMS = {
 def compute_lki_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     # None = "not set": the strategy's own default stays.
     p = {**LKI_DEFAULT_PARAMS, **{k: v for k, v in (params or {}).items() if v is not None}}
-    close = df["close"]
-
-    # Matches Pine's rsi() exactly, including its edge-case ternary:
-    # down==0 -> 100, up==0 (and down!=0) -> 0, else the usual formula.
-    delta = close.diff()
-    avg_gain = _wilder_rma(delta.clip(lower=0), p["rsi_length"])
-    avg_loss = _wilder_rma(-delta.clip(upper=0), p["rsi_length"])
-    avg_loss_safe = avg_loss.replace(0, np.nan)
-    raw_rsi = 100 - (100 / (1 + avg_gain / avg_loss_safe))
-    rsi = pd.Series(
-        np.where(avg_loss == 0, 100.0, np.where(avg_gain == 0, 0.0, raw_rsi)),
-        index=df.index,
+    close, rsi, upper, lower = rust_bridge.cached_lki_bands(
+        df, int(p["rsi_length"]), int(p["bb_length"]), float(p["bb_mult"])
     )
-
-    # Pine's stdev() is a population (biased) standard deviation, ddof=0 —
-    # same convention already used by the Lorenzo strategy above.
-    basis = close.rolling(p["bb_length"]).mean()
-    dev = p["bb_mult"] * close.rolling(p["bb_length"]).std(ddof=0)
-    upper = basis + dev
-    lower = basis - dev
 
     entry_long = (rsi < p["rsi_oversold"]) & (close < lower)
     exit_long = (rsi > p["rsi_overbought"]) & (close > upper)
@@ -917,52 +901,30 @@ def confirmed_events(
     position = 0  # 0 flat, 1 long, -1 short
     events: list[StrategySignal] = []
 
-    # Columns as plain lists instead of signals.iterrows() (overhaul plan,
-    # week 2): same values, same order, no Series per row.
-    cols = {c: signals[c].tolist() for c in ("entry_long", "entry_short", "exit_long", "exit_short")}
-    # Bars past the last closed one, by position: iterating the DatetimeIndex
-    # built a Timestamp per bar and was 40% of a backtest on 20 000 candles.
     sig_index = signals.index
     n_confirmed = (len(sig_index) if last_confirmed_ts is None
                    else int(sig_index.searchsorted(last_confirmed_ts, side="right")))
-    for i in range(len(sig_index)):
-        prev_position = position
-        if position == 1 and cols["exit_long"][i]:
-            position = 0
-        elif position == -1 and cols["exit_short"][i]:
-            position = 0
-        if cols["entry_long"][i]:
-            position = 1
-        elif cols["entry_short"][i]:
-            position = -1
-
-        if position == prev_position:
-            continue
-        if i >= n_confirmed:
-            continue  # transition happened on the still-forming candle; not confirmed yet
-        ts = sig_index[i]
-
-        if prev_position == 0 and position == 1:
-            signal_type = "entry_long"
-        elif prev_position == 0 and position == -1:
-            signal_type = "entry_short"
-        elif prev_position == 1 and position == 0:
-            signal_type = "exit_long"
-        elif prev_position == -1 and position == 0:
-            signal_type = "exit_short"
-        elif prev_position == 1 and position == -1:
-            signal_type = "flip_to_short"
-        else:
-            signal_type = "flip_to_long"
-
-        events.append(
-            StrategySignal(
-                time=int(ts.timestamp()),
-                type=signal_type,
-                price=float(df.loc[ts, "close"]),
-                label=_LABELS[signal_type],
+    transitions, position = rust_bridge.fast_confirmed_transitions(
+        signals["entry_long"].to_numpy(dtype=np.uint8, copy=False),
+        signals["entry_short"].to_numpy(dtype=np.uint8, copy=False),
+        signals["exit_long"].to_numpy(dtype=np.uint8, copy=False),
+        signals["exit_short"].to_numpy(dtype=np.uint8, copy=False),
+        n_confirmed,
+    )
+    if transitions:
+        close_arr = df["close"].to_numpy(dtype=np.float64, copy=False)
+        same_index = sig_index.equals(df.index)
+        for i, signal_type in transitions:
+            ts = sig_index[i]
+            price = float(close_arr[i]) if same_index else float(df.loc[ts, "close"])
+            events.append(
+                StrategySignal(
+                    time=int(ts.timestamp()),
+                    type=signal_type,
+                    price=price,
+                    label=_LABELS[signal_type],
+                )
             )
-        )
 
     return events, position
 

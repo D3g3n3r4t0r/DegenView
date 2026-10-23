@@ -272,7 +272,14 @@ def _parse_block(lines: list[tuple[int, str, int]], start: int, indent: int) -> 
     return stmts, i
 
 
+_AST_CACHE: dict[str, list[ast.Stmt]] = {}
+_AST_CACHE_MAX = 128
+
+
 def parse_program(source: str) -> list[ast.Stmt]:
+    hit = _AST_CACHE.get(source)
+    if hit is not None:
+        return list(hit)
     lines = preprocess(source)
     filtered = [
         (indent, text, no)
@@ -285,4 +292,7 @@ def parse_program(source: str) -> list[ast.Stmt]:
     stmts, i = _parse_block(filtered, 0, base_indent)
     if i < len(filtered):
         raise PineParseError("inconsistent indentation", filtered[i][2])
-    return stmts
+    if len(_AST_CACHE) >= _AST_CACHE_MAX:
+        _AST_CACHE.pop(next(iter(_AST_CACHE)))
+    _AST_CACHE[source] = stmts
+    return list(stmts)

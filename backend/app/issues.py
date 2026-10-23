@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0398l", "Rivoluzione delle performance su 3 Pilastri: Native Rust Core (libdegenview_rs) + SIMD orjson, RAM/Mtime Snapshot Cache e motore WebAssembly nel browser",
+     "Lorenzo, 23/10: 'c\'e\' un modo per rivoluzionare il linguaggio di programmazione dietro al backend di questo sito e renderlo estremamente veloce e reattivo? stupiscimi', 'APPLICA TUTTO RIVOLUZIONAMO TUTTO', 'usa 15 agenti per fare prima'.",
+     "alta"),
     ("seed-0397l", "Progetti spariti in Settori (solo 2 visibili), autoripristino pool e messaggi deploy Telegram troppo lunghi",
      "Lorenzo, 23/10: 'sono spariti i progetti' (screenshot Settori con soli 2 progetti DREGG e PARE per via del filtro _kobra_lists/_gem_view attivo su tutti), 'rendi il sistema in grado di autoripristinarsi se rileva questo tipo di problemi', 'i messaggi su telegram sono troppo lunghi, falli meglio'.",
      "alta"),

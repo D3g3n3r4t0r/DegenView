@@ -19,6 +19,9 @@ export const device = (() => {
 })();
 
 const inFlight = new Map<string, Promise<unknown>>();
+const swrCache = new Map<string, { ts: number; data: unknown }>();
+const SWR_FRESH_MS = 12_000;
+const SWR_MAX_STALE_MS = 120_000;
 
 async function send<T>(path: string, method = "GET", body?: unknown, timeoutMs = 8000): Promise<T> {
   let r: Response;
@@ -36,10 +39,13 @@ async function send<T>(path: string, method = "GET", body?: unknown, timeoutMs =
   try { payload = await r.json(); } catch { /* 204 or not JSON */ }
   if (r.status === 401) location.href = "/onchain-app.html";
   if (!r.ok) throw new ApiError(typeof payload?.detail === "string" ? payload.detail : t("error {n}", { n: r.status }), r.status, payload?.detail);
+  if (method === "GET" && payload !== null) {
+    swrCache.set(path, { ts: Date.now(), data: payload });
+  }
   return payload as T;
 }
 
-function get<T>(path: string, timeoutMs?: number): Promise<T> {
+function fetchDedup<T>(path: string, timeoutMs?: number): Promise<T> {
   let p = inFlight.get(path) as Promise<T> | undefined;
   if (!p) {
     p = send<T>(path, "GET", undefined, timeoutMs).finally(() => inFlight.delete(path));
@@ -48,8 +54,21 @@ function get<T>(path: string, timeoutMs?: number): Promise<T> {
   return p;
 }
 
+function get<T>(path: string, timeoutMs?: number): Promise<T> {
+  const hit = swrCache.get(path);
+  const now = Date.now();
+  if (hit && now - hit.ts < SWR_MAX_STALE_MS) {
+    if (now - hit.ts >= SWR_FRESH_MS && !inFlight.has(path)) {
+      fetchDedup<T>(path, timeoutMs).catch(() => {});
+    }
+    return Promise.resolve(hit.data as T);
+  }
+  return fetchDedup<T>(path, timeoutMs);
+}
+
 function post<T>(path: string, body: unknown): Promise<T> {
   inFlight.clear();
+  swrCache.clear();
   return send<T>(path, "POST", body);
 }
 

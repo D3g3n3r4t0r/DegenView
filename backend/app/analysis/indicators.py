@@ -1,11 +1,16 @@
+import numpy as np
 import pandas as pd
 import pandas_ta  # noqa: F401  (registers the .ta accessor on DataFrame)
 
 from app.models import IndicatorSeries
 
+_IND_CACHE: dict[tuple, list[IndicatorSeries]] = {}
+_IND_CACHE_MAX = 192
+
 
 def _series_to_values(s: pd.Series) -> list[float | None]:
-    return [None if pd.isna(v) else float(v) for v in s]
+    arr = s.to_numpy(dtype=np.float64, copy=False)
+    return [float(v) if v == v else None for v in arr]
 
 
 def _first_col(df: pd.DataFrame | None, prefix: str) -> pd.Series | None:
@@ -47,8 +52,27 @@ def vwap_anchor(interval: str | None) -> str:
 
 
 def compute_indicators(df: pd.DataFrame, interval: str | None = None) -> list[IndicatorSeries]:
-    out: list[IndicatorSeries] = []
     n = len(df)
+    cache_key = None
+    if n >= 2 and "close" in df.columns:
+        try:
+            c_arr = df["close"].to_numpy(dtype=np.float64, copy=False)
+            cache_key = (
+                interval or "",
+                n,
+                int(df.index[0].value),
+                int(df.index[-1].value),
+                float(c_arr[0]),
+                float(c_arr[-1]),
+                float(c_arr[-2]),
+            )
+            hit = _IND_CACHE.get(cache_key)
+            if hit is not None:
+                return list(hit)
+        except Exception:
+            cache_key = None
+
+    out: list[IndicatorSeries] = []
 
     ema20 = _as_series(df.ta.ema(length=20), n)
     ema50 = _as_series(df.ta.ema(length=50), n)
@@ -98,6 +122,10 @@ def compute_indicators(df: pd.DataFrame, interval: str | None = None) -> list[In
     if stoch_d is not None:
         out.append(IndicatorSeries(name="STOCH_D", values=_series_to_values(stoch_d)))
 
+    if cache_key is not None:
+        if len(_IND_CACHE) >= _IND_CACHE_MAX:
+            _IND_CACHE.pop(next(iter(_IND_CACHE)))
+        _IND_CACHE[cache_key] = list(out)
     return out
 
 

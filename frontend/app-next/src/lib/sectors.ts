@@ -30,17 +30,33 @@ export type TodayView = { since: number | null; items: TodayItem[]; counts: Reco
 export type SectorsView = { sectors: Sector[]; today: TodayView; readings_since: number | null; momentum_ready: boolean };
 
 let inFlight: Promise<SectorsView> | null = null;
+let cachedSectors: { ts: number; data: SectorsView } | null = null;
+const SECTORS_FRESH_MS = 12_000;
+const SECTORS_MAX_STALE_MS = 120_000;
 
-export function getSectors(): Promise<SectorsView> {
+function revalidateSectors(): Promise<SectorsView> {
   if (inFlight) return inFlight;
   inFlight = (async () => {
     const r = await fetch("/api/onchain/sectors", { headers: device ? { "X-Device": device } : {}, signal: AbortSignal.timeout(15000) })
       .catch(() => { throw new ApiError(tr("network unreachable")); });
     if (r.status === 401) location.href = "/onchain-app.html";
     if (!r.ok) throw new ApiError(tr("error {n}", { n: r.status }), r.status);
-    return r.json() as Promise<SectorsView>;
+    const data = (await r.json()) as SectorsView;
+    cachedSectors = { ts: Date.now(), data };
+    return data;
   })().finally(() => { inFlight = null; });
   return inFlight;
+}
+
+export function getSectors(): Promise<SectorsView> {
+  const now = Date.now();
+  if (cachedSectors && now - cachedSectors.ts < SECTORS_MAX_STALE_MS) {
+    if (now - cachedSectors.ts >= SECTORS_FRESH_MS && !inFlight) {
+      revalidateSectors().catch(() => {});
+    }
+    return Promise.resolve(cachedSectors.data);
+  }
+  return revalidateSectors();
 }
 
 /** Changed since the last reading: the sectors whose champion changed. */

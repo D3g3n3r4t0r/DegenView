@@ -27,11 +27,11 @@ peers, in the arena of one of its narratives (layer chains have their own).
 """
 from __future__ import annotations
 
-import json
 import logging
 import statistics
 import time
 
+from app.accel import fast_json
 from app.atomic_write import write_text_atomic
 from app.trading.onchain import narratives, storage
 
@@ -226,7 +226,10 @@ def build(entries: list[dict], ladder: dict | None = None, prefer: set[str] | No
 
 def load() -> dict:
     try:
-        return json.loads(_FILE.read_text())
+        data = fast_json.read_json_cached(_FILE, default=None)
+        if data is None:
+            return {}
+        return {**data, "ratings": dict(data.get("ratings") or {})} if isinstance(data, dict) else {}
     except FileNotFoundError:
         return {}
     except Exception:
@@ -235,12 +238,16 @@ def load() -> dict:
 
 
 def _save(state: dict) -> None:
-    write_text_atomic(_FILE, json.dumps(state, separators=(",", ":")))
+    write_text_atomic(_FILE, fast_json.dumps(state))
+    fast_json.invalidate_file_cache(_FILE)
 
 
 def load_tenure() -> dict:
     try:
-        return {k: float(v) for k, v in json.loads(_TENURE_FILE.read_text()).items()}
+        raw = fast_json.read_json_cached(_TENURE_FILE, default=None)
+        if not isinstance(raw, dict):
+            return {}
+        return {k: float(v) for k, v in raw.items()}
     except FileNotFoundError:
         return {}
     except Exception:
@@ -249,7 +256,8 @@ def load_tenure() -> dict:
 
 
 def _save_tenure(tenure: dict) -> None:
-    write_text_atomic(_TENURE_FILE, json.dumps(tenure, separators=(",", ":")))
+    write_text_atomic(_TENURE_FILE, fast_json.dumps(tenure))
+    fast_json.invalidate_file_cache(_TENURE_FILE)
 
 
 def duel(a: dict, b: dict) -> float | None:

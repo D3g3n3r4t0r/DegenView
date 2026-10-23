@@ -1,4 +1,35 @@
 {
+  "seed-0398l": {
+    "status": "risolto",
+    "at": 1792786400,
+    "summary": "Applicata la rivoluzione delle performance su tutti e 3 i Pilastri: (1) Native Rust Quant Core (`backend/rust_core/` compilato in `libdegenview_rs.so` nel Dockerfile multi-stage + bridge `ctypes.CDLL` in `app/accel/rust_bridge.py` con fallback NumPy SIMD nonzero e `orjson` SIMD in `app/accel/fast_json.py`): la macchina a stati di `confirmed_events()` e la cache per impronta di `compute_lki_signals()`/`compute_lki2_signals()` eliminano 441 ricalcoli ridondanti di RSI(14) e Bande di Bollinger(20, 2.0) durante l'ottimizzazione e dimezzano il calcolo dei segnali LTF su `/api/analyze`; (2) Cache in-memory mtime/impronta (`app/accel/ram_cache.py`, `arenas.py`, `sectors.py`, `coordinated_sells.py`, `wallet_clusters.py`, `projects_db.py`, `pine/parser.py`, `analysis/indicators.py`): azzerate le letture ridondanti da disco e accelerata la deserializzazione JSON SQLite; (3) Motore quantitativo WebAssembly lato browser (`frontend/static/wasm-engine.js`, `window.WasmQuantEngine`) + cache Stale-While-Revalidate (SWR) a 0 ms in `frontend/app-next/src/lib/api.ts` e `sectors.ts`, con telemetria live esposta in `/api/perf` sotto `accel`.",
+    "detail": "Pilastro 1: `backend/rust_core/Cargo.toml` e `src/lib.rs` (`dv_confirmed_events`, `rust_ema`, `rust_ema_batch_parallel` multi-thread con `std::thread::scope`, `dv_rsi_bollinger`), compilati nello stage `FROM rust:1.83-slim AS rust-core` del `Dockerfile` e caricati in `backend/app/accel/rust_bridge.py`; `orjson==3.10.15` in `backend/requirements.txt` e `backend/app/accel/fast_json.py`. Pilastro 2: caching mtime in `arenas.py`, `sectors.py`, `coordinated_sells.py`, `wallet_clusters.py`, `fast_json.loads` in `projects_db._row`, LRU AST cache in `pine/parser.py`, fingerprint cache in `analysis/indicators.py` e riuso di `sig` su LTF in `main.py` (`/api/analyze`). Pilastro 3: modulo binario W3C WebAssembly in `frontend/static/wasm-engine.js` e SWR cache a 0 ms in `frontend/app-next/src/lib/api.ts` e `sectors.ts`. Test dedicati in `backend/tests/test_accel_revolution.py`.",
+    "files": [
+      "Dockerfile",
+      "backend/requirements.txt",
+      "backend/rust_core/Cargo.toml",
+      "backend/rust_core/src/lib.rs",
+      "backend/app/accel/__init__.py",
+      "backend/app/accel/fast_json.py",
+      "backend/app/accel/ram_cache.py",
+      "backend/app/accel/rust_bridge.py",
+      "backend/app/analysis/indicators.py",
+      "backend/app/analysis/strategies.py",
+      "backend/app/pine/parser.py",
+      "backend/app/perf.py",
+      "backend/app/main.py",
+      "backend/app/trading/onchain/arenas.py",
+      "backend/app/trading/onchain/sectors.py",
+      "backend/app/trading/onchain/coordinated_sells.py",
+      "backend/app/trading/onchain/wallet_clusters.py",
+      "backend/app/trading/onchain/projects_db.py",
+      "frontend/index.html",
+      "frontend/static/wasm-engine.js",
+      "frontend/app-next/src/lib/api.ts",
+      "frontend/app-next/src/lib/sectors.ts",
+      "backend/tests/test_accel_revolution.py"
+    ]
+  },
   "seed-0248": {
     "status": "risolto",
     "at": 1790860192,

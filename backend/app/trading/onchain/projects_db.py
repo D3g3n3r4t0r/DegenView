@@ -29,6 +29,7 @@ import threading
 import time
 from pathlib import Path
 
+from app.accel import fast_json
 from app.trading.onchain.storage import data_file
 
 _DB_FILE = data_file("onchain_projects.db")
@@ -139,7 +140,7 @@ def _row(r: sqlite3.Row | None) -> dict | None:
     for f in _JSON:
         if d.get(f):
             try:
-                d[f] = json.loads(d[f])
+                d[f] = fast_json.loads(d[f])
             except ValueError:
                 d[f] = None
     return d

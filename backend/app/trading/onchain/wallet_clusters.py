@@ -37,6 +37,7 @@ from pathlib import Path
 import httpx
 
 from app import service_keys
+from app.accel import fast_json
 from app.atomic_write import write_text_atomic
 from app.trading.onchain import storage, sync_sells, sync_watch, transfer_sources
 
@@ -137,7 +138,7 @@ def _state_path() -> Path:
 
 def _read(path: Path, default):
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return fast_json.loads(path.read_bytes())
     except (OSError, ValueError):
         return default
 
@@ -148,7 +149,9 @@ def _state() -> dict:
 
 
 def _save_state(st: dict) -> None:
-    write_text_atomic(_state_path(), json.dumps(st))
+    p = _state_path()
+    write_text_atomic(p, fast_json.dumps(st))
+    fast_json.invalidate_file_cache(p)
 
 
 def _key(chain: str, token: str) -> str:

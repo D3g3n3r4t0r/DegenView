@@ -1,3 +1,10 @@
+# Native Rust Quant Core (libdegenview_rs.so): zero-dependency cdylib
+# compiled once with LTO=fat and opt-level=3, loaded via Python ctypes.CDLL.
+FROM rust:1.83-slim AS rust-core
+WORKDIR /build
+COPY backend/rust_core ./rust_core
+RUN cd rust_core && cargo build --release
+
 # Our JS reaches the browser without comments and extra whitespace (-32%
 # after gzip). esbuild only reprints the same code: deploy/minify-assets.sh.
 FROM node:22-slim AS assets
@@ -41,6 +48,7 @@ ps=('it/it_IT/paola/medium/it_IT-paola-medium', 'en/en_US/lessac/medium/en_US-le
     || (echo 'piper voices not downloaded: browser voice only' && rm -f /srv/voices/*)
 
 COPY backend/app ./backend/app
+COPY --from=rust-core /build/rust_core/target/release/libdegenview_rs.so ./backend/app/accel/libdegenview_rs.so
 COPY backend/app_entry.py ./backend/app_entry.py
 COPY --from=assets /srv/frontend ./frontend
 COPY docker-entrypoint.sh ./docker-entrypoint.sh

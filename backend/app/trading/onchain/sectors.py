@@ -22,11 +22,11 @@ Pure functions plus one JSON file on the volume; nothing here calls out.
 """
 from __future__ import annotations
 
-import json
 import logging
 import statistics
 import time
 
+from app.accel import fast_json
 from app.atomic_write import write_text_atomic
 from app.trading.onchain import storage
 
@@ -110,8 +110,8 @@ def snapshot(sectors: list[dict], now: float) -> dict:
 
 def load(pool: str = "base") -> list[dict]:
     try:
-        snaps = json.loads(_file(pool).read_text(encoding="utf-8"))
-        return snaps if isinstance(snaps, list) else []
+        snaps = fast_json.read_json_cached(_file(pool), default=None)
+        return list(snaps) if isinstance(snaps, list) else []
     except (OSError, ValueError):
         return []
 
@@ -142,7 +142,9 @@ def record(sectors: list[dict], now: float | None = None, snaps: list[dict] | No
     snaps = prune([*snaps, snapshot(sectors, now)], now)
     if persist:
         try:
-            write_text_atomic(_file(pool), json.dumps(snaps, separators=(",", ":")))
+            f = _file(pool)
+            write_text_atomic(f, fast_json.dumps(snaps))
+            fast_json.invalidate_file_cache(f)
         except OSError:
             logger.exception("sectors: snapshot not written")
     return snaps

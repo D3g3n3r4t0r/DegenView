@@ -48,6 +48,7 @@ import logging
 import time
 from pathlib import Path
 
+from app.accel import fast_json
 from app.atomic_write import write_text_atomic
 from app.trading.onchain import storage
 
@@ -163,17 +164,28 @@ def from_analysis(a: dict, chain: str, token: str, wallets: list[str], symbol: s
                   "events": events})
 
 
+_report_cache: dict[str, tuple[int, int, dict | None]] = {}
+
+
 def write(report: dict) -> Path:
     """Where the engine saves a report: the view and the alert read it."""
     path = _dir() / f"{report['chain']}-{report['token'].lower()}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_text_atomic(path, json.dumps(report))
+    write_text_atomic(path, fast_json.dumps(report))
+    _report_cache.pop(str(path), None)
     return path
 
 
 def _read(path: Path) -> dict | None:
+    key = str(path)
     try:
-        return clean(json.loads(path.read_text(encoding="utf-8")))
+        st = path.stat()
+        hit = _report_cache.get(key)
+        if hit is not None and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
+            return hit[2]
+        cleaned = clean(fast_json.loads(path.read_bytes()))
+        _report_cache[key] = (st.st_mtime_ns, st.st_size, cleaned)
+        return cleaned
     except (OSError, ValueError):
         logger.warning("coordinated sells: unreadable report %s", path.name)
         return None

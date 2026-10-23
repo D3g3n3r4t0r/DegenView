@@ -7146,8 +7146,9 @@ async def analyze(
             # segnali spot-only che usa l'alert watcher, cosi' il grafico non
             # mostra trade diversi dal backtest on-chain della classifica.
             sig = None
-            if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
-                sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params_dict))
+            if strategy_name in STRATEGY_REGISTRY and (asset_type == "dex" or tf_key == "ltf"):
+                raw_sig = STRATEGY_REGISTRY[strategy_name](df, strategy_params_dict)
+                sig = spot_only(raw_sig) if asset_type == "dex" else raw_sig
             strategy = build_strategy_state(strategy_name, df, strategy_params_dict, signals=sig)
             strategies[tf_key] = [strategy]
             # The frontend only ever charts the ltf timeframe (state.activeTimeframe
@@ -7184,6 +7185,7 @@ async def analyze(
                     equity_curve=[],
                     trades=[],
                 )
+            df_candles = df if tf_key == "ltf" else df.iloc[-50:]
             candles = [
                 Candle(
                     time=int(ts.timestamp()),
@@ -7193,7 +7195,7 @@ async def analyze(
                     close=float(row.close),
                     volume=float(row.volume),
                 )
-                for ts, row in zip(df.index, df.itertuples(index=False))
+                for ts, row in zip(df_candles.index, df_candles.itertuples(index=False))
             ]
             # Same story for the raw candle/indicator time series: the chart only
             # ever plots ltf, and build_summary's per-timeframe indicator readout
@@ -7205,7 +7207,6 @@ async def analyze(
             if tf_key != "ltf":
                 # Keep enough bars for frontend MTF trend computation (needs ~10+)
                 # while still trimming the bulk of the history to save bandwidth.
-                candles = candles[-50:]
                 indicators = [ind.model_copy(update={"values": ind.values[-50:]}) for ind in indicators]
             timeframes[tf_key] = TimeframeAnalysis(
                 interval=intervals[tf_key],
@@ -8702,6 +8703,7 @@ def _compute_asset_version() -> str:
     try:
         parts = [
             (FRONTEND_DIR / "static" / "style.css").read_bytes(),
+            (FRONTEND_DIR / "static" / "wasm-engine.js").read_bytes(),
             (FRONTEND_DIR / "static" / "app.js").read_bytes(),
             (FRONTEND_DIR / "static" / "elliott.js").read_bytes(),
             (FRONTEND_DIR / "static" / "draw-engine.js").read_bytes(),
@@ -8763,6 +8765,7 @@ _INDEX_HTML = (
     (FRONTEND_DIR / "index.html")
     .read_text(encoding="utf-8")
     .replace('href="/static/style.css"', f'href="/static/style.css?v={_ASSET_VERSION}"')
+    .replace('src="/static/wasm-engine.js"', f'src="/static/wasm-engine.js?v={_ASSET_VERSION}"')
     .replace('src="/static/app.js"', f'src="/static/app.js?v={_ASSET_VERSION}"')
     .replace('src="/static/elliott.js"', f'src="/static/elliott.js?v={_ASSET_VERSION}"')
     .replace('src="/static/draw-engine.js"', f'src="/static/draw-engine.js?v={_ASSET_VERSION}"')

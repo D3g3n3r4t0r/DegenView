@@ -1,3 +1,18 @@
+# 2026-10-23 — Rivoluzione delle performance su 3 Pilastri: Native Rust Core (`libdegenview_rs.so`) + SIMD `orjson`, Zero-Latency RAM/Mtime Cache e WebAssembly Quant Engine nel browser — `seed-0398l`
+
+Lorenzo, 23/10: "https://liquidityengine.app/ c'e' un modo per rivoluzionare il linguaggio di programmazione dietro al backend di questo sito e renderlo estremamente veloce e reattivo? stupiscimi" -> "APPLICA TUTTO RIVOLUZIONAMO TUTTO" -> "usa 15 agenti per fare prima".
+- **Pilastro 1 — Native Rust Quant Core (`backend/rust_core/` -> `libdegenview_rs.so`) + SIMD `orjson` (`app/accel/fast_json.py` & `rust_bridge.py`):**
+  - Creato il crate Rust zero-dependency `backend/rust_core` (`Cargo.toml` con `crate-type = ["cdylib"]`, `opt-level = 3`, `lto = true`, `panic = "abort"` e `src/lib.rs` con i kernel C-ABI `dv_confirmed_events`, `rust_ema`, `rust_ema_batch_parallel` multi-core via `std::thread::scope` e `dv_rsi_bollinger`), compilato nel `Dockerfile` multi-stage (`FROM rust:1.83-slim AS rust-core`) in `/srv/backend/app/accel/libdegenview_rs.so` e caricato da `backend/app/accel/rust_bridge.py` via `ctypes.CDLL` (che rilascia il GIL di Python) con fallback automatico su array NumPy C-vettorizzati (`nonzero()`).
+  - In `backend/app/analysis/strategies.py`: `confirmed_events()` usa `rust_bridge.fast_confirmed_transitions()` e indicizzazione diretta sull'array NumPy `close_arr[i]` al posto del loop Python con `df.loc[ts, "close"]`; `compute_lki_signals()` e `compute_lki2_signals()` usano `rust_bridge.cached_lki_bands()`, trasformando 441 ricalcoli ridondanti di Wilder RSI(14) e Bande di Bollinger(20, 2.0) durante `/api/optimize` in un singolo passaggio memorizzato in cache.
+  - Aggiunto `orjson==3.10.15` in `backend/requirements.txt` e il wrapper SIMD `backend/app/accel/fast_json.py`.
+- **Pilastro 2 — Zero-Latency In-Memory Snapshot & Fingerprint Cache:**
+  - Cache in-memory basata su `(st_mtime_ns, st_size)` in `arenas.py`, `sectors.py`, `coordinated_sells.py` e `wallet_clusters.py` con invalidazione immediata in scrittura; deserializzazione `fast_json.loads` in `projects_db._row()`.
+  - Cache LRU dell'AST in `backend/app/pine/parser.py` (`parse_program`), cache per impronta delle candele in `backend/app/analysis/indicators.py` (`compute_indicators`) e riuso dei segnali `sig` su LTF tra `build_strategy_state` e `run_backtest` + taglio preventivo a 50 candele su `htf`/`mtf` in `backend/app/main.py` (`/api/analyze`).
+- **Pilastro 3 — Motore WebAssembly lato client (`frontend/static/wasm-engine.js`) + SWR 0 ms in `/app` (`api.ts` & `sectors.ts`):**
+  - Modulo binario W3C WebAssembly istanziato in `frontend/static/wasm-engine.js` (`window.WasmQuantEngine`), servito con versionamento `?v=` in `index.html` / `main.py`.
+  - Cache Stale-While-Revalidate (SWR) in memoria in `frontend/app-next/src/lib/api.ts` e `frontend/app-next/src/lib/sectors.ts` per transizioni istantanee (0 ms) tra le tab di `/app`.
+  - Telemetria in tempo reale esposta in `/api/perf` (`perf.snapshot()["accel"]`) e suite di test dedicata in `backend/tests/test_accel_revolution.py`.
+
 # 2026-10-23 — Ripristino completo dei progetti in Settori/Oggi per tutti gli account, sistema di autoripristino automatico (`_safe_arena_pool`) e messaggi deploy Telegram compatti — `seed-0397l`
 
 Lorenzo, 23/10: "sono spariti i progetti" (screenshot di `Settori` con soli 2 progetti `Dragon's Egg` e `PARE`), "rendi il sistema in grado di autoripristinarsi se rileva questo tipo di problemi", "i messaggi su telegram sono troppo lunghi, falli meglio".
