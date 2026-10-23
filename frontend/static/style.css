@@ -6173,3 +6173,20 @@ button, a, summary, label, select, input[type="checkbox"], input[type="radio"] {
 .ct-pnl-card dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .ct-pnl-card dd:first-of-type b { font-size: 1.05rem; }
 .ct-warn { margin: 0; font-size: .8rem; color: var(--warn); background: var(--warn-soft); padding: 6px 9px; border-radius: 6px; }
+
+/* ── Telegram notifications pause (Alert tab, static/telegram-pause.js) ── */
+.tg-pause { margin: 10px 0 14px; }
+.tg-pause-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tg-pause-row { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "dot name actions" "dot state actions"; align-items: center; gap: 2px 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); font-size: .84rem; }
+.tg-pause-dot { grid-area: dot; width: 9px; height: 9px; border-radius: 50%; background: var(--bull); box-shadow: 0 0 0 3px var(--bull-soft); }
+.tg-pause-row.is-paused .tg-pause-dot { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+.tg-pause-name { grid-area: name; display: flex; flex-direction: column; min-width: 0; }
+.tg-pause-name small { color: var(--ink-dim); font-size: .74rem; }
+.tg-pause-state { grid-area: state; color: var(--ink-dim); font-size: .78rem; }
+.tg-pause-row.is-paused .tg-pause-state span { color: var(--warn); font-weight: 600; }
+.tg-pause-actions { grid-area: actions; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.tg-pause-actions select { font-size: .78rem; padding: .25rem .35rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--ink); }
+.tg-pause-actions button { font-size: .78rem; padding: .3rem .7rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--ink); cursor: pointer; }
+.tg-pause-row:not(.is-paused) .tg-pause-actions button { border-color: var(--warn); color: var(--warn); }
+.tg-pause-row.is-paused .tg-pause-actions button { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+@media (max-width: 520px) { .tg-pause-row { grid-template-columns: auto 1fr; grid-template-areas: "dot name" "dot state" ". actions"; } .tg-pause-actions { justify-content: flex-start; } }

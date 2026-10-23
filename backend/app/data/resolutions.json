@@ -3409,5 +3409,10 @@
     "status": "risolto",
     "at": 1792756394,
     "summary": "MEXC spot: le quantita' rispettano i decimali di ogni coppia letti da MEXC (BTC 8, SOL 3, KAS 2, PEPE 0) e sono arrotondate per difetto, cosi' 'vendi tutto' non chiede mai piu' del saldo; l'importo minimo (1 USDT) e' controllato prima di mandare l'ordine; con '% del saldo' resta lo 0,5% per il movimento del prezzo, quindi anche il 100% va a buon fine. Il bot ora esce vendendo esattamente le monete che ha comprato quella strategia (al netto della commissione), non piu' '50 USDT' o 'il 10% di tutte le monete': le monete che avevi gia' restano. Se arriva un'uscita senza un acquisto registrato (posizioni aperte dal bot prima del 23/10) non vende e lo dice su Telegram: si chiude a mano con 'Sell all'. La chiave MEXC va solo sulle chiamate firmate. Futures MEXC: le posizioni mostrano il prezzo di mercato vero (prima era il prezzo di carico, quindi profitto ~0 e liquidazione misurata male) e con il 100% del margine resta spazio per la commissione. Provato con un MEXC finto (firma, regole, saldi, commissione) e sul MEXC vero con una chiave finta; un ordine reale resta da fare con una chiave vera e pochi dollari."
+  },
+  "seed-0386": {
+    "status": "risolto",
+    "at": 1792758306,
+    "summary": "Nel sito classico, scheda Alert, sezione Telegram, c'e' 'Notifiche Telegram': per ogni gruppo del tuo account (chat principale, chat segnali, chat gemme; per l'amministratore anche i messaggi di sistema) si sceglie per quanto mettere in pausa (1 ora, 8 ore, 24 ore o finche' non riattivi) e lo si riattiva con un tasto. Un gruppo in pausa non riceve nulla; i messaggi non vengono accodati ma contati, e alla ripresa (a mano o alla scadenza) il bot scrive quanti ne sono stati saltati. Le risposte a quello che scrivi al bot arrivano comunque. La pausa vale per la chat: se un gruppo e' condiviso con altri account, tace per tutti."
   }
 }

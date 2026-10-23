@@ -1324,7 +1324,7 @@ async def _telegram_chat_loop() -> None:
                     msg = up.get("message") or {}
                     chat_id = str((msg.get("chat") or {}).get("id") or "")
                     if _is_chatid_command(msg.get("text") or "", bot):
-                        _fire(telegram.send_to(chat_id, f"Chat ID: <code>{chat_id}</code>"))
+                        _fire(telegram.send_to(chat_id, f"Chat ID: <code>{chat_id}</code>", force=True))
                         continue
                     text = deepseek_desk.wants_answer(msg, bot)
                     if text and chat_id in _deepseek_chats():
@@ -1547,7 +1547,7 @@ async def _telegram_reply(chat_id: str, text: str) -> None:
     except Exception as exc:
         logger.exception("deepseek chat")
         reply = f"DeepSeek non risponde ora ({type(exc).__name__})."
-    await telegram.send_to(chat_id, _html.escape(reply, quote=False))
+    await telegram.send_to(chat_id, _html.escape(reply, quote=False), force=True)
 
 
 async def _deepseek_recap_loop() -> None:
@@ -1687,7 +1687,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
 app.include_router(quant_router(auth.get_current_user))
 # Route groups split out of this file (app/routes/), same paths as before.
-for _name in ("issues", "price_alerts", "drawings", "jobs", "push", "guest_links", "auth_routes", "copytrade"):
+for _name in ("issues", "price_alerts", "drawings", "jobs", "push", "guest_links", "auth_routes", "copytrade",
+              "telegram_pause"):
     app.include_router(importlib.import_module(f"app.routes.{_name}").router)
 
 # ── Cancello di autenticazione ────────────────────────────────────────────

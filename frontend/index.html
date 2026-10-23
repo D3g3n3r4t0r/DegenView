@@ -708,6 +708,12 @@
             </div>
             <!-- 16/10: after Save, what each chat receives and whether it got the test message -->
             <ul id="telegram-check" class="telegram-check hidden"></ul>
+            <!-- 23/10: pause a group's notifications for a while (static/telegram-pause.js, notify/pause.py) -->
+            <section id="tg-pause" class="tg-pause hidden" aria-labelledby="tg-pause-title">
+              <div class="section-title-row"><span class="section-eyebrow" id="tg-pause-title">Telegram notifications</span></div>
+              <ul id="tg-pause-list" class="tg-pause-list"></ul>
+              <p class="panel-hint">A paused group gets nothing; when it resumes, the bot says how many messages were skipped. Answers to what you write to the bot still arrive.</p>
+            </section>
             <div id="telegram-setup" class="telegram-setup">
               <label>Your Telegram chat ID
                 <input type="text" id="telegram-chat-id-input" placeholder="es. 123456789" autocomplete="off" />
@@ -1605,5 +1611,6 @@
   <script src="/static/simple-mode.js" defer></script>
   <script src="/static/diagnostics.js" defer></script>
   <script src="/static/copytrade.js" defer></script>
+  <script src="/static/telegram-pause.js" defer></script>
 </body>
 </html>
