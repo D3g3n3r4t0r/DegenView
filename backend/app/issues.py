@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0409l", "Copy trading anche su wallet EVM: un indirizzo per Base, BNB Chain, Ethereum, Robinhood Chain, Arc e Monad",
+     "Lorenzo, 23/10, con lo screenshot della lista indirizzi di FOMO: 'aggiungere alla sezione trading, copy trading, la possibilita' di avere, oltre al wallet Solana, anche un aggregatore di wallet EVM [...] permette di fare copy trading su tutte le reti EVM in questione'. Scelte: tutte e sei le reti, wallet Robinhood riusato come indirizzo EVM unico, KyberSwap per le quotazioni, tutti gli account.",
+     "alta"),
     ("seed-0408l", "Task fermi su 'in corso' da 11 ore e 2 giorni nel Cantiere",
      "Lorenzo, 23/10: '11 ore fa e 2 giorni fa? credo siano errati'. Nel Cantiere comparivano in cima come 'in corso' (65%) task di 11 ore fa (seed-0382) e 2 giorni fa (seed-0376) gia' conclusi.",
      "media"),

@@ -6137,6 +6137,13 @@ button, a, summary, label, select, input[type="checkbox"], input[type="radio"] {
 .ct-badge.is-sim { background: var(--violet-soft); color: var(--violet); }
 .ct-badge.is-real { background: var(--warn-soft); color: var(--warn); }
 .ct-badge.is-failed { background: var(--danger-soft); color: var(--danger); }
+/* EVM wallet: one address, a row per network (copytrade_evm.py, 23/10). */
+.ct-evm-addr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0; }
+.ct-evm-addr .ct-mono { word-break: break-all; }
+.ct-evm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: .82rem; background: var(--bg); }
+.ct-chip { display: inline-block; font-size: .68rem; padding: 1px 6px; margin-left: 2px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-dim); }
+.ct-chain-boxes { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.ct-chains[hidden] { display: none; }   /* .ct-seg sets display:flex, which beats [hidden] */
 .ct-side { font-weight: 700; font-size: .72rem; }
 .ct-side.is-buy { color: var(--bull); }
 .ct-side.is-sell { color: var(--bear); }

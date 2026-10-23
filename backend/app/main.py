@@ -1680,6 +1680,8 @@ async def lifespan(app: FastAPI):
     background.append(asyncio.create_task(_deepseek_recap_loop()))
     background.append(asyncio.create_task(_coordinated_sells_loop()))
     background.append(asyncio.create_task(onchain_copytrade.loop()))
+    from app.trading.onchain import copytrade_evm as _copytrade_evm
+    background.append(asyncio.create_task(_copytrade_evm.loop()))   # EVM wallets, simulated (23/10)
     if settings.onchain_radar_enabled:
         # Wallet clusters of the candidates, built by the server (22/10).
         from app.trading.onchain import wallet_clusters
