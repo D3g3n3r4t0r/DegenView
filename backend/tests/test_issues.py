@@ -424,6 +424,20 @@ def test_new_seed_ids_carry_the_account_letter():
             assert m.group(2) in ("g", "l"), f"{sid}: a new entry needs the account letter g or l (CLAUDE.md)"
 
 
+def test_no_board_key_is_written_twice():
+    """Two chats adding the same id merge cleanly in git, and json.load then
+    keeps only the last block: a resolution vanishes in silence (seed-0398l sat
+    there twice on 23/10, the board showing the shorter, older copy)."""
+    from pathlib import Path
+
+    data = Path(__file__).resolve().parents[1] / "app" / "data"
+    for name in ("resolutions.json", "replies.json"):
+        pairs = json.loads((data / name).read_text(encoding="utf-8"), object_pairs_hook=lambda p: p)
+        keys = [k for k, _ in pairs]
+        dup = sorted({k for k in keys if keys.count(k) > 1})
+        assert not dup, f"{name}: keys written twice {dup} — run scripts/seed_id.py fix <id>"
+
+
 def test_deploy_cards_find_ids_with_a_letter():
     from app.notify import deploy_card
     assert deploy_card._SEED_RE.findall("Fix it (seed-0393g, seed-0393l and seed-0042)") == ["seed-0393g", "seed-0393l", "seed-0042"]

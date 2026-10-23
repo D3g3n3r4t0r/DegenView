@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0405l", "Id della bacheca presi due volte da due chat dello stesso account",
+     "Lorenzo, 23/10: 'sistema le collisioni degli id seed fra le due chat'. In una sera seed-0398l, seed-0401l e seed-0403l sono stati presi due volte; seed-0398l era scritto due volte in resolutions.json e la bacheca mostrava la copia piu' corta.",
+     "media"),
     ("seed-0404l", "Trascinando un disegno, si sposta meno del puntatore",
      "Trovato dopo la scansione del sito classico: il test automatico degli strumenti di disegno falliva dal restyling desktop (seed-0396l). Un disegno trascinato di 80 pixel si spostava di 73,7. Lorenzo, 23/10: 'si, sistemalo'.",
      "media"),
