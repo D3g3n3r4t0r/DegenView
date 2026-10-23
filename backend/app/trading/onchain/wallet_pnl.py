@@ -177,20 +177,28 @@ async def _batch_once(sigs: list[str]) -> list[dict | None]:
             err = f"RPC unreachable ({type(exc).__name__})"     # never the URL: it holds the key
         if attempt == 3:
             raise RuntimeError(err)
-        await asyncio.sleep(1.5 * (attempt + 1))
+        await asyncio.sleep((4.0 if "429" in err else 1.5) * (attempt + 1))
     return []
 
 
 async def _batch(sigs: list[str]) -> list[dict | None]:
     """A batch answers some calls with an error under rate limits (seen on
-    the public node, 23/10): those are asked again, twice, before giving up."""
-    out = await _batch_once(sigs)
+    the public node, 23/10): those are asked again, twice, before giving up.
+    A batch refused outright (429 after every retry) ends as unread, never
+    as the end of the whole analysis (956 transactions lost to one 429, 23/10)."""
+    try:
+        out = await _batch_once(sigs)
+    except RuntimeError:
+        out = [None] * len(sigs)          # still refused: counted as unread, the analysis goes on
     for wait in (1.0, 2.5):
         missing = [i for i, tx in enumerate(out) if tx is None]
         if not missing:
             break
         await asyncio.sleep(wait)
-        again = await _batch_once([sigs[i] for i in missing])
+        try:
+            again = await _batch_once([sigs[i] for i in missing])
+        except RuntimeError:
+            continue
         for i, tx in zip(missing, again):
             out[i] = tx
     return out
@@ -236,7 +244,7 @@ async def analyze(address: str, say: Callable[[str], None] = lambda m: None) -> 
         if (i // BATCH) % 5 == 4 or i + BATCH >= len(names):
             say(f"Read {min(i + BATCH, len(names))} of {len(names)} transactions, {len(swaps)} swaps")
         if not helius:
-            await asyncio.sleep(0.5)          # the public node limits bursts
+            await asyncio.sleep(1.0)          # the public node limits bursts
     swaps.sort(key=lambda s: s["t"])
     closes, open_, orphan = realize(swaps)
 

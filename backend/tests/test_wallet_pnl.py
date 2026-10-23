@@ -89,3 +89,18 @@ def test_analyze_end_to_end(monkeypatch):
     assert d["realized_usd"] == 200 and d["roi_pct"] == 200       # bought 1 SOL at $100, sold 2 SOL at $150
     assert r["coverage"]["swaps"] == 2 and not r["coverage"]["partial"]
     assert wp.cached(leader) is r
+
+
+def test_a_refused_batch_is_unread_not_fatal(monkeypatch):
+    calls = {"n": 0}
+
+    async def refuse(sigs):
+        calls["n"] += 1
+        raise RuntimeError("RPC 429")
+
+    async def no_wait(_):
+        return None
+    monkeypatch.setattr(wp, "_batch_once", refuse)
+    monkeypatch.setattr(wp.asyncio, "sleep", no_wait)
+    assert asyncio.run(wp._batch(["a", "b"])) == [None, None]
+    assert calls["n"] == 3
