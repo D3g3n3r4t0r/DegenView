@@ -79,3 +79,31 @@ def test_high_risk_report_excludes_the_token(tmp_path, monkeypatch):
     rep["risk"]["score"] = 59
     (d / f"robinhood-{tok}.json").write_text(json.dumps(rep))
     assert lb.crash_reason("robinhood", tok) == ""
+
+
+def test_only_linked_clusters_and_tokens_on_screen_alert(tmp_path, monkeypatch):
+    """Lorenzo, 23/10 ("Applica A e C"): the top-holders group never alerts,
+    and only tokens in the Top or Early do; another token's wave is kept
+    for later, should the token enter the Top within the alert window."""
+    monkeypatch.setattr(cs.storage, "DATA_DIR", tmp_path)
+    (tmp_path / "coordinated_sells").mkdir()
+    sent = []
+
+    async def send(text):
+        sent.append(text)
+        return True
+
+    now = 1_000_000.0
+    for tok, sym in (("0xab", "INTOP"), ("0xcd", "ELSEWHERE")):
+        report = {"version": 1, "chain": "base", "token": tok, "symbol": sym,
+                  "clusters": [{"id": "c1", "share": 0.1, "wallets": [{"address": "0x1", "share": 0.05}]},
+                               {"id": "top", "share": 0.4, "wallets": [{"address": "0x2", "share": 0.2}]}],
+                  "events": [{"id": "linked", "cluster": "c1", "ts": now - 60, "wallets": 3, "share_sold": 0.02},
+                             {"id": "holders", "cluster": "top", "ts": now - 60, "wallets": 5, "share_sold": 0.05}]}
+        (tmp_path / "coordinated_sells" / f"base-{tok}.json").write_text(json.dumps(report))
+    shown = {cs.shown_key("Base", "0xAB")}
+    assert asyncio.run(cs.notify_once(send, "u", now, shown=shown)) == 1
+    assert "INTOP" in sent[0]
+    assert asyncio.run(cs.notify_once(send, "u", now, shown=shown | {cs.shown_key("base", "0xcd")})) == 1
+    assert "ELSEWHERE" in sent[1]                    # entered the Top: its recent wave alerts now
+    assert len(sent) == 2                            # the "top" group never did

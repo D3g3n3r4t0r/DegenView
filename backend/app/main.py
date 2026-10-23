@@ -1578,6 +1578,33 @@ async def _onchain_reconcile_loop() -> None:
         await asyncio.sleep(20)
 
 
+_ALERT_TOKENS_TTL_S = 300
+_alert_tokens_cache: tuple[float, set[str]] = (0.0, set())
+
+
+def _alert_tokens() -> set[str]:
+    """The tokens a coordinated-sell alert may be about (Lorenzo, 23/10, "C"):
+    those in the Top (the arenas pool, both the shared one and whitekobra's)
+    and in Early, as coordinated_sells.shown_key. Watch is not here: the
+    stars live in each browser, the server never sees them. Read every 5 min;
+    an error gives the last set, or nothing (no alert beats a wrong one)."""
+    global _alert_tokens_cache
+    from app.trading.onchain import coordinated_sells
+    at, keys = _alert_tokens_cache
+    if time.time() - at < _ALERT_TOKENS_TTL_S:
+        return keys
+    try:
+        kobra_pool, kobra_early = _kobra_lists("")
+        rows = [*_top_entries(ARENA_POOL, ""), *(onchain_leaderboard.board().get("early") or []),
+                *kobra_pool, *kobra_early]
+        keys = {coordinated_sells.shown_key(e.get("chain"), e.get("token_address")) for e in rows
+                if e.get("chain") and e.get("token_address")}
+    except Exception:  # noqa: BLE001
+        logger.exception("coordinated sells: Top and Early not readable")
+    _alert_tokens_cache = (time.time(), keys)
+    return keys
+
+
 async def _coordinated_sells_loop() -> None:
     """Telegram alert when a cluster sells one token together (Lorenzo,
     22/10): reads the engine's reports every minute."""
@@ -1592,7 +1619,7 @@ async def _coordinated_sells_loop() -> None:
             continue
         try:
             await coordinated_sells.notify_once(
-                _to_gems_chats, f"{settings.public_base_url}/onchain-app.html#sells")
+                _to_gems_chats, f"{settings.public_base_url}/onchain-app.html#sells", shown=_alert_tokens())
         except Exception:  # noqa: BLE001
             logger.exception("coordinated sells loop")
         try:

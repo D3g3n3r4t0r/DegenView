@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0387", "Troppi avvisi di vendite coordinate nella chat gemme di whitekobra",
+     "Domanda in chat, 23/10: 'L'account whitekobra a differenza di Lorenzo sta ricevendo numerose notifiche sulle vendite coordinate nel gruppo Telegram per le gemme. Perche'?'. Gli avvisi vanno alla chat gemme di ogni account che ne ha una (whitekobra si', l'altro account no); erano tanti perche' contava anche il gruppo 'top' (i 50 holder piu' grandi, senza legami) e valeva per ogni token con un cluster. Scelta: 'Applica A e C'.",
+     "media"),
     ("seed-0386", "Pulsanti per mettere in pausa le notifiche Telegram dei gruppi",
      "Richiesta in chat, 23/10: 'Vorrei creare dei pulsanti attiva/disattiva notifiche Telegram sul sito classico con l'obiettivo di poter mettere temporaneamente in pausa le notifiche dei diversi gruppi'.",
      "media"),
