@@ -11,6 +11,8 @@
     href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   />
+  <link rel="icon" type="image/png" href="/static/engn/icon-192.png" />
+  <link rel="apple-touch-icon" href="/static/engn/icon-180.png" />
   <link rel="stylesheet" href="/static/style.css" />
   <!-- Vendorizzato invece di caricato da unpkg, stesso motivo del grafico piu' in basso. -->
 </head>
@@ -1612,6 +1614,7 @@
       <button type="button" class="auth-modal-close" data-close-auth>✕</button>
       <h3 id="auth-modal-title">Log in</h3>
       <p id="auth-gate-hint" class="panel-hint hidden">Log in or sign up to use Liquidity Engine — each user has their own watchlist and Telegram alerts.</p>
+      <p id="auth-invite-hint" class="panel-hint hidden">Sign-up is by invitation: only an invited email can create an account.</p>
       <form id="auth-form" class="auth-form">
         <label>Email <input type="email" id="auth-email" required autocomplete="email" /></label>
         <label>Password <input type="password" id="auth-password" required autocomplete="current-password" minlength="8" /></label>

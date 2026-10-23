@@ -6203,11 +6203,26 @@ body > .bg-hint, body > .hide-toast, body > .fx-burst { display: none !important
     background: var(--bg-panel);
     border-top: 1px solid var(--border);
   }
+  /* The pair is what the strip is for: it keeps its full width (up to a
+     cap, for long DEX names) and the strategy pill gives way instead —
+     "BTCU…" next to an untruncated "TREND EMA" had it backwards. */
   .mobile-chart-symbol {
     color: var(--ink);
     font-weight: 800;
     letter-spacing: -0.02em;
+    flex: 0 0 auto;
+    max-width: 46%;
   }
+  .mobile-strategy-pill {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* OHLC readout stops before the price scale instead of covering its top
+     label (the scale is wider than the 80px the desktop rule leaves). */
+  .chart-top-left { max-width: calc(100% - 104px); }
   .mobile-strategy-pill {
     background: var(--c-ink, #2f3a32);
     color: var(--c-on-ink, #f3efe6);
@@ -6461,6 +6476,11 @@ body > .bg-hint, body > .hide-toast, body > .fx-burst { display: none !important
     display: flex !important;
     flex: 0 0 360px;
   }
+  /* Levels + chart + watchlist left the chart at 392px (764px without
+     Levels, at 1440): the watchlist steps aside while Levels is open. */
+  .cockpit[data-area="analizza"]:has(#levels-panel.open) .right-panel {
+    display: none;
+  }
 
   /* Left Draw Rail & Bottom Chart Stats */
   .draw-rail {
@@ -6639,15 +6659,20 @@ body > .bg-hint, body > .hide-toast, body > .fx-burst { display: none !important
     border-radius: 30%;
   }
 
-  /* Alert & Trading Sub-Tabs Editorial Pill Bar */
+  /* Alert & Trading Sub-Tabs Editorial Pill Bar.
+     Wraps instead of scrolling: the scrollbar is hidden, so with a mouse the
+     pills past the right edge (Copy trading, On-chain wallet, Hide chart)
+     could not be reached at all, even at 1920px. */
   .subtabs {
     background: var(--bg-raised);
     padding: 5px;
-    border-radius: 999px;
+    border-radius: 20px;
     border: 1px solid var(--border);
     gap: 4px;
     margin: 0 0 16px;
     align-items: center;
+    flex-wrap: wrap;
+    overflow: visible;
   }
   .subtabs > button {
     border-radius: 999px;

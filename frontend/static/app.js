@@ -106,6 +106,10 @@ const COLORS_LIGHT = {
     else if (/^Gabriele\b/.test(head)) label = "RSI+BB Reversal";
     else if (/^Accumulo\b/.test(head)) label = "Accumulation / Distribution";
     else if (/^Claudio\b/.test(head)) label = head;
+    // Manual closes are journalled under Italian names (main.py, spot and
+    // futures close): kept as stored, shown in the site's language.
+    else if (head === "chiusura manuale futures") label = "Manual close (futures)";
+    else if (head === "chiusura manuale") label = "Manual close";
     return label + tail;
   }
   window.strategyLabel = strategyLabel;
@@ -1603,6 +1607,12 @@ const COLORS_LIGHT = {
   }
 
   async function loadBalances() {
+    // The server says up front whether this account may see the balances
+    // (_user_out "balances"): no request just to collect a 403.
+    if (state.user && state.user.balances === false) {
+      setBalancesVisible(false);
+      return;
+    }
     try {
       const resp = await fetch("/api/balances");
       if (resp.status === 403) {
@@ -1806,6 +1816,28 @@ const COLORS_LIGHT = {
     },
   });
   let moSuggestTimer = null;
+
+  // Opening Trading with a crypto pair on the chart: the manual order starts
+  // on that pair and its exchange instead of an empty field. Never overwrites
+  // what someone already typed — it is a real-money form.
+  function prefillManualPair() {
+    const input = el("manual-symbol");
+    const exchangeSel = el("manual-exchange");
+    const data = state.data;
+    if (!input || input.value.trim() || !data || data.asset_type !== "crypto") return;
+    if (exchangeSel && [...exchangeSel.options].some((o) => o.value === state.cryptoExchange)) {
+      exchangeSel.value = state.cryptoExchange;
+      exchangeSel.dispatchEvent(new Event("change"));
+    }
+    input.value = data.symbol;
+    // Same path as typing (confirm summary, execute state), minus the
+    // suggestion lookup: the pair comes from the chart, there is nothing to pick.
+    input.dispatchEvent(new Event("input"));
+    clearTimeout(moSuggestTimer);
+    if (MANUAL_PAIR_EXCHANGES.has(exchangeSel?.value)) {
+      manualPairHint(`✓ ${data.symbol} — from the chart`, "ok");
+    }
+  }
 
   function bindManualPairAutocomplete() {
     const input = el("manual-symbol");
@@ -2750,6 +2782,9 @@ const COLORS_LIGHT = {
     el("auth-switch-btn").textContent = authMode === "login" ? "Sign up" : "Log in";
     el("auth-error").classList.add("hidden");
     el("auth-gate-hint").classList.toggle("hidden", !authGateActive);
+    // Registration is limited to registration_allowed_emails: say so before
+    // someone fills the form and gets a bare "not allowed".
+    el("auth-invite-hint").classList.toggle("hidden", authMode !== "register");
     el("auth-form").reset();
     el("auth-modal").classList.remove("hidden");
     el("auth-modal").classList.toggle("gate", authGateActive);
@@ -4824,6 +4859,8 @@ const COLORS_LIGHT = {
     if (nearBottom) list.scrollTop = list.scrollHeight;
   }
 
+  // Called only for final states (done, stopped, failed): the header must
+  // stop saying "Optimizing" and the Stop button has nothing left to stop.
   function optProgressFoot(text, kind) {
     const foot = el("opt-progress-foot");
     if (!foot || !text) return;
@@ -4831,6 +4868,9 @@ const COLORS_LIGHT = {
     foot.className = "opt-progress-foot " + (kind || "");
     foot.classList.remove("hidden");
     el("opt-progress").classList.add(kind === "error" ? "failed" : "done");
+    el("opt-progress-stop").classList.add("hidden");
+    el("opt-progress-title").textContent =
+      kind === "ok" ? "Search finished" : kind === "error" ? "Search failed" : "Search stopped";
   }
 
   function startOptPolling() {
@@ -5599,6 +5639,9 @@ const COLORS_LIGHT = {
   }
 
   function pricePrecisionFor(price) {
+    // Five-digit prices (BTC): cents are noise on the axis and "540000.00"
+    // ate a third of the price scale on a phone.
+    if (price >= 10000) return { type: "price", precision: 0, minMove: 1 };
     if (!price || price <= 0 || price >= 1) return { type: "price", precision: 2, minMove: 0.01 };
     const magnitude = Math.floor(Math.log10(price));
     const precision = Math.min(8, Math.max(2, -magnitude + 3));
@@ -8982,9 +9025,48 @@ const COLORS_LIGHT = {
     thinnable.sort((a, b) => a.time - b.time);
     const thinned = _thinMarkers(thinnable, candles);
 
+    // Crowded chart (low timeframes, zoomed out): "IN long"/"OUT" labels
+    // piled into an unreadable smear. Arrows and colours stay, the words come
+    // back on zoom-in, and clicking a marker still opens its full popup.
+    // Executed orders ("● ...") keep their label: rare, and they matter.
+    _lastFixedMarkers = fixed;
+    _markerLabelsDense = markersTooDense(fixed);
+    if (_markerLabelsDense) {
+      fixed = fixed.map((m) => (String(m.text || "").startsWith("●") ? m : { ...m, text: "" }));
+    }
+    watchMarkerDensity();
+
     const markers = fixed.concat(thinned);
     markers.sort((a, b) => a.time - b.time);
     candleSeries.setMarkers(markers);
+  }
+
+  const MARKER_LABEL_MIN_PX = 46;
+  let _lastFixedMarkers = [];
+  let _markerLabelsDense = false;
+  let _markerDensityChart = null;
+
+  function markersTooDense(markers) {
+    if (!mainChart || !markers.length) return false;
+    const range = mainChart.timeScale().getVisibleRange();
+    const width = el("main-chart")?.clientWidth || 0;
+    if (!range || !width) return false;
+    const shown = markers.filter((m) => m.time >= range.from && m.time <= range.to).length;
+    return shown * MARKER_LABEL_MIN_PX > width;
+  }
+
+  // Re-checks on pan/zoom, once per frame, and redraws only when the answer
+  // flips: setMarkers on every scroll tick would be wasted work.
+  function watchMarkerDensity() {
+    if (!mainChart || _markerDensityChart === mainChart) return;
+    _markerDensityChart = mainChart;
+    let raf = 0;
+    mainChart.timeScale().subscribeVisibleTimeRangeChange(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (markersTooDense(_lastFixedMarkers) !== _markerLabelsDense) applyChartMarkers();
+      });
+    });
   }
 
   // Segnalazione 6da2bba6: le frecce della strategia e il numero di trade del
@@ -10060,15 +10142,23 @@ const COLORS_LIGHT = {
   }
 
   let suggestTimer = null;
+  // Bumped by every new query and by hideSuggestions(): a response that
+  // lands after the search was submitted (Enter within the 300ms debounce,
+  // or a slow /api/symbols) must not reopen the list over the chart.
+  let suggestSeq = 0;
 
   async function fetchSuggestions(query) {
+    const seq = ++suggestSeq;
+    let items;
     try {
       const url = `/api/symbols?query=${encodeURIComponent(query)}`;
       const resp = await fetch(url);
-      state.suggestions = resp.ok ? await resp.json() : [];
+      items = resp.ok ? await resp.json() : [];
     } catch (err) {
-      state.suggestions = [];
+      items = [];
     }
+    if (seq !== suggestSeq) return;
+    state.suggestions = items;
     state.activeSuggestionIndex = -1;
     renderSuggestions();
   }
@@ -10119,6 +10209,8 @@ const COLORS_LIGHT = {
   }
 
   function hideSuggestions() {
+    clearTimeout(suggestTimer);
+    suggestSeq++;
     state.suggestions = [];
     state.activeSuggestionIndex = -1;
     const list = el("ticker-suggestions");
@@ -10609,6 +10701,14 @@ const COLORS_LIGHT = {
     "riaperto": "Reopened",
     "scartato": "Dismissed",
   };
+  // Priorities are stored in Italian (issues.py _VALID_PRIORITY), like the
+  // statuses: shown raw they were the only Italian words on the board.
+  // The badge opts out of the dictionary (data-no-i18n): "High" there is the
+  // candle's high ("Massimo"), the wrong word for a priority.
+  const ISSUE_PRIO_LABEL = { bassa: "Low", media: "Medium", alta: "High" };
+  const issuePrioLabel = (p) => (window.i18n?.lang === "it"
+    ? String(p).charAt(0).toUpperCase() + String(p).slice(1)
+    : ISSUE_PRIO_LABEL[p] || p);
 
   async function loadIssues() {
     const list = el("issues-list");
@@ -10657,8 +10757,8 @@ const COLORS_LIGHT = {
     const counts = body.counts || {};
     const cEl = el("issues-counts");
     if (cEl) {
-      cEl.innerHTML = ["aperto", "riaperto", "in corso", "risolto"]
-        .filter((k) => counts[k] || k !== "riaperto")
+      cEl.innerHTML = ["aperto", "riaperto", "in corso", "risolto", "scartato"]
+        .filter((k) => counts[k] || (k !== "riaperto" && k !== "scartato"))
         .map((k) => `<span class="issues-count is-${k.replace(" ", "-")}">`
           + `<b>${counts[k] || 0}</b> ${ISSUE_STATUS_LABEL[k].toLowerCase()}</span>`)
         .join("");
@@ -10716,7 +10816,7 @@ const COLORS_LIGHT = {
       return `<details class="issue-card is-${(it.status || "aperto").replace(" ", "-")}"${openByDefault ? " open" : ""}>
         <summary class="issue-head">
           <span class="issue-status">${ISSUE_STATUS_LABEL[it.status] || it.status}</span>
-          <span class="issue-prio p-${it.priority}">${it.priority}</span>
+          <span class="issue-prio p-${it.priority}" data-no-i18n>${issuePrioLabel(it.priority)}</span>
           <span class="issue-title">${escapeHtml(it.title)}</span>
         </summary>
         ${it.detail ? `<p class="issue-detail">${escapeHtml(it.detail)}</p>` : ""}
@@ -11472,7 +11572,9 @@ const COLORS_LIGHT = {
     el("toolbar-indicators-btn")?.addEventListener("click", () => openIndicatorLibraryModal());
     // Fetched in the background at start-up (and refreshed over the cache),
     // so the library is ready before anyone opens it.
-    setTimeout(() => ensureIndicatorCatalog({ refresh: true }), 1500);
+    // Only for a signed-in user: the API is behind login, so an anonymous
+    // visit just collected a 401 (opening the library still fetches it).
+    setTimeout(() => { if (state.user) ensureIndicatorCatalog({ refresh: true }); }, 1500);
 
     renderActiveIndicatorChips();
     renderChartIndicatorLegend();
@@ -11619,7 +11721,7 @@ const COLORS_LIGHT = {
       });
     });
 
-    el("search-form").addEventListener("submit", (e) => {
+    el("search-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const symbol = el("ticker-input").value.trim();
       if (!symbol) return;
@@ -11630,13 +11732,26 @@ const COLORS_LIGHT = {
       // No suggestion explicitly picked (e.g. hit Enter right away) — if the
       // typed text exactly matches a suggestion already fetched, use its
       // asset type/exchange instead of falling back to whatever was set last.
-      const exact = state.suggestions.find((s) => s.symbol.toLowerCase() === symbol.toLowerCase());
+      const sameSymbol = (s) => s.symbol.toLowerCase() === symbol.toLowerCase();
+      let exact = state.suggestions.find(sameSymbol);
+      hideSuggestions();
+      closeMobileTickerSearch();
+      if (!exact) {
+        // Enter pressed before the debounced suggestions arrived: ask once,
+        // briefly, so a pair listed only on KuCoin/Binance is not analysed
+        // on the exchange of the previous ticker.
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 1500);
+          const resp = await fetch(`/api/symbols?query=${encodeURIComponent(symbol)}`, { signal: ctrl.signal });
+          clearTimeout(timer);
+          if (resp.ok) exact = (await resp.json()).find(sameSymbol);
+        } catch { /* lookup is best effort: keep the last exchange */ }
+      }
       if (exact) {
         state.assetType = exact.asset_type;
         if (exact.asset_type === "crypto") state.cryptoExchange = exact.provider;
       }
-      hideSuggestions();
-      closeMobileTickerSearch();
       runAnalysis(symbol);
     });
 
@@ -13347,7 +13462,10 @@ const COLORS_LIGHT = {
     cockpit.dataset.area = area;
     document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
 
-    if (area === "trading") loadPositions();
+    if (area === "trading") {
+      loadPositions();
+      prefillManualPair();
+    }
 
     // Lab e Analizza mostrano la stessa cosa (segnalazione 411e4c7c): pair,
     // timeframe, strategia e parametri passano dall'uno all'altro quando si

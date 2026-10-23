@@ -210,6 +210,7 @@ logger = logging.getLogger(__name__)
 from app.web_common import (  # noqa: E402  (shared with app/routes/)
     SUPPORTED_FUTURES_EXCHANGES_ORDERED,
     WatchlistStrategyToggleRequest,
+    _balance_visible,
     _client_ip,
     _device,
     _fire,
@@ -239,11 +240,6 @@ binance_provider = BinanceProvider()
 kucoin_provider = KucoinProvider()
 kraken_provider = KrakenProvider()
 dexscreener_provider = DexScreenerProvider()
-
-
-def _balance_visible(user: User) -> bool:
-    allowed = email_allowlist(settings.balance_visible_emails)
-    return not allowed or user.email.lower() in allowed
 
 
 def backtest_interval_for(ltf_interval: str) -> str:
@@ -8199,7 +8195,7 @@ async def start_optimize(
                     jobs_store.fail(job_id, exc.detail)
                     return
                 jobs_store.log(job_id, f"period {start_date or 'start'} → {end_date or 'end'}")
-            jobs_store.log(job_id, f"{len(df)} candele a {backtest_interval}")
+            jobs_store.log(job_id, f"{len(df)} candles at {backtest_interval}")
 
             def say(message: str) -> None:
                 jobs_store.log(job_id, message)
@@ -8688,6 +8684,19 @@ class _VersionedStatic(StaticFiles):
 app.mount("/static", _VersionedStatic(directory=str(FRONTEND_DIR / "static")), name="static")
 
 
+# Plain scripts of index.html beside app.js: hashed into _ASSET_VERSION and
+# served with it (_version_index_scripts).
+_INDEX_EXTRA_SCRIPTS = (
+    "lightweight-charts.standalone.production.js",
+    "i18n.js",
+    "simple-mode.js",
+    "diagnostics.js",
+    "copytrade.js",
+    "telegram-pause.js",
+    "subtabs.js",
+)
+
+
 def _compute_asset_version() -> str:
     """Hash of the actual CSS/JS bytes being served, not the git commit —
     correct even in the Docker image, which doesn't ship .git. Computed once
@@ -8711,6 +8720,7 @@ def _compute_asset_version() -> str:
             (FRONTEND_DIR / "static" / "engn-system.css").read_bytes(),
             (FRONTEND_DIR / "static" / "engn-landing.css").read_bytes(),
         ]
+        parts += [(FRONTEND_DIR / "static" / name).read_bytes() for name in _INDEX_EXTRA_SCRIPTS]
         parts += [m.read_bytes() for m in sorted((FRONTEND_DIR / "static" / "onchain").glob("*.js"))]
         # The app's skin (static/onchain/app.css) too: a CSS-only deploy must change the ?v=.
         parts += [m.read_bytes() for m in sorted((FRONTEND_DIR / "static" / "onchain").glob("*.css"))]
@@ -8720,6 +8730,15 @@ def _compute_asset_version() -> str:
 
 
 _ASSET_VERSION = _compute_asset_version()
+
+
+def _version_index_scripts(html: str) -> str:
+    """The classic page's other scripts get the same ?v= (and so the
+    immutable cache) as app.js: unversioned, each was revalidated on every
+    visit — seven round trips, 53 KB of chart library among them."""
+    for name in _INDEX_EXTRA_SCRIPTS:
+        html = html.replace(f'src="/static/{name}"', f'src="/static/{name}?v={_ASSET_VERSION}"')
+    return html
 
 # Pagina a se', niente app.js/style.css: e' quella che si apre scansionando
 # il QR per rivelare una chiave on-chain, deve restare piccola e verificabile
@@ -8762,8 +8781,7 @@ def _onchain_importmap(version: str, folder: str = "onchain") -> str:
 
 
 _INDEX_HTML = (
-    (FRONTEND_DIR / "index.html")
-    .read_text(encoding="utf-8")
+    _version_index_scripts((FRONTEND_DIR / "index.html").read_text(encoding="utf-8"))
     .replace('href="/static/style.css"', f'href="/static/style.css?v={_ASSET_VERSION}"')
     .replace('src="/static/wasm-engine.js"', f'src="/static/wasm-engine.js?v={_ASSET_VERSION}"')
     .replace('src="/static/app.js"', f'src="/static/app.js?v={_ASSET_VERSION}"')

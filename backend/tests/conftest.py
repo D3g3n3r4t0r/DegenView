@@ -30,6 +30,15 @@ def _private_projects_db(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _private_audit_log(monkeypatch, tmp_path):
+    """Order flow tests write fake fills to the audit log: never to the real
+    one (a run left 126 fake KASUSDT orders in a tracked file, 23/10)."""
+    from app.trading import audit
+    monkeypatch.setattr(audit, "_AUDIT_FILE", tmp_path / "audit.jsonl")
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _fresh_github_cache():
     """Stessa cosa per la cache e la quota di GitHub."""
     from app.trading.onchain import legit

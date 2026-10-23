@@ -48,6 +48,11 @@ def _telegram_allowed(user: User) -> bool:
     return not allowed or user.email.lower() in allowed
 
 
+def _balance_visible(user: User) -> bool:
+    allowed = email_allowlist(settings.balance_visible_emails)
+    return not allowed or user.email.lower() in allowed
+
+
 def _user_out(user: User) -> dict:
     return {
         "id": user.id,
@@ -56,6 +61,9 @@ def _user_out(user: User) -> dict:
         "telegram_signal_chat_id": getattr(user, "telegram_signal_chat_id", ""),
         "telegram_gems_chat_id": getattr(user, "telegram_gems_chat_id", ""),
         "guest": guest_links.is_guest(user),
+        # Lets the page skip GET /api/balances instead of probing it for a
+        # 403 (a red console error on every load for most accounts).
+        "balances": _balance_visible(user),
     }
 
 

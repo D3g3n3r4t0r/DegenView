@@ -962,7 +962,15 @@
   "Show chart": "Mostra grafico",
   "Hide chart": "Nascondi grafico",
   "Alert sections": "Sezioni di Alert",
-  "Trading sections": "Sezioni di Trading"
+  "Trading sections": "Sezioni di Trading",
+  "Search finished": "Ricerca finita",
+  "Search failed": "Ricerca fallita",
+  "Search stopped": "Ricerca fermata",
+  "Slope σ window": "Finestra σ della pendenza",
+  "Manual close": "Chiusura manuale",
+  "Manual close (futures)": "Chiusura manuale (futures)",
+  "Sign-up is by invitation: only an invited email can create an account.": "La registrazione è su invito: solo un'email invitata può creare un account.",
+  "dismissed": "scartate"
  },
  "patterns": [
   [
@@ -1136,6 +1144,18 @@
   [
    "^(\\d+) skipped$",
    "$1 saltati"
+  ],
+  [
+   "^(\\d+) candles at (\\S+)$",
+   "$1 candele a $2"
+  ],
+  [
+   "^✓ (.+) — from the chart$",
+   "✓ $1 — dal grafico"
+  ],
+  [
+   "^● Manual close(.*)$",
+   "● Chiusura manuale$1"
   ]
  ]
 }

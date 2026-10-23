@@ -65,6 +65,9 @@ async def list_issues(
         "in corso": sum(1 for i in items if i.get("status") == "in corso"),
         "risolto": sum(1 for i in items if i.get("status") == "risolto"),
         "riaperto": sum(1 for i in items if i.get("status") == "riaperto"),
+        # The board's "Resolved" column also holds the dismissed ones: without
+        # this the header said 379 resolved over a column of 388.
+        "scartato": sum(1 for i in items if i.get("status") == "scartato"),
     }
     # The badge on the menu entry only needs the numbers: the full board is
     # ~600 KB, and every page load fetched it just for them.

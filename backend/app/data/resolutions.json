@@ -1,4 +1,11 @@
 {
+  "seed-0399l": {
+    "status": "risolto",
+    "at": 1792786868,
+    "summary": "Scansione del sito classico con un browser automatico (desktop 1280/1440/1920 e mobile, ogni sezione, sotto-scheda e azione) e corretti tutti i difetti trovati. Su desktop le sotto-schede di Trading e Alert andavano oltre il bordo con la barra di scorrimento nascosta: Copy trading, On-chain wallet e Hide chart non si raggiungevano nemmeno a 1920px; ora vanno a capo. Il menu dei suggerimenti del ticker si riapriva sopra il grafico se si premeva Invio entro 300 ms; ora si chiude, e l'exchange viene ricavato anche in quel caso. Il registro degli ordini (audit.jsonl) veniva scritto dentro l'immagine invece che sul volume, quindi si perdeva a ogni deploy, e i test ci aggiungevano ordini finti finiti nel repo: ora sta in backend/data e i test usano un file temporaneo.",
+    "detail": "Altre correzioni: in Levels il grafico passava da 764 a 392px (la watchlist si nasconde mentre Levels e' aperto); la finestra dell'ottimizzazione finita diceva ancora 'Optimizing' con il pulsante Stop; i conteggi della bacheca non tornavano (379 contro 388: la colonna conta anche le scartate, ora mostrate a parte); testi italiani nella versione inglese (Confluenza, candele a, chiusura manuale, priorita' BASSA/ALTA); niente piu' errori in console a ogni caricamento (gruppi Telegram e catalogo indicatori chiesti da non loggati, saldi chiesti da account non abilitati, favicon mancante); avviso 'registrazione su invito'; ordine manuale precompilato con la coppia del grafico; TODO_LOG aggiornato su #7 e #10. Miglioramenti: etichette IN/OUT nascoste quando si accavallano (tornano zoomando, il clic sul marker apre sempre la spiegazione), prezzi da 5 cifre senza decimali sull'asse, simbolo intero e legenda OHLC che non copre l'asse su mobile, gli altri script della pagina versionati per la cache.",
+    "next": "Resta fuori una chiamata dell'app on-chain (saldo del wallet Solana che risponde 404 quando il wallet non esiste): vive in static/onchain/ e per le regole dell'app va chiesto per quali account cambiarla."
+  },
   "seed-0398l": {
     "status": "risolto",
     "at": 1792786400,
