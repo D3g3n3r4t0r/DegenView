@@ -3,7 +3,10 @@ import json
 import time
 from pathlib import Path
 
-_AUDIT_FILE = Path(__file__).resolve().parent.parent / "data" / "audit.jsonl"
+# backend/data, the persistent volume like every other store. It used to be
+# parent.parent (app/data, inside the image and the repo): in production the
+# log was lost at every deploy, and test runs appended to a tracked file.
+_AUDIT_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "audit.jsonl"
 
 
 def log_order(
@@ -34,6 +37,7 @@ def log_order(
         "result": result,
     }
     try:
+        _AUDIT_FILE.parent.mkdir(parents=True, exist_ok=True)
         with _AUDIT_FILE.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
     except Exception:

@@ -9,8 +9,8 @@ Il campo "quando" non è scritto a mano — è la data del commit, che git regis
 
 | id | stato | intervento | commit | data |
 |----|-------|------------|--------|------|
-| `#7` | diagnosticato | Causa radice trovata e misurata. Fix non ancora applicato. | — | 2026-09-03 |
-| `#10` | diagnosticato | Look-ahead confermato e quantificato. Fix non ancora applicato. | — | 2026-09-03 |
+| `#7` | risolto | Il backtest gira sul timeframe del grafico (`backtest_interval_for()` restituisce `ltf_interval`), non piu' forzato a `1d`. Bacheca: `seed-0007`. | vedi `seed-0007` in `resolutions.json` | 2026-09 |
+| `#10` | risolto | `_find_confirmation()` parte da `swing_pos + swing_length`: niente piu' conferme prima che lo swing sia visibile. Bacheca: `seed-0010`. | vedi `seed-0010` in `resolutions.json` | 2026-09 |
 
 ---
 

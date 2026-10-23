@@ -72,7 +72,7 @@ def compute_confluence(timeframes: dict[str, TimeframeAnalysis]) -> list[Conflue
                 timeframes=distinct_tfs,
                 types=types,
                 score=score,
-                label=f"Confluenza {'/'.join(tf.upper() for tf in distinct_tfs)}: {type_summary}",
+                label=f"Confluence {'/'.join(tf.upper() for tf in distinct_tfs)}: {type_summary}",
             )
         )
 

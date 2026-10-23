@@ -68,6 +68,17 @@
   document.getElementById("telegram-chat-id-save")?.addEventListener("click", () => setTimeout(load, 1500));
   // Also picks the section up after a login without a page reload.
   const signedIn = document.getElementById("alert-authenticated");
-  setInterval(() => { if (document.visibilityState === "visible" && signedIn && !signedIn.classList.contains("hidden")) load(); }, REFRESH_MS);
-  load();
+  const isSignedIn = () => signedIn && !signedIn.classList.contains("hidden");
+  setInterval(() => { if (document.visibilityState === "visible" && isSignedIn()) load(); }, REFRESH_MS);
+  // Asked only once someone is logged in: before, every anonymous visit
+  // collected a 401 here. The section appears as soon as login unhides it.
+  let wasSignedIn = isSignedIn();
+  if (signedIn) {
+    new MutationObserver(() => {
+      const now = isSignedIn();
+      if (now && !wasSignedIn) load();
+      wasSignedIn = now;
+    }).observe(signedIn, { attributes: true, attributeFilter: ["class"] });
+  }
+  if (wasSignedIn) load();
 })();

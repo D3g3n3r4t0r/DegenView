@@ -14,6 +14,7 @@ desktop-app/src-tauri/binaries/
 backend/uvicorn.log
 backend/data/
 # Dati generati a runtime (come issues.json): vivono sul volume, non in git.
+backend/app/data/audit.jsonl
 backend/app/data/server_errors.json
 backend/app/data/issues.json
 backend/app/data/issue_replies.json
