@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0388", "La nuova app (/app) non si apriva in automatico da computer dopo la PR #8",
+     "Lorenzo, 23/10: 'c'era poi questa https://github.com/D3g3n3r4t0r/DegenView/pull/8; che dice e' andata operativa ma il sito non risulta aggiornato secondo il nuovo standard (tramite desktop) mentre app tramite mobile funge perfettamente', poi 'PROCEDI'. L'interruttore onchain_next_desktop era rimasto spento in attesa di conferma.",
+     "alta"),
     ("seed-0387", "Troppi avvisi di vendite coordinate nella chat gemme di whitekobra",
      "Domanda in chat, 23/10: 'L'account whitekobra a differenza di Lorenzo sta ricevendo numerose notifiche sulle vendite coordinate nel gruppo Telegram per le gemme. Perche'?'. Gli avvisi vanno alla chat gemme di ogni account che ne ha una (whitekobra si', l'altro account no); erano tanti perche' contava anche il gruppo 'top' (i 50 holder piu' grandi, senza legami) e valeva per ogni token con un cluster. Scelta: 'Applica A e C'.",
      "media"),

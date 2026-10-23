@@ -51,6 +51,7 @@ def test_a_missing_build_falls_back_to_the_current_app(users):
 
 
 def test_open_to_all_serves_every_account_and_sends_phones_there(users, monkeypatch):
+    monkeypatch.setattr(main.settings, "onchain_next_desktop", False)
     monkeypatch.setattr(main.settings, "onchain_next_for_all", True)
     assert _get("other@example.com").status_code == 200
     assert _get(None).status_code == 303
@@ -76,6 +77,7 @@ def test_a_phone_is_sent_to_the_new_app_by_the_server(users, monkeypatch):
 
 
 def test_computers_stay_on_the_current_app_until_the_desktop_switch(users, monkeypatch):
+    monkeypatch.setattr(main.settings, "onchain_next_desktop", False)
     monkeypatch.setattr(main.settings, "onchain_next_for_all", True)
     desktop = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0"}
     with TestClient(main.app) as client:

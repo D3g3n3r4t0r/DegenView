@@ -3415,6 +3415,11 @@
     "at": 1792758306,
     "summary": "Nel sito classico, scheda Alert, sezione Telegram, c'e' 'Notifiche Telegram': per ogni gruppo del tuo account (chat principale, chat segnali, chat gemme; per l'amministratore anche i messaggi di sistema) si sceglie per quanto mettere in pausa (1 ora, 8 ore, 24 ore o finche' non riattivi) e lo si riattiva con un tasto. Un gruppo in pausa non riceve nulla; i messaggi non vengono accodati ma contati, e alla ripresa (a mano o alla scadenza) il bot scrive quanti ne sono stati saltati. Le risposte a quello che scrivi al bot arrivano comunque. La pausa vale per la chat: se un gruppo e' condiviso con altri account, tace per tutti."
   },
+  "seed-0388": {
+    "status": "risolto",
+    "at": 1792760600,
+    "summary": "Acceso l'interruttore desktop della nuova app (onchain_next_desktop = True): ora anche chi apre /onchain-app.html da computer viene portato automaticamente sulla nuova /app con la barra laterale e il layout desktop completo (come gia' succedeva da telefono). L'app vecchia resta raggiungibile con ?classic=1."
+  },
   "seed-0387": {
     "status": "risolto",
     "at": 1792759033,
