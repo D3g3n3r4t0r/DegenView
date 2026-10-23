@@ -1,3 +1,12 @@
+# 2026-10-23 — Redditivita' dei wallet EVM (Trading → Copy trading) — `seed-0415l`
+
+Lorenzo, 23/10: "nella sottosezione Profittabilita' del Wallet, aggiungi la possibilita' di fare check anche su wallet che fanno parte degli EVM, ovvero tutte le reti che sono state integrate nel wallet EVM".
+- `app/trading/onchain/wallet_pnl_evm.py`, una rete per analisi (selettore accanto all'indirizzo, solo per gli 0x). Riusa la parte pura di `wallet_pnl.py` (trade chiusi, finestre 24h/7g/30g, token).
+- Storico: `eth_getLogs` dei Transfer da/verso il wallet sui blocchi di 30 giorni (blocco iniziale per ricerca binaria), intervalli adattivi (si riducono su "range too large", poi ricrescono), 4 in parallelo, budget di 6 minuti per rete, massimo 3.000 transazioni; se non basta, `coverage.partial` e la data fin dove e' arrivato.
+- Importi senza saldi storici: `native_delta_from_tx` = valore inviato dal wallet + `Withdrawal` del token wrapped nella stessa transazione (cosi' paga un router quando si vende per ETH/BNB). Limite noto: un rimborso di ETH in eccesso fatto con una chiamata interna senza unwrap non si vede; su Monad (wrapped non configurato) le vendite per MON non si riconoscono; su Arc la moneta nativa e' USDC.
+- Ora dei trade interpolata fra blocchi letti; prezzi orari MEXC (ETHUSDT/BNBUSDT/MONUSDT).
+- Errori di rete mostrati come frase ("Base is not answering right now: try again in a minute."), il dettaglio nel log del server.
+
 # 2026-10-24 — Scanner Cluster Universale (`scan.octa.space` in 0,75s, `explorer.cheqd.io` in 0,49s), Nuova Mappa 3D Glassmorphic a 60fps e Generatore Auto-PR Self-Healing per Nuove Chain — `seed-0412l`, `seed-0413l`, `seed-0414l`
 
 Lorenzo, 24/10: "ma https://scan.octa.space/ ? i cluster non li scansiona però", "velocizza le scansioni su octa.space", "rifai la grafica dei cluster, le animazioni; e rendilo moderno ebello da vedewre", "in generale migliora la velocità delle ricerche per i cluster e tutta la sezione ad esso dedicata", "Ho provato con il link di un'altra chain (https://explorer.cheqd.io/accounts) e dice: Failed...", "dobbiamo rendere lo scan quasi compatibile con tutto e tutti, se una chain non é compatibile deve crearsi automaticamente una pull request per essere aggiornato e introdotto il supporto".

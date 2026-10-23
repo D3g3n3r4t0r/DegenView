@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0415l", "Redditivita' del wallet anche per i wallet EVM, su tutte le reti del wallet EVM",
+     "Lorenzo, 23/10: 'nella sottosezione Profittabilita' del Wallet, aggiungi la possibilita' di fare check anche su wallet che fanno parte degli EVM, ovvero tutte le reti che sono state integrate nel wallet EVM'.",
+     "media"),
     ("seed-0414l", "Scanner universale (explorer.cheqd.io) e creazione automatica di Pull Request per nuove chain",
      "Lorenzo, 24/10: 'Ho provato con il link di un\\'altra chain (https://explorer.cheqd.io/accounts) e dice Failed... dobbiamo rendere lo scan quasi compatibile con tutto e tutti, se una chain non e\\' compatibile deve crearsi automaticamente una pull request per essere aggiornato e introdotto il supporto'.",
      "alta"),

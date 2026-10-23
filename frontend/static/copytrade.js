@@ -108,7 +108,7 @@
         <span class="ct-grow"><b>${esc(f.label || short(f.address))}</b> <a class="ct-mono ct-dim" href="${walletUrl(f.address)}" target="_blank" rel="noopener">${short(f.address)}</a>${isEvm(f.address) ? ` ${chainChips(f.chains)}` : ""}</span>
         <span class="ct-dim">${f.copy === "both" ? "Entries and exits" : "Entries only"}</span>
         <span>${f.sizing === "pct" ? `${f.pct}%` : `${usd(f.fixed_usd)} / position`}</span>
-        ${isEvm(f.address) ? "" : `<button type="button" class="section-action-btn" data-act="analyze">Analyze</button>`}
+        <button type="button" class="section-action-btn" data-act="analyze">Analyze</button>
         <button type="button" class="section-action-btn" data-act="edit">Edit</button>
         <button type="button" class="section-action-btn" data-act="toggle">${f.mode === "off" ? "Resume" : "Pause"}</button>
         <button type="button" class="section-action-btn" data-act="remove">Remove</button>
@@ -250,7 +250,7 @@
     const f = state.follows.find((x) => x.address === address);
     try {
       if (btn.dataset.act === "edit") return fill(f);
-      if (btn.dataset.act === "analyze") return analyze(address);
+      if (btn.dataset.act === "analyze") return analyze(address, false, isEvm(address) ? (f.chains || [])[0] : null);
       if (btn.dataset.act === "remove") {
         if (!confirm("Stop following this wallet? Open copied positions stay, and can be sold from the list.")) return;
         await api(`/api/copytrade/follow/${encodeURIComponent(address)}`, { method: "DELETE" });
@@ -297,7 +297,8 @@
   let pnlRun = 0;
 
   const hold = (sec) => (sec == null ? "—" : sec < 3600 ? `${Math.max(1, Math.round(sec / 60))} min` : sec < 86400 ? `${(sec / 3600).toFixed(1)} h` : `${(sec / 86400).toFixed(1)} d`);
-  const tokenLink = (t, c) => `<a class="ct-mono" href="https://dexscreener.com/solana/${esc(t.mint)}" target="_blank" rel="noopener">${short(t.mint)}</a> <span class="${c}">${signed(t.pnl_usd)}</span>`;
+  let pnlChain = null;            // network of the result being drawn (null: Solana)
+  const tokenLink = (t, c) => `<a class="ct-mono" href="${tokenUrl(pnlChain, t.mint)}" target="_blank" rel="noopener">${short(t.mint)}</a> <span class="${c}">${signed(t.pnl_usd)}</span>`;
 
   function pnlCard(key, label, w) {
     const rows = [
@@ -323,20 +324,22 @@
 
   function renderPnl(r) {
     const c = r.coverage;
+    pnlChain = r.chain || null;
     const notes = [];
     if (r.bot_like) notes.push(`<p class="ct-warn">Looks like a bot: ${r.swaps_per_day} swaps a day. Copying it mostly pays fees.</p>`);
     if (c.partial) notes.push(`<p class="ct-warn">Too many transactions: only the latest ${c.transactions} were read.</p>`);
     if (c.unread) notes.push(`<p class="ct-reason">${c.unread} transactions could not be read and are missing.</p>`);
-    if (!c.sol_history) notes.push(`<p class="ct-reason">No SOL price history: today's price was used.</p>`);
+    if (r.chain ? !c.price_history : !c.sol_history) notes.push(`<p class="ct-reason">No ${r.chain ? esc(c.native) : "SOL"} price history: today's price was used.</p>`);
+    if (r.chain && c.partial && c.from) notes.push(`<p class="ct-warn">Read back to ${new Date(c.from * 1000).toLocaleDateString("en-GB")} only: the rest of the 30 days took too long.</p>`);
     const open = r.still_open.length ? `<ul class="ct-list">${r.still_open.map((o) => `
-      <li class="ct-row is-muted"><span class="ct-grow"><a class="ct-mono" href="https://dexscreener.com/solana/${esc(o.mint)}" target="_blank" rel="noopener">${short(o.mint)}</a> <span class="ct-dim">${ago(o.opened_at)}</span></span>
+      <li class="ct-row is-muted"><span class="ct-grow"><a class="ct-mono" href="${tokenUrl(r.chain, o.mint)}" target="_blank" rel="noopener">${short(o.mint)}</a> <span class="ct-dim">${ago(o.opened_at)}</span></span>
         <span class="ct-dim">put in</span> ${usd(o.invested_usd)}</li>`).join("")}</ul>` : "";
     const toks = r.tokens.length ? `<ul class="ct-list">${r.tokens.slice(0, 12).map((t) => `
-      <li class="ct-row"><span class="ct-grow"><a class="ct-mono" href="https://dexscreener.com/solana/${esc(t.mint)}" target="_blank" rel="noopener">${short(t.mint)}</a></span>
+      <li class="ct-row"><span class="ct-grow"><a class="ct-mono" href="${tokenUrl(r.chain, t.mint)}" target="_blank" rel="noopener">${short(t.mint)}</a></span>
         <span class="ct-dim">${t.trades} closed · ${t.wins} won</span> <b class="${cls(t.pnl_usd)}">${signed(t.pnl_usd) || "$0"}</b></li>`).join("")}</ul>` : "";
     const followed = state?.follows?.some((f) => f.address === r.address);
     $("ct-pnl-out").innerHTML = `
-      <p class="ct-dim ct-pnl-head"><a class="ct-mono" href="https://solscan.io/account/${esc(r.address)}" target="_blank" rel="noopener">${short(r.address)}</a>
+      <p class="ct-dim ct-pnl-head"><a class="ct-mono" href="${walletUrl(r.address)}" target="_blank" rel="noopener">${short(r.address)}</a>${r.chain ? ` ${chainChips([r.chain])}` : ""}
         · ${c.swaps} swaps in ${c.transactions} transactions · ${ago(r.generated_at)} ago
         ${followed ? "" : `<button type="button" class="section-action-btn" id="ct-pnl-follow">Copy this wallet</button>`}</p>
       <p class="ct-reason">Only trades opened and closed inside each period count: from the first buy to the last sell. Positions still open are left out.</p>
@@ -352,16 +355,29 @@
     });
   }
 
-  async function analyze(address, fresh = false) {
+  // EVM wallets are read one network at a time: the picker shows for 0x addresses only.
+  function pnlChainPicker() {
+    const sel = $("ct-pnl-chain");
+    if (state?.evm && !sel.options.length) {
+      sel.innerHTML = state.evm.chains.map((c) => `<option value="${esc(c.id)}">${esc(c.label)}</option>`).join("");
+    }
+    sel.hidden = !isEvm($("ct-pnl-address").value) || !sel.options.length;
+    return sel.hidden ? null : sel.value;
+  }
+  $("ct-pnl-address").addEventListener("input", pnlChainPicker);
+
+  async function analyze(address, fresh = false, chain = null) {
     const run = ++pnlRun;
     $("ct-pnl-address").value = address;
+    if (chain) { pnlChainPicker(); $("ct-pnl-chain").value = chain; }
+    chain = isEvm(address) ? (pnlChainPicker() || chain || "base") : null;
     $("ct-pnl").scrollIntoView({ block: "start", behavior: "smooth" });
     $("ct-pnl-go").disabled = true;
     $("ct-pnl-out").innerHTML = "";
     $("ct-pnl-progress").classList.remove("is-error");
     $("ct-pnl-progress").textContent = "Starting";
     try {
-      const start = await api("/api/copytrade/analyze", { method: "POST", body: JSON.stringify({ address, fresh }) });
+      const start = await api("/api/copytrade/analyze", { method: "POST", body: JSON.stringify({ address, fresh, chain }) });
       if (start.result) { renderPnl(start.result); $("ct-pnl-progress").textContent = ""; return; }
       let since = 0;
       for (;;) {
@@ -371,7 +387,8 @@
         since = job.log_total;
         if (job.log.length) $("ct-pnl-progress").textContent = job.log[job.log.length - 1].m;
         if (job.state === "finito") { renderPnl(job.result); $("ct-pnl-progress").textContent = ""; return; }
-        if (job.state !== "in corso") throw new Error(job.error || "Analysis failed");
+        // jobs.py prefixes the exception type ("RuntimeError: ..."): the sentence is what matters here.
+        if (job.state !== "in corso") throw new Error((job.error || "Analysis failed").replace(/^[A-Za-z]+Error: /, ""));
       }
     } catch (e) {
       $("ct-pnl-progress").textContent = e.message;
