@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0410l", "Deploy del copy trading EVM bloccato da due test Kraken, e ricerca Kraken vuota per un'ora dopo un errore",
+     "Lorenzo, 23/10: 'unisci la PR' (#25). Il deploy si e' fermato su due test del provider Kraken che dipendevano dall'ordine dei test e dalla rete vera.",
+     "alta"),
     ("seed-0409l", "Copy trading anche su wallet EVM: un indirizzo per Base, BNB Chain, Ethereum, Robinhood Chain, Arc e Monad",
      "Lorenzo, 23/10, con lo screenshot della lista indirizzi di FOMO: 'aggiungere alla sezione trading, copy trading, la possibilita' di avere, oltre al wallet Solana, anche un aggregatore di wallet EVM [...] permette di fare copy trading su tutte le reti EVM in questione'. Scelte: tutte e sei le reti, wallet Robinhood riusato come indirizzo EVM unico, KyberSwap per le quotazioni, tutti gli account.",
      "alta"),

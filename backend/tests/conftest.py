@@ -30,6 +30,20 @@ def _private_projects_db(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _fresh_symbol_lists():
+    """The exchanges' pair lists are cached for an hour, module-wide: a test
+    that reached the provider earlier (the /api/symbols search asks all of
+    them) left its list there, and the Kraken tests then read that instead of
+    their own fake answer — real pairs in CI, an empty list offline. One
+    unlucky CI run blocked a deploy this way (23/10)."""
+    from app.providers import binance, kraken, kucoin, mexc
+    for mod in (binance, kraken, kucoin, mexc):
+        mod._symbols_cache.clear()
+    getattr(mexc, "_last_good", {}).clear()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _private_audit_log(monkeypatch, tmp_path):
     """Order flow tests write fake fills to the audit log: never to the real
     one (a run left 126 fake KASUSDT orders in a tracked file, 23/10)."""
