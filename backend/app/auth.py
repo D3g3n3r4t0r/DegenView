@@ -177,15 +177,6 @@ def _save_users() -> None:
         if _USERS_FILE.exists() and _read_users_file(_USERS_FILE) is not None:
             os.replace(_USERS_FILE, _USERS_FILE.with_suffix(".json.bak"))
         os.replace(tmp, _USERS_FILE)
-    return
-    tmp = _USERS_FILE.with_suffix(".json.tmp")
-    with tmp.open("w", encoding="utf-8") as fh:
-        fh.write(payload)
-        fh.flush()
-        os.fsync(fh.fileno())
-    if _USERS_FILE.exists() and _read_users_file(_USERS_FILE) is not None:
-        os.replace(_USERS_FILE, _USERS_FILE.with_suffix(".json.bak"))
-    os.replace(tmp, _USERS_FILE)
 
 
 _load_users()

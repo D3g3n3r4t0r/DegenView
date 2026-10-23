@@ -55,8 +55,6 @@ def test_the_weekly_recap_leaves_private_changes_out():
 
 
 def test_deploy_notice_has_figures_details_and_renders_png_card(monkeypatch, tmp_path):
-    from app.notify import deploy_card
-
     sent_photos = []
 
     async def send_photo(photo_bytes, caption=""):
@@ -128,7 +126,7 @@ def test_security_hardening_invariants(tmp_path):
 
 def test_layer_clusters_kaspa_and_injective(tmp_path, monkeypatch):
     import httpx
-    from app.trading.onchain import coordinated_sells, layer_clusters, storage, sync_sells, sync_watch, wallet_clusters
+    from app.trading.onchain import layer_clusters, storage, sync_sells, wallet_clusters
 
     monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
     assert wallet_clusters.request("layer", "kas-kaspa", "KAS") is True

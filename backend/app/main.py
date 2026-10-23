@@ -1118,9 +1118,8 @@ async def _notify_deploy() -> None:
         await telegram.send_photo(card_png, caption="🚀 <b>DegenView · Scheda Grafica Nuovo Deploy</b>")
     rich_text = deploy_card.build_deploy_message(public_commits, repo=_GITHUB_REPO)
     await telegram.send_message(rich_text)
-    return
-    changelog = "\n".join(lines) if lines else "• (nessun commit trovato)"
-    await telegram.send_message(f"🚀 <b>Nuovo deploy completato</b>\n\n<b>Modifiche:</b>\n{changelog}")
+
+
 
 
 _LAST_RECAP_FILE = Path(__file__).resolve().parent.parent / "data" / "last_weekly_recap.txt"

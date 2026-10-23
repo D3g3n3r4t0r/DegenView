@@ -22,7 +22,6 @@ Three native paths, all using free keyless public APIs:
 
 from __future__ import annotations
 
-import asyncio
 from collections import Counter, defaultdict
 from datetime import datetime
 import logging
@@ -31,7 +30,7 @@ import time
 
 import httpx
 
-from app.trading.onchain import projects_db, storage, sync_sells, transfer_sources
+from app.trading.onchain import projects_db, sync_sells, transfer_sources
 
 logger = logging.getLogger(__name__)
 
@@ -801,7 +800,7 @@ async def build(token: str, symbol: str = "", created_at: float | None = None, c
     if resolved:
         target_chain, contract_addr = resolved
         if target_chain == "solana":
-            from app.trading.onchain import solana_clusters, sync_watch, wallet_clusters
+            from app.trading.onchain import solana_clusters, wallet_clusters
             import json
             from app.atomic_write import write_text_atomic
 
