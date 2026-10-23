@@ -37,6 +37,7 @@ import time
 import httpx
 
 from app import http_client
+from app.notify import pause
 
 from app.config import settings
 
@@ -99,11 +100,29 @@ def _is_paced(chat_id: str) -> bool:
         return False
 
 
-async def send_to(chat_id: str, text: str) -> bool:
+async def _paused(chat_id: str) -> bool:
+    """True while the chat is paused (pause.py): the message is counted, not
+    sent. A pause that ran out is lifted here, with its resume notice first."""
+    row = pause.state(chat_id)
+    if not row:
+        return False
+    if row.get("expired"):
+        pause.resume(chat_id)
+        async with http_client.pooled(timeout=15.0) as client:
+            await _deliver(client, chat_id, pause.resume_notice(row))
+        return False
+    pause.skipped(chat_id)
+    return True
+
+
+async def send_to(chat_id: str, text: str, *, force: bool = False) -> bool:
     """Send to one specific chat — used for per-user watchlist alerts now
     that each user has their own chat_id, instead of broadcasting to every
-    configured recipient."""
+    configured recipient. force: an answer to someone writing to the bot,
+    sent even while the chat's notifications are paused."""
     if not settings.telegram_bot_token or not chat_id:
+        return False
+    if not force and await _paused(chat_id):
         return False
     if not _is_paced(chat_id):
         async with http_client.pooled(timeout=15.0) as client:
@@ -212,6 +231,8 @@ async def send_message(text: str) -> bool:
         for chat_id in _chat_ids():
             if chat_id in reserved:
                 continue    # a signals-only chat never gets system messages
+            if await _paused(chat_id):
+                continue
             # Un destinatario che fallisce non ferma gli altri.
             sent_any = await _deliver(client, chat_id, text) or sent_any
     return sent_any

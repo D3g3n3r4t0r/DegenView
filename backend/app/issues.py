@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0386", "Pulsanti per mettere in pausa le notifiche Telegram dei gruppi",
+     "Richiesta in chat, 23/10: 'Vorrei creare dei pulsanti attiva/disattiva notifiche Telegram sul sito classico con l'obiettivo di poter mettere temporaneamente in pausa le notifiche dei diversi gruppi'.",
+     "media"),
     ("seed-0385", "MEXC: quantita' rifiutate, uscite del bot sbagliate, acquisti al 100% impossibili",
      "Richiesta in chat, 23/10: 'per il trading con denaro reale [...] utilizzeremo solo Mexc [...] fare i test su quello e verificare che sia tutto ok (chiavi, operazioni, ingressi, uscite, percentuale di portafoglio per il trade, ecc)'. Trovato con un MEXC finto che applica le regole vere e con prove sul MEXC vero: quantita' sempre a 6 decimali (MEXC ne accetta 2 su KAS, 0 su PEPE), uscite del bot calcolate come un nuovo ingresso, 100% del saldo senza margine, prezzo delle posizioni futures preso dal prezzo di carico.",
      "alta"),
