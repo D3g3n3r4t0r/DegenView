@@ -165,7 +165,7 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
-    ("seed-0393g", "Id delle voci in bacheca che si sovrappongono fra due account Claude",
+    ("seed-0395g", "Id delle voci in bacheca che si sovrappongono fra due account Claude",
      "Richiesta in chat, 23/10: 'Visto che lavoriamo in due persone da due account Claude diversi puoi gestire meglio i nomi delle voci seed per evitare sovrapposizioni? Magari puoi aggiungere una lettera ai numeri'. Due chat in parallelo avevano preso lo stesso id (seed-0377, seed-0388).",
      "bassa"),
     ("seed-0392", "Alert e Trading affollati: sezioni che saltano da una colonna all'altra",

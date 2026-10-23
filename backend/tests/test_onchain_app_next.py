@@ -97,3 +97,13 @@ def test_the_desktop_switch_sends_computers_to_the_new_app(users, monkeypatch):
         page = client.get("/onchain-app.html?classic=1", headers=desktop)
         assert page.status_code == 200 and "innerWidth<1100" not in page.text
         assert client.get("/app", headers=desktop).status_code == 200
+
+
+def test_lorenzo_and_whitekobra_share_the_exact_same_unified_app_by_default():
+    from types import SimpleNamespace
+    lorenzo = SimpleNamespace(email="lorenzo@example.com", is_guest=False)
+    kobra = SimpleNamespace(email="whitekobra@example.com", is_guest=False)
+    other = SimpleNamespace(email="anyone@example.com", is_guest=False)
+    for u in (lorenzo, kobra, other):
+        assert main._onchain_variant(u) == "current"
+        assert main._full_score(u) is True

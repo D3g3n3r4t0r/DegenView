@@ -63,7 +63,7 @@ la lettera dell'account da cui lavori:
 L'email non si scrive mai nel repo (e' pubblico): si confronta l'impronta. Il
 numero e' il successivo al piu' alto su `origin/main`, qualunque lettera abbia;
 `seed-0393g` e `seed-0393l` possono convivere. Le voci vecchie senza lettera
-restano come sono. La stessa chiave va in `resolutions.json` e nei messaggi di
+restano come sono (fino a `seed-0394`). La stessa chiave va in `resolutions.json` e nei messaggi di
 commit (le schede di deploy le riconoscono, `notify/deploy_card.py`); il test
 `test_new_seed_ids_carry_the_account_letter` blocca un id nuovo senza lettera.
 

@@ -61,11 +61,11 @@ class Settings(BaseSettings):
     # admin_emails, the default is the admin account. Lorenzo,
     # 16/10: his own account back to before that day's changes, everyone
     # else on the current app.
-    onchain_v1_emails: str = "sha256:ec987139be8d4d3991504dbe9bd5c8f92ce102948dee4e4305db5e84e841eb0e"
+    onchain_v1_emails: str = ""
     # Accounts that may open /app, the on-chain app rebuilt in React
     # (frontend/app-next). Lorenzo, 21/10: "non x whitekobra ma per lorenzo
     # devi farla": his own account only, everyone else keeps their app.
-    onchain_next_emails: str = "sha256:ec987139be8d4d3991504dbe9bd5c8f92ce102948dee4e4305db5e84e841eb0e"
+    onchain_next_emails: str = "sha256:ec987139be8d4d3991504dbe9bd5c8f92ce102948dee4e4305db5e84e841eb0e,sha256:fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"
     # Lorenzo, 22/10: "rinnova l'app per tutto [...] va applicato a tutti".
     # True opens /app to every signed-in account (guest links aside) and sends
     # phones from /onchain-app.html to it; False goes back to the list above.
@@ -79,16 +79,16 @@ class Settings(BaseSettings):
     # as the token page does (Lorenzo, 17/10: "per ora falla solo per
     # whitekobra"). Everyone else keeps the lighter rows, and the Telegram
     # alerts and the nightly run read the Top as before.
-    onchain_full_score_emails: str = "sha256:fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"
+    onchain_full_score_emails: str = "*"
     # Accounts that may set outside-service keys in Diagnostics (service_keys.py)
     # besides the admins: whitekobra (Lorenzo, 20/10, the Groq key).
-    service_keys_emails: str = "sha256:fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"
+    service_keys_emails: str = "sha256:ec987139be8d4d3991504dbe9bd5c8f92ce102948dee4e4305db5e84e841eb0e,sha256:fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"
     # Accounts with no cap on their Telegram alerts (gems, listings), their
     # chats paced instead (telegram.PACE_S between two messages), and gems
     # announced only on their first entry into any ranking (Lorenzo, 17/10:
     # "Solo per account whitekobra: Rimuovi tutti i limiti per tutte le chat
     # Telegram").
-    telegram_unlimited_emails: str = "sha256:fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"
+    telegram_unlimited_emails: str = "sha256:ec987139be8d4d3991504dbe9bd5c8f92ce102948dee4e4305db5e84e841eb0e,sha256:fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"
     # Off on Hetzner (deploy/docker-compose.yml): Caddy compresses there.
     app_gzip: bool = True
     # The gem research (discovery, pillars, DeepSeek readings, layers,

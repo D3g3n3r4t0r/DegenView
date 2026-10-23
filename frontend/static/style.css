@@ -7,32 +7,42 @@
    finanziaria: danno carattere dove un mono in piu' era solo rumore.
    ============================================================ */
 :root {
-  --bg: #f4f6f5;
-  --bg-panel: #ffffff;
-  --bg-raised: #eef1ef;
-  --bg-sunk: #e6eae7;
-  --grid: rgba(14, 21, 19, 0.05);
-  --grid-major: rgba(14, 21, 19, 0.10);
-  --border: #dfe4e1;
-  --border-strong: #c9d1cc;
-  --ink: #0e1513;
-  --ink-dim: #54615c;
-  --ink-faint: #84918c;
-  --accent: #0b8f68;
-  --accent-soft: rgba(11, 143, 104, 0.10);
-  --accent-ink: #ffffff;
-  --bull: #0a835f;
-  --bull-soft: rgba(11, 143, 104, 0.14);
-  --bear: #cf3a2a;
-  --bear-soft: rgba(207, 58, 42, 0.12);
-  --warn: #a86a06;
-  --warn-soft: rgba(168, 106, 6, 0.13);
-  --danger: #c02616;
-  --danger-soft: rgba(192, 38, 22, 0.12);
-  --violet: #5847c9;
-  --violet-soft: rgba(88, 71, 201, 0.12);
-  --stamp: #a86a06;
-  --shadow: 0 1px 2px rgba(16, 32, 28, 0.06), 0 8px 24px -16px rgba(16, 32, 28, 0.28);
+  --c-bg: #efeae0;
+  --c-card: #f8f5ef;
+  --c-pill: #e4dfd3;
+  --c-press: #d9d3c5;
+  --c-line: #e0d9cb;
+  --c-ink: #2f3a32;
+  --c-on-ink: #f3efe6;
+  --c-sage: #c9d4c0;
+  --c-on-sage: #2f3a32;
+
+  --bg: #efeae0;
+  --bg-panel: #f8f5ef;
+  --bg-raised: #e4dfd3;
+  --bg-sunk: #d9d3c5;
+  --grid: rgba(47, 58, 50, 0.06);
+  --grid-major: rgba(47, 58, 50, 0.12);
+  --border: #e0d9cb;
+  --border-strong: #cfc7b6;
+  --ink: #2f3a32;
+  --ink-dim: #4f5a4f;
+  --ink-faint: #687264;
+  --accent: #2f3a32;
+  --accent-soft: #c9d4c0;
+  --accent-ink: #f3efe6;
+  --bull: #2f7a4a;
+  --bull-soft: rgba(47, 122, 74, 0.14);
+  --bear: #b4472f;
+  --bear-soft: rgba(180, 71, 47, 0.12);
+  --warn: #8f6417;
+  --warn-soft: rgba(143, 100, 23, 0.13);
+  --danger: #b4472f;
+  --danger-soft: rgba(180, 71, 47, 0.12);
+  --violet: #5a527a;
+  --violet-soft: rgba(90, 82, 122, 0.12);
+  --stamp: #8f6417;
+  --shadow: 0 1px 2px rgba(47, 58, 50, 0.06), 0 8px 24px -12px rgba(47, 58, 50, 0.18);
 
   --font-sans: "Instrument Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --font-num: "Instrument Serif", Georgia, "Times New Roman", serif;
@@ -45,66 +55,46 @@
   --text-lg: 19px;
   --text-xl: 26px;
 
-  --radius: 7px;
+  --radius: 12px;
   --nav-w: 216px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #080b0c;
-    --bg-panel: #0f1416;
-    --bg-raised: #141b1e;
-    --bg-sunk: #1a2327;
-    --grid: rgba(230, 238, 236, 0.05);
-    --grid-major: rgba(230, 238, 236, 0.10);
-    --border: #1e282c;
-    --border-strong: #2c393e;
-    --ink: #e6eeec;
-    --ink-dim: #93a49f;
-    --ink-faint: #788781;
-    --accent: #4fd8a8;
-    --accent-soft: rgba(79, 216, 168, 0.12);
-    --accent-ink: #05130e;
-    --bull: #3ecf8e;
-    --bull-soft: rgba(62, 207, 142, 0.14);
-    --bear: #ff6b5e;
-    --bear-soft: rgba(255, 107, 94, 0.13);
-    --warn: #f2a93b;
-    --warn-soft: rgba(242, 169, 59, 0.14);
-    --danger: #ff4d3d;
-    --danger-soft: rgba(255, 77, 61, 0.14);
-    --violet: #9b8cff;
-    --violet-soft: rgba(155, 140, 255, 0.14);
-    --stamp: #f2a93b;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -20px rgba(0, 0, 0, 0.9);
-  }
-}
 :root[data-theme="dark"] {
-  --bg: #080b0c;
-  --bg-panel: #0f1416;
-  --bg-raised: #141b1e;
-  --bg-sunk: #1a2327;
-  --grid: rgba(230, 238, 236, 0.05);
-  --grid-major: rgba(230, 238, 236, 0.10);
-  --border: #1e282c;
-  --border-strong: #2c393e;
-  --ink: #e6eeec;
-  --ink-dim: #93a49f;
-  --ink-faint: #788781;
-  --accent: #4fd8a8;
-  --accent-soft: rgba(79, 216, 168, 0.12);
-  --accent-ink: #05130e;
-  --bull: #3ecf8e;
-  --bull-soft: rgba(62, 207, 142, 0.14);
-  --bear: #ff6b5e;
-  --bear-soft: rgba(255, 107, 94, 0.13);
-  --warn: #f2a93b;
-  --warn-soft: rgba(242, 169, 59, 0.14);
-  --danger: #ff4d3d;
-  --danger-soft: rgba(255, 77, 61, 0.14);
+  --c-bg: #111513;
+  --c-card: #1a1f1c;
+  --c-pill: #252b27;
+  --c-press: #2f3631;
+  --c-line: #29302b;
+  --c-ink: #25352b;
+  --c-on-ink: #f1f4ee;
+  --c-sage: #c9d4c0;
+  --c-on-sage: #1d2620;
+
+  --bg: #111513;
+  --bg-panel: #1a1f1c;
+  --bg-raised: #252b27;
+  --bg-sunk: #2f3631;
+  --grid: rgba(232, 235, 228, 0.05);
+  --grid-major: rgba(232, 235, 228, 0.10);
+  --border: #29302b;
+  --border-strong: #38423b;
+  --ink: #e8ebe4;
+  --ink-dim: #bcc3b8;
+  --ink-faint: #8f998c;
+  --accent: #c9d4c0;
+  --accent-soft: rgba(201, 212, 192, 0.16);
+  --accent-ink: #1d2620;
+  --bull: #63c48b;
+  --bull-soft: rgba(99, 196, 139, 0.14);
+  --bear: #ec8468;
+  --bear-soft: rgba(236, 132, 104, 0.14);
+  --warn: #d9a94f;
+  --warn-soft: rgba(217, 169, 79, 0.14);
+  --danger: #ec8468;
+  --danger-soft: rgba(236, 132, 104, 0.14);
   --violet: #9b8cff;
   --violet-soft: rgba(155, 140, 255, 0.14);
-  --stamp: #f2a93b;
+  --stamp: #d9a94f;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -20px rgba(0, 0, 0, 0.9);
 }
 
@@ -6201,3 +6191,117 @@ button, a, summary, label, select, input[type="checkbox"], input[type="radio"] {
 body > #ask-fab, body > .ask-sheet, body > .desk-empty, body > dialog.detail,
 body > .bg-hint, body > .hide-toast, body > .fx-burst { display: none !important; }
 .subtab-panel .telegram-setup, .subtab-panel .tg-pause { max-width: 720px; }
+
+
+/* === DESIGN 01: TODAY EDITORIAL PILL (/app#today) === */
+:root { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+.toolbar {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.sidenav {
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+.sidenav-item {
+  border-radius: 999px;
+  margin: 1px 8px;
+  padding: 8px 14px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.sidenav-item:hover {
+  background: var(--bg-raised);
+}
+.sidenav-item.active {
+  background: var(--c-sage, #c9d4c0);
+  color: var(--c-on-sage, #2f3a32);
+  font-weight: 700;
+}
+
+.subtabs {
+  border-bottom: 1px solid var(--border);
+}
+.subtabs > button[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+  font-weight: 700;
+}
+.subtabs > .subtabs-chart {
+  border-radius: 999px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Impostazione Mobile Design 01: Grafico a tutto schermo + Barra Pollice + 5 Tab Inferiori */
+@media (max-width: 760px) {
+  .mobile-chart-strip {
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+  }
+  .mobile-chart-symbol {
+    color: var(--ink);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .mobile-strategy-pill {
+    background: var(--c-ink, #2f3a32);
+    color: var(--c-on-ink, #f3efe6);
+    border-radius: 999px;
+    padding: 4px 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .tf-wheel {
+    border: 1.5px solid var(--ink);
+    border-radius: 16px;
+    background: var(--bg-panel);
+  }
+  .tf-wheel::before {
+    background: linear-gradient(var(--bg-panel), transparent);
+  }
+  .tf-wheel::after {
+    background: linear-gradient(transparent, var(--bg-panel));
+  }
+  .tf-wheel-band {
+    background: var(--c-ink, #2f3a32);
+    border-radius: 999px;
+  }
+  .tf-wheel-item {
+    color: var(--ink-faint);
+  }
+  .tf-wheel-item.near {
+    color: var(--ink-dim);
+  }
+  .tf-wheel-item.current {
+    color: var(--c-on-ink, #f3efe6);
+  }
+  .strip-tool-btn {
+    border-radius: 10px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--bg);
+    color: var(--ink-dim);
+  }
+  .strip-tool-btn.active {
+    background: var(--c-ink, #2f3a32);
+    color: var(--c-on-ink, #f3efe6);
+    border-color: var(--c-ink, #2f3a32);
+  }
+  .mobile-nav {
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+  }
+  .mobile-nav-btn,
+  .mobile-nav-link {
+    color: var(--ink-dim);
+  }
+  .mobile-nav-btn.active {
+    color: var(--ink);
+    font-weight: 700;
+    border-top: 2.5px solid var(--ink);
+  }
+}

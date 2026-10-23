@@ -4272,7 +4272,11 @@ ARENA_POOL = 500   # every gated project; the arenas set no fixed size
 
 
 def _full_score(user: User | None) -> bool:
-    return getattr(user, "email", None) in email_allowlist(settings.onchain_full_score_emails)
+    raw = (settings.onchain_full_score_emails or "").strip()
+    email = getattr(user, "email", None)
+    if raw == "*":
+        return bool(email)
+    return email in email_allowlist(raw)
 
 
 # Whitekobra's gems (Lorenzo, 17/10): one row per project, nothing launched

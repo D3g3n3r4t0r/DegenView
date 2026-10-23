@@ -696,6 +696,7 @@ def test_the_token_endpoint_carries_the_report_of_a_database_row(monkeypatch, _d
     now = time.time()
     row = _top_db_row(now)
     monkeypatch.setattr(m, "_require_onchain_enabled", lambda: None)
+    monkeypatch.setattr(m.settings, "onchain_full_score_emails", "")
     monkeypatch.setattr(m.onchain_projects_db, "get", lambda c, t: row)
     monkeypatch.setattr(m.onchain_strategy_lab, "get", lambda c, t: None)
     monkeypatch.setattr(m.onchain_alert_track, "for_token", lambda c, t: [])
@@ -790,6 +791,7 @@ def test_the_token_page_shows_the_top_s_score(monkeypatch):
     monkeypatch.setattr(m.onchain_judge, "get", lambda *a: None)
     monkeypatch.setattr(m.onchain_leaderboard, "board", lambda: {"entries": []})
     monkeypatch.setattr(m, "_require_onchain_enabled", lambda: None)
+    monkeypatch.setattr(m.settings, "onchain_full_score_emails", "")
     top = next(e for e in m._top_entries(10) if e["symbol"] == "OKP")
     page = asyncio.run(m.onchain_token("solana", "OKmint", user=User.model_construct(id="u", email="x@y.z")))
     assert page["entry"]["score"] == top["score"] != 12

@@ -3445,7 +3445,7 @@
     "at": 1792777084,
     "summary": "Alert e Trading sono a sotto-schede: Trading ha Posizioni, Ordine manuale, Bot e chiavi, Futures, Copy trading, Wallet on-chain; Alert ha I tuoi alert, Alert di prezzo, Storico, Telegram. Si vede una sezione alla volta, a tutta larghezza, e non salta piu' niente da una colonna all'altra (le colonne di prima si ribilanciavano a ogni apertura). In queste due schede il grafico parte chiuso e si riapre con 'Mostra grafico'; il sito ricorda la scheda e la scelta. Se Telegram non e' configurato, la sua scheda ha un pallino. Il funzionamento non cambia. Nello stesso giro: aprendo 'Wallet on-chain' nel sito classico, l'app on-chain metteva sulla pagina il suo pulsante dell'agente senza stili (un'icona grande quanto lo schermo) e un pannello che bloccava i clic; ora nel sito classico non compaiono."
   },
-  "seed-0393g": {
+  "seed-0395g": {
     "status": "risolto",
     "at": 1792781599,
     "summary": "Da ora ogni voce nuova della bacheca ha il numero piu' la lettera dell'account da cui lavora la chat: g per un account, l per l'altro (Lorenzo), per esempio seed-0393g e seed-0393l possono esistere insieme. La regola e' scritta in CLAUDE.md, che ogni chat legge all'inizio; la chat capisce da quale account lavora confrontando l'impronta dell'email, che nel repo non compare. Un test blocca gli id nuovi senza lettera o ripetuti, e le schede di deploy su Telegram riconoscono anche gli id con la lettera. Le voci vecchie restano come sono."

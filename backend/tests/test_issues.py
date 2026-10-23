@@ -405,7 +405,7 @@ def test_public_board_masks_author_emails(store):
 
 def test_new_seed_ids_carry_the_account_letter():
     """Two people, two Claude accounts (23/10): parallel chats took the same
-    seed-NNNN twice. Ids after seed-0392 carry the account letter, g or l
+    seed-NNNN twice. Ids after seed-0394 carry the account letter, g or l
     (CLAUDE.md), and no id appears twice."""
     import re
     from collections import Counter
@@ -420,7 +420,7 @@ def test_new_seed_ids_carry_the_account_letter():
         m = re.fullmatch(r"seed-(\d{4})([a-z]*)", sid)
         if not m:
             continue                     # an old named id (seed-timeframe-ladder-20260930)
-        if int(m.group(1)) > 392:
+        if int(m.group(1)) > 394:      # 0393 and 0394 were named before the rule
             assert m.group(2) in ("g", "l"), f"{sid}: a new entry needs the account letter g or l (CLAUDE.md)"
 
 
