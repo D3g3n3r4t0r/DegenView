@@ -1106,7 +1106,7 @@ async def build_from_url(
             parts = [p for p in urlparse_path(url) if p]
             if len(parts) >= 3 and parts[1] in ("pools", "tokens"):
                 gt_net, gt_kind, gt_id = parts[0].lower(), parts[1], parts[2]
-                target_chain = PAPRIKA_PLATFORM_TO_CHAIN.get(gt_net, gt_net)
+                target_chain = _PAPRIKA_PLATFORM_MAP.get(gt_net, gt_net)
                 if gt_kind == "tokens":
                     contract_addr = gt_id
                 else:
