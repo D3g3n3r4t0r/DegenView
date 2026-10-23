@@ -6155,6 +6155,8 @@ button, a, summary, label, select, input[type="checkbox"], input[type="radio"] {
 .ct-form .mo-row .mo-field-grow { flex: 1 1 260px; }
 .ct-pnl { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-sunk); }
 .ct-pnl-input { flex: 1 1 260px; }
+.ct-pnl-chain { flex: 0 0 auto; width: auto; }
+.ct-pnl-chain[hidden] { display: none; }
 .ct-pnl-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .8rem; margin: 4px 0 0; }
 .ct-pnl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
 .ct-pnl-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--bg); }

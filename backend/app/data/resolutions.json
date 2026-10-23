@@ -1,4 +1,10 @@
 {
+  "seed-0415l": {
+    "status": "risolto",
+    "at": 1792794660,
+    "summary": "In Trading → Copy trading → Wallet profitability si puo' analizzare anche un wallet EVM (0x…): compare la scelta della rete (Base, BNB Chain, Ethereum, Robinhood Chain, Monad, Arc) e l'analisi mostra, come per Solana, i trade aperti e chiusi nelle ultime 24 ore, 7 e 30 giorni, con profitto, rendimento, percentuale di vincite, migliori e peggiori. Una rete alla volta: 30 giorni sono milioni di blocchi, quindi un wallet molto attivo richiede alcuni minuti, e se il tempo non basta l'analisi dice fino a che data e' arrivata. Il pulsante Analyze funziona anche sui wallet EVM seguiti.",
+    "detail": "app/trading/onchain/wallet_pnl_evm.py: storico con eth_getLogs sui Transfer ERC-20 da e verso il wallet, a intervalli che si restringono quando un nodo li rifiuta; quanto pagato e ricevuto senza saldi storici (i nodi pubblici non li tengono): valore della transazione inviata dal wallet piu' l'ETH/BNB sbloccato dal router (evento Withdrawal del token wrapped); ora dei trade interpolata fra blocchi letti; prezzo della moneta all'ora del trade da MEXC (ETHUSDT, BNBUSDT, MONUSDT; Arc in USDC). Stesse regole e stessi calcoli della versione Solana (wallet_pnl.round_trips/window/tokens). 7 test in tests/test_wallet_pnl_evm.py. Nel sandbox le reti sono bloccate: la prima prova vera e' in produzione."
+  },
   "seed-0411l": {
     "status": "risolto",
     "at": 1792793948,

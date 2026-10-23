@@ -15,7 +15,7 @@ from app import jobs as jobs_store
 from app import guest as guest_links
 from app.config import settings
 from app.models import User
-from app.trading.onchain import copytrade, copytrade_evm, wallet_pnl
+from app.trading.onchain import copytrade, copytrade_evm, wallet_pnl, wallet_pnl_evm
 
 router = APIRouter()
 
@@ -52,6 +52,7 @@ class RealRequest(BaseModel):
 class AnalyzeRequest(BaseModel):
     address: str = Field(min_length=32, max_length=44)
     fresh: bool = False
+    chain: str | None = None            # EVM wallets: the network to read (copytrade_evm.CHAINS)
 
 
 class CloseRequest(BaseModel):
@@ -145,7 +146,17 @@ async def copytrade_analyze(body: AnalyzeRequest, user: User = Depends(_member))
     result younger than 15 minutes comes back at once."""
     address = body.address.strip()
     if copytrade_evm.is_evm(address):
-        raise HTTPException(status_code=400, detail="The profitability analysis reads Solana wallets only for now.")
+        # One network per run (23/10): 30 days of blocks are searched with eth_getLogs.
+        chain = body.chain or "base"
+        if chain not in copytrade_evm.CHAINS:
+            raise HTTPException(status_code=400, detail="Unknown network.")
+        hit = None if body.fresh else wallet_pnl_evm.cached(chain, address)
+        if hit:
+            return {"result": hit}
+        label = copytrade_evm.CHAINS[chain]["label"]
+        jid = jobs_store.create(user.id, "wallet_pnl", f"Profitability {address[:6]}…{address[-4:]} · {label}", page="/")
+        jobs_store.run(jid, lambda: wallet_pnl_evm.analyze(address, chain, lambda m: jobs_store.log(jid, m)))
+        return {"job": jid}
     if not copytrade.valid_address(address):
         raise HTTPException(status_code=400, detail="Not a Solana wallet address.")
     hit = None if body.fresh else wallet_pnl.cached(address)

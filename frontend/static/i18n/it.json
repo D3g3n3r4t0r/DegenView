@@ -995,7 +995,11 @@
   "Not a Solana or EVM wallet address.": "Non e' un indirizzo di wallet Solana o EVM.",
   "The profitability analysis reads Solana wallets only for now.": "Per ora l'analisi di redditivita' legge solo wallet Solana.",
   "no Uniswap pool for this pair on Robinhood Chain": "nessun pool Uniswap per questa coppia su Robinhood Chain",
-  "the quote returns nothing": "la quotazione non restituisce niente"
+  "the quote returns nothing": "la quotazione non restituisce niente",
+  "Before copying a wallet, see how its closed trades went (entry and exit) in the last 24 hours, 7 and 30 days, read from its own swaps on chain. A Solana wallet or an EVM one (0x…): an EVM wallet is read one network at a time, and a busy one takes a few minutes.": "Prima di copiare un wallet, guarda come sono andati i suoi trade chiusi (ingresso e uscita) nelle ultime 24 ore, 7 e 30 giorni, letti dai suoi swap on chain. Un wallet Solana o uno EVM (0x…): un wallet EVM si legge una rete alla volta, e se e' molto attivo servono alcuni minuti.",
+  "Network to read": "Rete da leggere",
+  "Not an EVM wallet address.": "Non e' un indirizzo di wallet EVM.",
+  "Unknown network.": "Rete sconosciuta."
  },
  "patterns": [
   [
@@ -1193,6 +1197,34 @@
   [
    "^KyberSwap does not trade on (.+)$",
    "KyberSwap non opera su $1"
+  ],
+  [
+   "^No (\\S+) price history: today's price was used\\.$",
+   "Nessuno storico del prezzo di $1: usato il prezzo di oggi."
+  ],
+  [
+   "^Read back to (.+) only: the rest of the 30 days took too long\\.$",
+   "Letto solo fino al $1: il resto dei 30 giorni richiedeva troppo tempo."
+  ],
+  [
+   "^(.+): finding the block of 30 days ago$",
+   "$1: ricerca del blocco di 30 giorni fa"
+  ],
+  [
+   "^(.+): ([\\d,]+) of ([\\d,]+) blocks searched, (\\d+) transactions$",
+   "$1: $2 blocchi letti su $3, $4 transazioni"
+  ],
+  [
+   "^(.+): read (\\d+) of (\\d+) transactions, (\\d+) swaps$",
+   "$1: lette $2 transazioni su $3, $4 swap"
+  ],
+  [
+   "^No (\\S+) price right now, try again\\.$",
+   "Nessun prezzo di $1 in questo momento, riprova."
+  ],
+  [
+   "^(?:RuntimeError: )?(.+) is not answering right now: try again in a minute\\.$",
+   "$1 non risponde in questo momento: riprova tra un minuto."
   ]
  ]
 }
