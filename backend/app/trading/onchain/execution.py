@@ -47,9 +47,13 @@ async def build_signed_solana_swap(private_key_hex: str, quote: dict) -> bytes:
     che questo modulo non chiama mai da solo."""
     kp = Keypair.from_bytes(bytes.fromhex(private_key_hex))
     async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(JUPITER_SWAP_URL, json={
-            "quoteResponse": quote["raw"], "userPublicKey": str(kp.pubkey()),
-        })
+        body = {"quoteResponse": quote["raw"], "userPublicKey": str(kp.pubkey())}
+        if quote.get("priority_max_lamports"):
+            # Copy trading: a priority fee (capped) so the copy lands seconds, not blocks, later.
+            body["dynamicComputeUnitLimit"] = True
+            body["prioritizationFeeLamports"] = {"priorityLevelWithMaxLamports": {
+                "maxLamports": int(quote["priority_max_lamports"]), "priorityLevel": "veryHigh"}}
+        resp = await client.post(JUPITER_SWAP_URL, json=body)
     if resp.status_code != 200:
         raise RuntimeError(f"Jupiter /swap ha risposto {resp.status_code}: {resp.text[:200]}")
     body = resp.json()
