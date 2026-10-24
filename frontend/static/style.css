@@ -7194,3 +7194,139 @@ html[data-theme="dark"] .tv-comp-chg.down {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ── Workspace: Alert, Trading, Strategies without the chart (24/10) ──────
+   Lorenzo, 24/10: "le sezioni Alert, Trading e Strategie non hanno la
+   necessita' di mostrare il grafico, quindi puoi sfruttare tutta la pagina".
+   On desktop these three areas hide the chart and become a page: centred,
+   capped width (a line as long as the screen does not read), the sub-tab bar
+   as page navigation, and each sub-section laid out by what it does — a form
+   in a narrow column, its list as a grid of cards beside it. Phones are
+   untouched (one section at a time already). */
+@media (min-width: 761px) {
+  .cockpit[data-area="alert"] .chart-area,
+  .cockpit[data-area="trading"] .chart-area,
+  .cockpit[data-area="strategie"] .chart-area { display: none !important; }
+
+  .cockpit[data-area="alert"] .right-panel,
+  .cockpit[data-area="trading"] .right-panel,
+  .cockpit[data-area="strategie"] .right-panel {
+    flex: 1 1 auto; max-width: none; min-width: 0;
+  }
+  .cockpit[data-area="alert"] .tab-content.active,
+  .cockpit[data-area="trading"] .tab-content.active,
+  .cockpit[data-area="strategie"] .tab-content.active { padding: 28px clamp(20px, 3vw, 44px) 64px; }
+  .cockpit[data-area="alert"] .tab-content.active > .panel,
+  .cockpit[data-area="trading"] .tab-content.active > .panel,
+  .cockpit[data-area="strategie"] .tab-content.active > .panel {
+    max-width: 1440px; width: 100%; margin: 0 auto;
+    background: transparent; border: 0; box-shadow: none; padding: 0;
+  }
+
+  /* Page title: the panel heading (Trading's is a <summary>, kept open by subtabs.js). */
+  .cockpit[data-area="alert"] .tab-content.active > .panel > h3,
+  .cockpit[data-area="strategie"] .tab-content.active > .panel > h3,
+  .cockpit[data-area="trading"] .tab-content.active > .panel > summary {
+    font-family: var(--font-display, var(--font-sans)); font-size: 1.7rem; font-weight: 700;
+    letter-spacing: -0.01em; color: var(--ink); margin: 0 0 6px; padding: 0;
+    display: flex; align-items: center; gap: 12px; cursor: default; list-style: none;
+  }
+  .cockpit[data-area="trading"] .tab-content.active > .panel > summary::-webkit-details-marker { display: none; }
+  .cockpit[data-area="trading"] .tab-content.active > .panel > summary::before { content: none; }
+  .cockpit[data-area="trading"] .tab-content.active > .panel > .panel-hint,
+  .cockpit[data-area="strategie"] .tab-content.active > .panel > .panel-hint { max-width: 760px; margin: 0 0 18px; }
+
+  /* The sub-tab bar is the page's navigation: a full row, comfortable targets. */
+  .cockpit[data-area="alert"] .subtabs,
+  .cockpit[data-area="trading"] .subtabs { margin: 14px 0 26px; width: fit-content; max-width: 100%; }
+  .cockpit[data-area="alert"] .subtabs > button,
+  .cockpit[data-area="trading"] .subtabs > button { padding: 9px 18px; font-size: 13.5px; }
+
+  /* A sub-section's own title repeats the tab just chosen: smaller, as a section head. */
+  .cockpit[data-area="trading"] .opera-sub.subtab-panel > summary {
+    font-size: 1.05rem; padding: 0 0 14px; border-bottom: 1px solid var(--border); margin-bottom: 18px;
+  }
+
+  /* Card grids for every list. */
+  .cockpit[data-area="alert"] .watchlist-cards,
+  .cockpit[data-area="alert"] .pa-list,
+  .cockpit[data-area="alert"] .alert-log-cards,
+  .cockpit[data-area="strategie"] .archive-cards,
+  .cockpit[data-area="trading"] .positions-list,
+  .cockpit[data-area="trading"] #trading-credentials-list,
+  .cockpit[data-area="trading"] #futures-credentials-list {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; align-items: start;
+    margin-top: 0;
+  }
+  .cockpit[data-area="strategie"] .archive-cards { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 18px; }
+  .cockpit[data-area="alert"] .alert-log-cards { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+  .cockpit[data-area="trading"] .journal-list { max-width: none; }
+
+  /* Forms centred as cards where nothing sits beside them. */
+  .cockpit[data-area="trading"] [data-subtab="manual"] .manual-order-form {
+    max-width: 620px; margin: 0 auto; padding: 22px 24px; border: 1px solid var(--border);
+    border-radius: 18px; background: var(--bg-panel);
+  }
+  .cockpit[data-area="trading"] #onchain-embed { max-width: 1100px; margin: 0 auto; }
+
+  /* Futures keeps its warning border: its padding comes back (the sub-tab
+     rule zeroes every panel's, and the text touched the border). */
+  .cockpit[data-area="trading"] .opera-sub.subtab-panel > .futures-section { padding: 18px 22px; }
+
+  /* Heading rows: title and count together, actions grouped on the right,
+     instead of three things spread across 1,400px. */
+  .cockpit[data-area="alert"] .section-title-row,
+  .cockpit[data-area="trading"] .section-title-row,
+  .cockpit[data-area="strategie"] .section-title-row { justify-content: flex-start; gap: 10px; }
+  .cockpit[data-area="alert"] .section-title-row > .section-action-btn:first-of-type,
+  .cockpit[data-area="trading"] .section-title-row > .section-action-btn:first-of-type,
+  .cockpit[data-area="strategie"] .section-title-row > .section-action-btn:first-of-type { margin-left: auto; }
+}
+
+/* Two columns once there is room: the form on the left (it stays in view
+   while the list scrolls), what it produces on the right. */
+@media (min-width: 1100px) {
+  /* Alert → Your alerts: add-a-ticker column + alert cards. */
+  .cockpit[data-area="alert"] [data-subtab="alerts"]:not([hidden]),
+  .cockpit[data-area="alert"] [data-subtab="price"]:not([hidden]),
+  .cockpit[data-area="alert"] [data-subtab="telegram"]:not([hidden]) {
+    display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+    column-gap: 32px; align-items: start;
+  }
+  .cockpit[data-area="alert"] [data-subtab="alerts"] > *,
+  .cockpit[data-area="alert"] [data-subtab="price"] > * { grid-column: 1; }
+  .cockpit[data-area="alert"] [data-subtab="alerts"] > #watchlist-list,
+  .cockpit[data-area="alert"] [data-subtab="price"] > #price-alerts-list { grid-column: 2; grid-row: 1 / span 12; }
+  .cockpit[data-area="alert"] [data-subtab="alerts"] > .section-title-row,
+  .cockpit[data-area="alert"] [data-subtab="price"] > .section-title-row { margin-top: 0 !important; }
+
+  /* The price alert form: a narrow column, so its fields stack two by two. */
+  .cockpit[data-area="alert"] .pa-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cockpit[data-area="alert"] .pa-form input[type="text"],
+  .cockpit[data-area="alert"] .pa-form input[type="number"] { width: auto; min-width: 0; }
+  .cockpit[data-area="alert"] .pa-form #pa-note { grid-column: 1 / -1; }
+  .cockpit[data-area="alert"] .pa-form button[type="submit"] { grid-column: 1 / -1; padding: 9px; }
+
+  /* Telegram: the chat-id form on the left, status, checks and pauses on the right. */
+  .cockpit[data-area="alert"] [data-subtab="telegram"] > * { grid-column: 2; }
+  .cockpit[data-area="alert"] [data-subtab="telegram"] > #telegram-setup { grid-column: 1; grid-row: 1 / span 6; }
+
+  /* Futures: the order ticket on the left, the keys beside it. */
+  .cockpit[data-area="trading"] .futures-section {
+    display: grid; grid-template-columns: minmax(420px, 560px) minmax(0, 1fr); column-gap: 32px; align-items: start;
+  }
+  .cockpit[data-area="trading"] .futures-section > * { grid-column: 1 / -1; }
+  .cockpit[data-area="trading"] .futures-section > .futures-order-form { grid-column: 1; grid-row: 2; }
+  .cockpit[data-area="trading"] .futures-section > #futures-credentials-list {
+    grid-column: 2; grid-row: 2; grid-template-columns: 1fr;
+  }
+
+  /* Copy trading: wallet and follow form | profitability; lists full width below. */
+  .cockpit[data-area="trading"] .trading-auto-section.ct {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 32px; align-items: start;
+  }
+  .cockpit[data-area="trading"] .trading-auto-section.ct > * { grid-column: 1 / -1; }
+  .cockpit[data-area="trading"] .trading-auto-section.ct > #ct-evm,
+  .cockpit[data-area="trading"] .trading-auto-section.ct > #ct-form { grid-column: 1; }
+  .cockpit[data-area="trading"] .trading-auto-section.ct > #ct-pnl { grid-column: 2; grid-row: 3 / span 2; margin-top: 0; }
+}

@@ -10,7 +10,6 @@ from app.providers import composites, composites_snapshot
 from app.providers.composites import (
     ALL_CONSTITUENTS,
     COMPOSITES,
-    CompositeProvider,
     get_composite_meta,
     is_composite_symbol,
     resolve_composite,

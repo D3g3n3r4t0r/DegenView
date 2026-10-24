@@ -7,12 +7,10 @@
  * sibling panels with data-subtab. A panel that is a <details> is opened
  * when its tab is chosen and closed when another is, so what loads on
  * opening (copy trading, the on-chain wallet) still loads then; a <details>
- * opened by other code switches to its tab. In these two areas the chart
- * starts closed (cockpit.chart-mini) and a button in the bar brings it back. */
+ * opened by other code switches to its tab. On desktop these areas show no
+ * chart at all (24/10, style.css "Workspace"). */
 (function () {
   "use strict";
-  const CHART_KEY = "lae-chart-mini";
-  const CHART_AREAS = new Set(["alert", "trading"]);
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
@@ -72,28 +70,17 @@
     paint();
   }
 
-  function setupChart() {
-    const cockpit = document.querySelector(".cockpit");
-    if (!cockpit) return;
-    const buttons = [...document.querySelectorAll("[data-chart-toggle]")];
-    const mini = () => store.get(CHART_KEY) === "1";
-    const apply = () => {
-      const on = mini() && CHART_AREAS.has(cockpit.dataset.area);
-      const was = cockpit.classList.contains("chart-mini");
-      cockpit.classList.toggle("chart-mini", on);
-      for (const b of buttons) {
-        b.textContent = mini() ? "Show chart" : "Hide chart";
-        b.setAttribute("aria-pressed", String(!mini()));
-      }
-      // The chart measures itself on resize: tell it its box changed.
-      if (was !== on) requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
-    };
-    for (const b of buttons) b.addEventListener("click", () => { store.set(CHART_KEY, mini() ? "0" : "1"); apply(); });
-    new MutationObserver(apply).observe(cockpit, { attributes: true, attributeFilter: ["data-area"] });
-    apply();
+  // Alert, Trading and Strategies have no chart on desktop (24/10, CSS
+  // "Workspace"): the Trading heading is the page title there, and a click
+  // on it must not fold the whole page away.
+  function keepTradingOpen() {
+    const head = document.querySelector('[data-tab-content="trading"] > details.opera-advanced > summary');
+    head?.addEventListener("click", (e) => {
+      if (window.matchMedia("(min-width: 761px)").matches) e.preventDefault();
+    });
   }
 
   document.querySelectorAll("[data-subtabs]").forEach(setup);
   watchTelegram();
-  setupChart();
+  keepTradingOpen();
 })();

@@ -1,4 +1,15 @@
 {
+  "seed-0422l": {
+    "status": "risolto",
+    "at": 1792828323,
+    "summary": "Il deploy di main era fermo dal commit e31bd9f: il controllo di stile segnalava una variabile 'l' ambigua in providers/composites.py e un import inutilizzato in un test, e un test del client RPC contava ancora sul secondo nodo Solana (Ankr) appena tolto. Variabile rinominata 'lo' (nessun cambio di comportamento), import tolto, e il test del passaggio al secondo nodo ora usa Base, che ne ha due."
+  },
+  "seed-0421l": {
+    "status": "risolto",
+    "at": 1792828323,
+    "summary": "Su desktop Alert, Trading e Strategie non mostrano piu' il grafico e diventano pagine a tutta larghezza (fino a 1440 px, centrate): titolo di pagina, barra delle sotto-sezioni come navigazione, e ogni sotto-sezione disposta secondo quello che fa. I moduli (aggiungere un alert, un alert di prezzo, i chat id di Telegram) stanno in una colonna a sinistra e quello che producono a destra come griglia di schede; le strategie archiviate sono colonne per coppia; posizioni e chiavi in griglia; l'ordine manuale e' una scheda centrata; nei futures il ticket d'ordine sta accanto alle chiavi; nel copy trading wallet e modulo a sinistra, analisi di redditivita' a destra, liste e registro sotto. Tolto il pulsante Mostra/Nascondi grafico. Il telefono non cambia.",
+    "detail": "style.css, blocco 'Workspace' (min-width 761px; due colonne da 1100px). subtabs.js: tolta la gestione del grafico, il titolo di Trading non chiude piu' la pagina. index.html: titolo 'Trading', tolti i due pulsanti del grafico. Verificato con Playwright a 1000, 1280 e 1440 px: nessun errore, nessuno sbordamento orizzontale, il grafico torna intero in Analizza."
+  },
   "seed-0416l": {
     "status": "risolto",
     "at": 1792795329,

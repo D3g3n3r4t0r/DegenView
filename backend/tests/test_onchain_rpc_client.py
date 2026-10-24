@@ -44,16 +44,20 @@ def test_primary_success_no_fallback(monkeypatch):
 
 
 def test_transport_failure_falls_back_to_secondary(monkeypatch):
+    """Base has two endpoints (publicnode, then mainnet.base.org). Solana used
+    to be the example, until its Ankr fallback was dropped (e31bd9f, 24/10)
+    and this test blocked every deploy."""
     calls = []
 
     async def fake_post(self, url, json=None):
         calls.append(url)
-        if "ankr" not in url:
+        if "mainnet.base.org" not in url:
             raise httpx.ConnectTimeout("timeout", request=None)
         return _FakeResponse({"jsonrpc": "2.0", "id": 1, "result": {"value": 7}})
 
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
-    result = _run(rpc_client.call_rpc("solana", "getBalance", ["addr"]))
+    assert len(rpc_client._ENDPOINTS["base"]) == 2
+    result = _run(rpc_client.call_rpc("base", "eth_getBalance", ["addr"]))
     assert result == {"value": 7}
     assert len(calls) == 2
 
