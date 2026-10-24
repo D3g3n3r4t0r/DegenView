@@ -1,4 +1,10 @@
 {
+  "seed-0428l": {
+    "status": "risolto",
+    "at": 1792833600,
+    "summary": "Ridisegnato il layout desktop di Archivio Strategie e Trading → Copy trading per eliminare sovrapposizioni di testo, sbordamenti di indirizzi lunghi e spazi vuoti.",
+    "detail": "In Archivio Strategie (.cockpit[data-area='strategie']): i gruppi per simbolo (.arch-group) ora occupano l'intera larghezza con intestazione troncata ad ellissi per contratti lunghi (es. FLIP@ROBINHOOD:0X408AF...), mentre la griglia multi-colonna viene applicata alle singole schede (.arch-group-cards) all'interno di ciascun gruppo e gli errori lunghi (.arch-failed) vanno a capo senza uscire dai bordi. In Copy trading (.trading-auto-section.ct): modulo di follow (#ct-form) e analisi di profittabilità (#ct-pnl) sono affiancati alla stessa altezza nella prima riga; il Wallet EVM (#ct-evm) usa una griglia compatta multi-colonna per le 6 reti; Wallet seguiti (#ct-follows) e Posizioni aperte copiate (#ct-positions) sono affiancati su due colonne con contenitori card dedicati."
+  },
   "seed-0423l": {
     "status": "risolto",
     "at": 1792829127,

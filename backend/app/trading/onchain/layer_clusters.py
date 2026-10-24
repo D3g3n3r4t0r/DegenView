@@ -2107,7 +2107,7 @@ async def detect_chain_for_address(raw_input: str, hint_chain: str = "") -> dict
                 return res
 
         # Check canonical L1/L2 contracts table
-        for cid, (c_chain, c_addr) in _CANONICAL_CONTRACTS.items():
+        for cid, (c_chain, c_addr, _dec) in KNOWN_LAYER_CONTRACTS.items():
             if c_addr.lower() == addr:
                 _, c_sym = resolve_layer_token(cid)
                 if c_chain in wallet_clusters.CHAINS and c_chain != "layer":

@@ -207,6 +207,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0428l", "Layout e distribuzione dello spazio migliorati in Archivio Strategie e Trading → Copy trading",
+     "Lorenzo, 24/10 (con 2 screenshot): 'sta parte del sito degenview è un pò incasinata come layout e scelta di come occupare lo spazio', 'anche questa migliorabile'.",
+     "alta"),
     ("seed-0427l", "Rilevamento automatico della chain dei cluster in base all'indirizzo inserito",
      "Lorenzo, 24/10: 'la chain dei cluster deve essere indivudata automaticamente in base all'indiriizzo che viene inserito', 'dai priorità massima al push di questa task dei cluster'.",
      "alta"),

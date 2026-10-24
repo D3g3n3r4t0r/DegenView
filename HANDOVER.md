@@ -1,3 +1,13 @@
+# 2026-10-24 — Layout e Distribuzione dello Spazio in Archivio Strategie e Trading → Copy trading (`seed-0428l`)
+
+Lorenzo, 24/10 (con 2 screenshot): "sta parte del sito degenview è un pò incasinata come layout e scelta di come occupare lo spazio", "anche questa migliorabile".
+- **Archivio Strategie (`frontend/static/style.css`, `.cockpit[data-area="strategie"]`, `seed-0428l`):**
+  - La griglia multi-colonna era applicata a `.archive-cards` (la lista esterna dei gruppi per ticker `.arch-group`) anziché a `.arch-group-cards` (la lista delle singole strategie dentro ogni ticker). Di conseguenza i ticker lunghi (`FLIP@ROBINHOOD:0X408AF...`) venivano schiacciati in colonne strette sovrapponendosi al ticker accanto (`TIAUSDT`), gli errori con indirizzi esadecimali (`.arch-failed`) uscivano dai bordi della card, e le 3 strategie di `TIAUSDT` si impilavano in una sola colonna verticale centrale.
+  - Ora `.archive-cards` dispone i gruppi `.arch-group` a tutta larghezza (ognuno racchiuso in un pannello card pulito con `.arch-symbol` troncato ad ellissi), mentre `.arch-group-cards` dispone le strategie di ogni ticker su una griglia multi-colonna (`repeat(auto-fill, minmax(340px, 1fr))`) con `overflow-wrap: anywhere` su card, parametri ed errori.
+- **Trading → Copy trading (`frontend/static/style.css`, `.cockpit[data-area="trading"] .trading-auto-section.ct`, `seed-0428l`):**
+  - Ribilanciata la griglia desktop (`@media (min-width: 1100px)`): il modulo di follow (`#ct-form`, racchiuso in card) e l'analisi `Profittabilità del wallet` (`#ct-pnl`) siedono affiancati alla stessa altezza nella prima riga operativa (`grid-row: 3`), eliminando l'enorme spazio vuoto che restava sotto `#ct-pnl`.
+  - Il pannello `Wallet EVM` (`#ct-evm`, racchiuso in card) occupa la riga successiva a tutta larghezza con le 6 reti disposte in una griglia compatta multi-colonna (`.ct-evm-list`), seguito da `Wallet seguiti` (`#ct-follows`) e `Posizioni aperte copiate` (`#ct-positions`) affiancati su due colonne con contenitori card dedicati.
+
 # 2026-10-24 — Rilevamento Automatico della Chain nei Cluster in base all'Indirizzo (`seed-0427l`) & Osservatorio Dedicato in Tempo Reale per DREGG (`seed-0426l`)
 
 Lorenzo, 24/10: "la chain dei cluster deve essere indivudata automaticamente in base all'indiriizzo che viene inserito", "dai priorità massima al push di questa task dei cluster".
