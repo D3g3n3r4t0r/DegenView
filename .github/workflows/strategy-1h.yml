@@ -28,6 +28,14 @@ on:
         description: 'L, LS or L,LS'
         required: false
         default: 'L,LS'
+      from_run:
+        description: 'only the summary, on the results of this run id'
+        required: false
+        default: ''
+      show_modes:
+        description: 'rows in the summary: L, LS or L,LS'
+        required: false
+        default: 'L,LS'
 
 permissions:
   contents: read
@@ -35,6 +43,7 @@ permissions:
 
 jobs:
   pair:
+    if: ${{ !inputs.from_run }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -80,7 +89,9 @@ jobs:
         with:
           pattern: r1h-*
           path: results
-      - run: python scripts/research_1h_summary.py results
+          run-id: ${{ inputs.from_run || github.run_id }}
+          github-token: ${{ github.token }}
+      - run: SHOW_MODES=${{ inputs.show_modes || 'L,LS' }} python scripts/research_1h_summary.py results
       - uses: actions/upload-artifact@v4
         with:
           name: results-1h
