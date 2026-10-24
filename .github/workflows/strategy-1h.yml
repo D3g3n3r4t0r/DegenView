@@ -8,6 +8,10 @@ name: 1H strategy research
 on:
   workflow_dispatch:
     inputs:
+      script:
+        description: 'research_1h (our grids) or public_1h (GitHub / TradingView strategies)'
+        required: false
+        default: 'research_1h'
       pairs:
         description: 'JSON list of pairs (empty = the 20 of the 1H basket)'
         required: false
@@ -19,7 +23,7 @@ on:
       regimes:
         description: 'comma-separated: none, d200, btc, w21; "x" suffix = also exit when it turns'
         required: false
-        default: 'none,d200,btc'
+        default: ''
       modes:
         description: 'L, LS or L,LS'
         required: false
@@ -51,7 +55,7 @@ jobs:
           cd backend; rc=0
           for PAIR in $(python -c "import json,os; print(' '.join(json.loads(os.environ['PAIRS'])[${{ matrix.chunk }}::10]))"); do
             echo "::group::$PAIR"
-            PAIR=$PAIR GRIDSET=${{ inputs.gridset }} REGIMES=${{ inputs.regimes }} MODES=${{ inputs.modes }} PYTHONPATH=. python ../scripts/research_1h.py || { echo "::error::$PAIR failed"; rc=1; }
+            PAIR=$PAIR GRIDSET=${{ inputs.gridset }} REGIMES=${{ inputs.regimes || 'none,d200,btc' }} MODES=${{ inputs.modes || 'L,LS' }} PYTHONPATH=. python ../scripts/${{ inputs.script || 'research_1h' }}.py || { echo "::error::$PAIR failed"; rc=1; }
             echo "::endgroup::"
           done
           exit $rc

@@ -139,6 +139,18 @@ def main(folder):
                 for y in tests:
                     if y in c:
                         own[y].append(c[y][0])
+        # the author's own values (public_1h.py: every scale factor at 1)
+        dflt = next((v for v in cells if all(float(x) == 1.0 for x in v)), None)
+        if dflt is not None and "|" in var and var.split("|")[0] not in ("ST", "DC", "EX", "LZ"):
+            bp = cells[dflt]
+            sc = [train_score(c, train_years) for c in bp.values()]
+            row["default"] = {
+                "train": med([sum(c[y][0] for y in train_years if y in c) / max(1, len(train_years)) for c in bp.values()]),
+                "admitted": sum(1 for x in sc if x is not None),
+                **{y: med([c[y][0] for c in bp.values() if y in c]) for y in years},
+                **{f"pos{y}": sum(1 for c in bp.values() if y in c and c[y][0] > 0) for y in tests},
+                **{f"tr{y}": med([c[y][1] for c in bp.values() if y in c]) for y in tests},
+            }
         row["pair"] = {y: med(v) for y, v in own.items()}
         row["pair_pos"] = {y: f"{sum(1 for x in v if x > 0)}/{len(v)}" for y, v in own.items()}
         rows.append(row)
@@ -146,14 +158,21 @@ def main(folder):
     def fmt(r):
         c = r.get("common")
         if not c:
-            return f"{r['var']}: no value holds the limits"
+            d = r.get("default")
+            tail = (" · author's values: " + " ".join(f"{y} {d[y]:+.0f}% ({d['pos' + y]}+)" for y in tests)) if d else ""
+            return f"{r['var']}: no value holds the limits" + tail
         t = " ".join(f"{y} {c[y]:+.0f}% ({c['pos' + y]}/{c['n']}+, worst {c['worst' + y]:+.0f}, "
                      f"{c['tr' + y]:.0f}tr, dd {c['dd' + y]:.0f})" for y in tests)
         ins = " ".join(f"{y} {c[y]:+.0f}" for y in train_years if c.get(y) is not None)
         pp = " ".join(f"{y} {r['pair'][y]:+.0f}% ({r['pair_pos'][y]})" for y in tests if r["pair"][y] is not None)
-        return f"{r['var']} [{c['vals']}] sol {c['sol']} train {c['train']:+.0f}%/y ({ins}) · {t} · own values: {pp}"
+        out = f"{r['var']} [{c['vals']}] sol {c['sol']} train {c['train']:+.0f}%/y ({ins}) · {t} · own values: {pp}"
+        d = r.get("default")
+        if d:
+            out += " · author's values: train " + f"{d['train']:+.0f}%/y " + " ".join(
+                f"{y} {d[y]:+.0f}% ({d['pos' + y]}+, {d['tr' + y]:.0f}tr)" for y in tests)
+        return out
 
-    for fam in ("ST", "DC", "EX", "LZ"):
+    for fam in sorted({r["var"].split("|")[0] for r in rows}):
         fam_rows = [fmt(r) for r in rows if r["var"].startswith(fam + "|")]
         lines += [f"## {fam}", ""] + [f"- {x}" for x in fam_rows] + [""]
         print(f"::notice title=1h {fam}::" + " ‖ ".join(fam_rows))
