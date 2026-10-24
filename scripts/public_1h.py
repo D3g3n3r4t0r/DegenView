@@ -59,6 +59,17 @@ from app.analysis.backtest import run_backtest  # noqa: E402
 
 S_GRID = [0.5, 0.75, 1.0, 1.5, 2.0, 3.0]
 W_GRID = [0.5, 0.75, 1.0, 1.5, 2.0]
+# GRIDSET=v3 (24/10, long only — Lorenzo: "la strategia deve essere solo long
+# piu' uscita, quindi reversal"): finer grids on the four best long-only
+# scripts of the first run, past the edges they picked (AlphaTrend took the
+# smallest multiplier). AlphaTrend: period 7-21, multiplier 0.2-1.0.
+GRIDS_V3 = {
+    "AT": ([7 / 14, 8 / 14, 10 / 14, 12 / 14, 1.0, 17 / 14, 21 / 14], [0.2, 0.3, 0.4, 0.5, 0.6, 0.75, 1.0]),
+    "ATRSI": ([7 / 14, 8 / 14, 10 / 14, 12 / 14, 1.0, 17 / 14, 21 / 14], [0.2, 0.3, 0.4, 0.5, 0.6, 0.75, 1.0]),
+    "OTT": ([0.5, 1.0, 1.5, 2.0, 3.0], [1.0, 1.5, 2.0, 2.5, 3.0, 4.0]),
+    "HULL": ([1.0, 1.5, 2.0, 2.5, 3.0, 4.0], [1.0]),
+    "STADX": ([0.75, 1.0, 1.5, 2.0, 3.0], [1.0, 1.5, 2.0, 2.5, 3.0]),
+}
 MODES = tuple(os.environ.get("MODES", "L,LS").split(","))
 REGIMES = tuple(os.environ.get("REGIMES", "none,btc,w21").split(","))
 ONLY = [x for x in os.environ.get("ONLY", "").split(",") if x]
@@ -209,12 +220,21 @@ def rf_signals(src, filt):
 # ── strategies: raw signals + the author's risk rules ───────────────────────
 # Each returns (entry_long, exit_long, entry_short, exit_short, risk). An
 # entry on one side also closes the other (TradingView's strategy.entry).
-def s_at(df, s, w):
+def rsi(c, n):
+    d = np.diff(c, prepend=c[0])
+    up, dn = rma(np.where(d > 0, d, 0.0), n), rma(np.where(d < 0, -d, 0.0), n)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.where(dn > 0, 100 - 100 / (1 + up / dn), 100.0)
+
+
+def s_at(df, s, w, use_rsi=False):
+    """use_rsi: the script's own "no volume data" switch (RSI >= 50 instead
+    of MFI >= 50) — volumes differ from one exchange to the next."""
     ap, coeff = L(14, s), 1.0 * w
     a = sma(tr(df), ap)
     up_t = df["low"].to_numpy() - a * coeff
     dn_t = df["high"].to_numpy() + a * coeff
-    m = mfi(df, ap) >= 50
+    m = (rsi(df["close"].to_numpy(), ap) if use_rsi else mfi(df, ap)) >= 50
     at = np.zeros(len(a))
     prev = 0.0
     for i in range(len(a)):
@@ -437,6 +457,7 @@ STRATS = {  # name: (function, has a width to scale)
     "FST": (s_fst, True), "STADX": (s_stadx, True), "ADXSMA": (s_adxsma, False),
     "DEMA": (s_dema, False), "MACDT": (s_macdt, False), "JTURT": (s_jturt, True),
     "RIBBON": (s_ribbon, False),
+    "ATRSI": (lambda df, s, w: s_at(df, s, w, use_rsi=True), True),
 }
 
 
@@ -504,17 +525,18 @@ def run_pair(symbol, df, btc):
     res = {"symbol": symbol, "since": f"{idx[0]:%Y-%m}", "hold": hold, "cells": {}}
     t0 = time.time()
     for name, (fn, wide) in STRATS.items():
-        if ONLY and name not in ONLY:
+        if (ONLY and name not in ONLY) or (os.environ.get("GRIDSET") == "v3" and name not in GRIDS_V3):
             continue
-        for s in S_GRID:
-            for w_ in (W_GRID if wide else [1.0]):
+        sg, wg = (GRIDS_V3[name] if os.environ.get("GRIDSET") == "v3" else (S_GRID, W_GRID))
+        for s in sg:
+            for w_ in (wg if wide else [1.0]):
                 sig = fn(df, s, w_)
                 for mode in MODES:
                     for rg in REGIMES:
                         x = rg.endswith("x")
                         pos = position(df, sig, mode == "LS", regimes[rg[:-1] if x else rg], x)
                         bt = run_backtest(df, {}, R.BP, signals=R.signals_from(pos, idx), strategy_name=R.LORENZO)
-                        vals = f"{s},{w_}" if wide else f"{s}"
+                        vals = f"{s:g},{w_:g}" if wide else f"{s:g}"
                         res["cells"][f"{name}|{mode}|{rg}|{vals}"] = R.by_year(bt, years)
         print(f"{symbol} {name}: {len(res['cells'])} cells, {time.time() - t0:.0f}s", flush=True)
     return res

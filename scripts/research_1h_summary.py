@@ -194,6 +194,21 @@ def main(folder):
            for r in ranked[:12]]
     lines += ["## Ranking (worst yearly median, every full year)", ""] + [f"- {x}" for x in top]
     print("::notice title=1h ranking::" + " ‖ ".join(top))
+    # CELLS="AT|L|w21|0.714286,0.5;...": these cells as they are — values
+    # chosen on one basket, read on pairs that never took part in the choice
+    want = [c for c in os.environ.get("CELLS", "").split(";") if c]
+    if want:
+        out = []
+        for key in want:
+            var, vals = split(key)
+            by_pair = variants.get(var, {}).get(vals, {})
+            if not by_pair:
+                out.append(f"{key}: not run")
+                continue
+            out.append(f"{key} ({len(by_pair)} pairs) " + " ".join(
+                f"{y} {med([c[y][0] for c in by_pair.values() if y in c]):+.0f}%"
+                f" ({sum(1 for c in by_pair.values() if y in c and c[y][0] > 0)}+)" for y in years))
+        print("::notice title=1h cells::" + " ‖ ".join(out))
     print("::notice title=1h buy&hold::" + lines[2])
     with open("results-1h.md", "w") as fh:
         fh.write("\n".join(lines) + "\n")
