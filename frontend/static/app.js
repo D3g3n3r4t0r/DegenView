@@ -85,7 +85,152 @@ const COLORS_LIGHT = {
   // temporal dead zone — "Cannot access 'el' before initialization". Non un
   // difetto parziale: l'eccezione interrompe l'intero modulo, quindi la pagina
   // restava ferma sul suo stato vuoto senza che nulla si inizializzasse.
-  const el = (id) => document.getElementById(id);
+  const el = (id) =>
+    document.getElementById(id) ||
+    (id === "symbol-input"
+      ? document.getElementById("ticker-input")
+      : id === "symbol-suggestions"
+      ? document.getElementById("ticker-suggestions")
+      : null);
+
+  // ── TradingView Composite Tickers Package (20 Indices) ────────────────
+  const TV_COMPOSITES_CATALOG = [
+    // 1. Market Cap Indices ($B / $T)
+    { symbol: "TOTAL", name: "Crypto Total Market Cap ($B)", subtitle: "Total Crypto Market Cap", category: "market_cap", unit: "B_USD", value: 3120.0, change_24h: 1.84, aliases: ["CRYPTOCAP:TOTAL", "TOTALMCAP"] },
+    { symbol: "TOTAL2", name: "Crypto Total Market Cap Exclude BTC ($B)", subtitle: "Total Market Cap excl. BTC", category: "market_cap", unit: "B_USD", value: 1320.4, change_24h: 2.35, aliases: ["CRYPTOCAP:TOTAL2"] },
+    { symbol: "TOTAL3", name: "Crypto Total Market Cap Exclude BTC & ETH ($B)", subtitle: "Total Market Cap excl. BTC & ETH", category: "market_cap", unit: "B_USD", value: 942.5, change_24h: 2.78, aliases: ["CRYPTOCAP:TOTAL3"] },
+    { symbol: "TOTALES", name: "Crypto Total Market Cap Exclude Stablecoins ($B)", subtitle: "Total Market Cap excl. Stablecoins", category: "market_cap", unit: "B_USD", value: 2930.0, change_24h: 1.96, aliases: ["CRYPTOCAP:TOTALES", "TOTAL_ES"] },
+    { symbol: "TOTAL2ES", name: "Crypto Total Market Cap Exclude BTC & Stablecoins ($B)", subtitle: "Excl. BTC & Stablecoins", category: "market_cap", unit: "B_USD", value: 1130.2, change_24h: 2.64, aliases: ["CRYPTOCAP:TOTAL2ES", "TOTAL2_ES"] },
+    { symbol: "TOTAL3ES", name: "Pure Altcoin Market Cap — Exclude BTC, ETH & Stablecoins ($B)", subtitle: "Pure Altcoin Cap (Excl. BTC, ETH & Stables)", category: "market_cap", unit: "B_USD", value: 752.4, change_24h: 3.15, aliases: ["CRYPTOCAP:TOTAL3ES", "TOTAL3_ES"] },
+    { symbol: "OTHERS", name: "Crypto Total Market Cap Exclude Top 10 ($B)", subtitle: "Outside Top 10 Market Cap", category: "market_cap", unit: "B_USD", value: 384.2, change_24h: 3.42, aliases: ["CRYPTOCAP:OTHERS", "OTHERSMCAP"] },
+    { symbol: "TOTALDEFI", name: "Total DeFi Market Cap ($B)", subtitle: "Total DeFi Market Cap", category: "market_cap", unit: "B_USD", value: 118.6, change_24h: 2.18, aliases: ["CRYPTOCAP:TOTALDEFI", "TOTAL_DEFI", "DEFIMCAP"] },
+    // 2. Dominance Indices (%)
+    { symbol: "BTC.D", name: "Bitcoin Dominance (%)", subtitle: "Bitcoin Dominance", category: "dominance", unit: "PCT", value: 57.68, change_24h: -0.42, aliases: ["BTCD", "BTCDOM", "BTC_D", "CRYPTOCAP:BTC.D"] },
+    { symbol: "ETH.D", name: "Ethereum Dominance (%)", subtitle: "Ethereum Dominance", category: "dominance", unit: "PCT", value: 12.14, change_24h: 0.18, aliases: ["ETHD", "ETHDOM", "ETH_D", "CRYPTOCAP:ETH.D"] },
+    { symbol: "USDT.D", name: "Tether USDT Dominance (%)", subtitle: "Tether Dominance (Dry Powder)", category: "dominance", unit: "PCT", value: 4.38, change_24h: -0.88, aliases: ["USDTD", "USDT_D", "CRYPTOCAP:USDT.D"] },
+    { symbol: "USDC.D", name: "USD Coin USDC Dominance (%)", subtitle: "USD Coin Dominance", category: "dominance", unit: "PCT", value: 1.72, change_24h: -0.64, aliases: ["USDCD", "USDC_D", "CRYPTOCAP:USDC.D"] },
+    { symbol: "STABLE.C.D", name: "Combined Stablecoin Dominance — USDT + USDC (%)", subtitle: "USDT + USDC Combined Dominance", category: "dominance", unit: "PCT", value: 6.10, change_24h: -0.81, aliases: ["STABLED", "STABLE.D", "STABLECD", "STABLES.D", "CRYPTOCAP:STABLE.C.D"] },
+    { symbol: "OTHERS.D", name: "Altcoin Mid/Small-Cap Dominance Exclude Top 10 (%)", subtitle: "Mid/Small-Cap Altcoin Dominance", category: "dominance", unit: "PCT", value: 12.31, change_24h: 1.54, aliases: ["OTHERSD", "OTHERS_D", "CRYPTOCAP:OTHERS.D"] },
+    { symbol: "TOTAL3.D", name: "TOTAL3 Altcoin Dominance Exclude BTC & ETH (%)", subtitle: "TOTAL3 Share of Market", category: "dominance", unit: "PCT", value: 30.18, change_24h: 0.92, aliases: ["TOTAL3D", "TOTAL3_D", "CRYPTOCAP:TOTAL3.D"] },
+    { symbol: "ALTS.D", name: "Total Altcoin Dominance Exclude BTC & Stables (%)", subtitle: "Total Altcoin Dominance (100% − BTC − Stables)", category: "dominance", unit: "PCT", value: 36.22, change_24h: 0.76, aliases: ["ALTSD", "ALTS_D", "ALT.D", "CRYPTOCAP:ALTS.D"] },
+    // 3. Benchmarks & Cross Ratios
+    { symbol: "ETHBTC", name: "ETH / BTC Relative Strength Ratio", subtitle: "Ethereum / Bitcoin Ratio", category: "ratio", unit: "RATIO", value: 0.03642, change_24h: 0.62, aliases: ["ETH/BTC", "ETH_BTC"] },
+    { symbol: "SOLBTC", name: "SOL / BTC Relative Strength Ratio", subtitle: "Solana / Bitcoin Ratio", category: "ratio", unit: "RATIO", value: 0.002145, change_24h: 1.95, aliases: ["SOL/BTC", "SOL_BTC"] },
+    { symbol: "SOLETH", name: "SOL / ETH Relative Strength Ratio", subtitle: "Solana / Ethereum Ratio", category: "ratio", unit: "RATIO", value: 0.0589, change_24h: 1.32, aliases: ["SOL/ETH", "SOL_ETH"] },
+    { symbol: "DEFIETH", name: "TOTALDEFI / ETH Relative Strength Index", subtitle: "DeFi Index / Ethereum Ratio", category: "ratio", unit: "RATIO", value: 0.3128, change_24h: 0.44, aliases: ["DEFI/ETH", "DEFI_ETH"] },
+  ];
+
+  const FAVORITE_COMPOSITE_PILLS = [
+    "TOTAL", "TOTAL2", "TOTAL3", "TOTALES", "OTHERS",
+    "BTC.D", "USDT.D", "OTHERS.D", "ETH.D", "ETHBTC",
+  ];
+
+  const _TV_COMPOSITE_BY_KEY = new Map();
+  TV_COMPOSITES_CATALOG.forEach((item) => {
+    _TV_COMPOSITE_BY_KEY.set(item.symbol.toUpperCase(), item);
+    (item.aliases || []).forEach((a) => _TV_COMPOSITE_BY_KEY.set(a.toUpperCase(), item));
+  });
+
+  function resolveClientComposite(rawSymbol) {
+    if (!rawSymbol) return null;
+    const clean = String(rawSymbol).trim().toUpperCase().replace(/^CRYPTOCAP:/, "");
+    return _TV_COMPOSITE_BY_KEY.get(clean) || _TV_COMPOSITE_BY_KEY.get(String(rawSymbol).trim().toUpperCase()) || null;
+  }
+
+  function detectCompositeUnit(rawSymbol) {
+    const item = resolveClientComposite(rawSymbol);
+    if (item) return item.unit;
+    const s = String(rawSymbol || "").trim().toUpperCase();
+    if (/^(TOTAL|TOTAL2|TOTAL3|TOTALES|TOTAL2ES|TOTAL3ES|OTHERS|TOTALDEFI)$/.test(s)) return "B_USD";
+    if (/\.(D)$/.test(s)) return "PCT";
+    if (/^(ETHBTC|SOLBTC|SOLETH|DEFIETH)$/.test(s)) return "RATIO";
+    return null;
+  }
+
+  function formatCompositeValue(val, unit, { signed = false } = {}) {
+    const num = Number(val);
+    if (!Number.isFinite(num)) return "—";
+    const sign = signed && num > 0 ? "+" : num < 0 ? "-" : "";
+    const abs = Math.abs(num);
+    if (unit === "B_USD") {
+      if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(2)}T`;
+      return `${sign}$${abs.toFixed(2)}B`;
+    }
+    if (unit === "PCT") {
+      return `${sign}${abs.toFixed(2)}%`;
+    }
+    if (unit === "RATIO") {
+      const dec = abs > 0 && abs < 0.01 ? 6 : abs < 1 ? 5 : 4;
+      return `${sign}${abs.toFixed(dec)}`;
+    }
+    return `${sign}${abs.toFixed(2)}`;
+  }
+
+  function compositePriceFormat(unit, sampleClose) {
+    if (unit === "B_USD") {
+      return {
+        type: "custom",
+        minMove: 0.01,
+        formatter: (price) => formatCompositeValue(price, "B_USD"),
+      };
+    }
+    if (unit === "PCT") {
+      return {
+        type: "custom",
+        minMove: 0.01,
+        formatter: (price) => formatCompositeValue(price, "PCT"),
+      };
+    }
+    if (unit === "RATIO") {
+      const p = Math.abs(Number(sampleClose) || 0);
+      const minMove = p > 0 && p < 0.01 ? 0.000001 : 0.00001;
+      return {
+        type: "custom",
+        minMove,
+        formatter: (price) => formatCompositeValue(price, "RATIO"),
+      };
+    }
+    return pricePrecisionFor(sampleClose);
+  }
+
+  function compositeToSuggestion(item) {
+    return {
+      symbol: item.symbol,
+      name: `${item.subtitle} · ${formatCompositeValue(item.value, item.unit)}`,
+      asset_type: "crypto",
+      provider: "mexc",
+      exchange: "TradingView Index",
+      is_composite: true,
+      unit: item.unit,
+      category: item.category,
+    };
+  }
+
+  function searchClientComposites(query) {
+    const q = String(query || "").trim().toUpperCase();
+    if (!q) {
+      return FAVORITE_COMPOSITE_PILLS
+        .map((sym) => resolveClientComposite(sym))
+        .filter(Boolean)
+        .map(compositeToSuggestion);
+    }
+    const qBare = q.replace(/[^A-Z0-9]/g, "");
+    const scored = [];
+    for (const item of TV_COMPOSITES_CATALOG) {
+      const sym = item.symbol.toUpperCase();
+      const symBare = sym.replace(/[^A-Z0-9]/g, "");
+      const aliases = (item.aliases || []).map((a) => a.toUpperCase());
+      let score = 0;
+      if (sym === q || symBare === qBare || aliases.includes(q)) score = 100;
+      else if (sym.startsWith(q) || symBare.startsWith(qBare)) score = 85;
+      else if (aliases.some((a) => a.startsWith(q))) score = 75;
+      else if (sym.includes(q) || symBare.includes(qBare)) score = 60;
+      else if (item.name.toUpperCase().includes(q) || item.subtitle.toUpperCase().includes(q)) score = 45;
+      if (score > 0) scored.push({ score, item });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.map((s) => compositeToSuggestion(s.item));
+  }
 
   // Strategy names are storage/API keys ("Lorenzo (trend-follower)", ...):
   // they never change, but what the user reads is a neutral label. Any
@@ -4174,6 +4319,25 @@ const COLORS_LIGHT = {
   function openDeepLink() {
     const q = new URLSearchParams(location.search);
     const dex = q.get("dex");
+    const symParam = (q.get("symbol") || q.get("ticker") || "").trim();
+    if (!dex && symParam) {
+      const comp = resolveClientComposite(symParam);
+      const canonicalSym = comp ? comp.symbol : symParam.toUpperCase();
+      const assetType = q.get("asset_type") || "crypto";
+      const exchange = q.get("exchange") || "mexc";
+      applyConfigToChart({
+        assetType,
+        exchange,
+        symbol: canonicalSym,
+        displaySymbol: canonicalSym,
+        interval: q.get("interval") || el("interval-primary")?.value || "1d",
+        strategyName: q.get("strategy") || undefined,
+        params: null,
+        backtestParams: null,
+      });
+      runAnalysis(canonicalSym);
+      return true;
+    }
     if (!dex) return false;
     // Called where the boot would open the saved ticker: strategies are
     // loaded, and nothing opens BTC over it afterwards. The area comes from
@@ -5427,7 +5591,9 @@ const COLORS_LIGHT = {
     const c = ohlcCandles[i];
     const prev = i > 0 ? ohlcCandles[i - 1].close : c.open;
     const precision = pricePrecisionFor(c.close).precision;
-    const f = (v) => Number(v).toFixed(precision);
+    const compUnit = detectCompositeUnit(state.data && state.data.symbol);
+    const f = compUnit ? (v) => formatCompositeValue(v, compUnit) : (v) => Number(v).toFixed(precision);
+    const fDiff = compUnit ? (v) => formatCompositeValue(Math.abs(v), compUnit) : (v) => Number(v).toFixed(precision);
     const diff = c.close - prev;
     const pct = prev ? (diff / prev) * 100 : 0;
     const cls = c.close >= c.open ? "up" : "down";
@@ -5437,7 +5603,7 @@ const COLORS_LIGHT = {
       `<span>H <b class="${cls}">${f(c.high)}</b></span>` +
       `<span>L <b class="${cls}">${f(c.low)}</b></span>` +
       `<span>C <b class="${cls}">${f(c.close)}</b></span>` +
-      `<span class="${diff >= 0 ? "up" : "down"}">${sign}${f(diff)} (${sign}${pct.toFixed(2)}%)</span>`;
+      `<span class="${diff >= 0 ? "up" : "down"}">${sign}${fDiff(diff)} (${sign}${pct.toFixed(2)}%)</span>`;
     box.classList.remove("hidden");
   }
 
@@ -8602,7 +8768,13 @@ const COLORS_LIGHT = {
     // Switching symbol/timeframe can jump price magnitude by orders of
     // magnitude (a $90,000 BTC chart vs. a $0.00001 microcap) — the default
     // fixed 2-decimal price format rounds small prices straight to 0.00.
-    candleSeries.applyOptions({ priceFormat: pricePrecisionFor(candles[candles.length - 1].close) });
+    const _compUnit = detectCompositeUnit(state.data && state.data.symbol);
+    candleSeries.applyOptions({
+      priceFormat: _compUnit
+        ? compositePriceFormat(_compUnit, candles[candles.length - 1].close)
+        : pricePrecisionFor(candles[candles.length - 1].close),
+    });
+    syncActiveCompositeUI(state.data && state.data.symbol);
     candleSeries.setData(candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
     wakeDraw(0);
     setOhlcCandles(candles);
@@ -8999,7 +9171,10 @@ const COLORS_LIGHT = {
     const hi = Math.max(...candles.map((c) => c.high));
     const lo = Math.min(...candles.map((c) => c.low));
     const chg = (last.close / first.close - 1) * 100;
-    const fmt = (v) => Number(v).toLocaleString("en-US", { maximumFractionDigits: v < 10 ? 6 : 2 });
+    const compUnit = detectCompositeUnit(state.data && state.data.symbol);
+    const fmt = compUnit
+      ? (v) => formatCompositeValue(v, compUnit)
+      : (v) => Number(v).toLocaleString("en-US", { maximumFractionDigits: v < 10 ? 6 : 2 });
     el("cs-last").textContent = fmt(last.close);
     const c = el("cs-chg");
     c.textContent = (chg >= 0 ? "+" : "") + chg.toFixed(2) + "%";
@@ -10306,6 +10481,12 @@ const COLORS_LIGHT = {
 
   async function fetchSuggestions(query) {
     const seq = ++suggestSeq;
+    const localComposites = searchClientComposites(query);
+    if (localComposites.length) {
+      state.suggestions = localComposites;
+      state.activeSuggestionIndex = -1;
+      renderSuggestions();
+    }
     if (suggestAbortCtrl) {
       try { suggestAbortCtrl.abort(); } catch (_) {}
     }
@@ -10319,13 +10500,67 @@ const COLORS_LIGHT = {
       items = [];
     }
     if (seq !== suggestSeq) return;
-    state.suggestions = items;
+    const seenSyms = new Set(localComposites.map((c) => c.symbol.toUpperCase()));
+    const merged = [...localComposites];
+    (items || []).forEach((it) => {
+      const k = `${(it.symbol || "").toUpperCase()}:${it.provider || ""}`;
+      if (!seenSyms.has((it.symbol || "").toUpperCase()) && !seenSyms.has(k)) {
+        seenSyms.add(k);
+        merged.push(it);
+      }
+    });
+    state.suggestions = merged;
     state.activeSuggestionIndex = -1;
     renderSuggestions();
   }
 
   function positionSuggestions() {
     placeSuggestionList(el("ticker-suggestions"), el("ticker-input"));
+  }
+
+  function buildFavoriteCompositePillsRow() {
+    const li = document.createElement("li");
+    li.className = "sug-composites-bar";
+    const head = document.createElement("div");
+    head.className = "sug-composites-head";
+    head.textContent = "TradingView Composite Indices";
+    const row = document.createElement("div");
+    row.className = "sug-composites-pills";
+    FAVORITE_COMPOSITE_PILLS.forEach((sym) => {
+      const item = resolveClientComposite(sym);
+      if (!item) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "sug-comp-pill";
+      btn.textContent = item.symbol;
+      btn.title = `${item.subtitle} (${formatCompositeValue(item.value, item.unit)})`;
+      const pick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectSymbol({
+          symbol: item.symbol,
+          asset_type: "crypto",
+          provider: "mexc",
+          exchange: "TradingView Index",
+          name: item.name,
+        });
+      };
+      btn.addEventListener("mousedown", pick);
+      btn.addEventListener("click", pick);
+      row.appendChild(btn);
+    });
+    li.appendChild(head);
+    li.appendChild(row);
+    return li;
+  }
+
+  function showFavoriteCompositesInSuggestions() {
+    const list = el("ticker-suggestions");
+    if (!list) return;
+    list.innerHTML = "";
+    positionSuggestions();
+    list.appendChild(buildFavoriteCompositePillsRow());
+    list.classList.remove("hidden");
   }
 
   function renderSuggestions() {
@@ -10337,6 +10572,7 @@ const COLORS_LIGHT = {
       return;
     }
     positionSuggestions();
+    list.appendChild(buildFavoriteCompositePillsRow());
     state.suggestions.forEach((item, i) => {
       const li = document.createElement("li");
       li.className = i === state.activeSuggestionIndex ? "active" : "";
@@ -10396,6 +10632,162 @@ const COLORS_LIGHT = {
   // Colors are picked deterministically from the symbol so the same ticker
   // always gets the same avatar, without needing a real logo per symbol
   // (which we don't have data for).
+  const selectSymbol = selectSuggestion;
+  window.selectSymbol = selectSuggestion;
+
+  function syncActiveCompositeUI(rawSymbol) {
+    const comp = resolveClientComposite(rawSymbol);
+    const activeSym = comp ? comp.symbol : null;
+    const deskBtn = el("tv-composites-btn");
+    const deskLabel = el("tv-composites-btn-active");
+    const mobBtn = el("mobile-composites-btn");
+    if (deskBtn) deskBtn.classList.toggle("is-composite-active", !!activeSym);
+    if (deskLabel) {
+      deskLabel.textContent = activeSym
+        ? `${activeSym} (${formatCompositeValue(comp.value, comp.unit)})`
+        : "TOTAL3 / BTC.D";
+    }
+    if (mobBtn) {
+      mobBtn.classList.toggle("is-composite-active", !!activeSym);
+      mobBtn.textContent = activeSym ? `${activeSym} ▾` : "Indices ▾";
+    }
+    document.querySelectorAll(".tv-comp-card[data-comp-symbol]").forEach((card) => {
+      card.classList.toggle("active", card.dataset.compSymbol === activeSym);
+    });
+  }
+
+  let _compositesSnapshotBusy = false;
+  async function refreshCompositesSnapshot() {
+    if (_compositesSnapshotBusy) return;
+    _compositesSnapshotBusy = true;
+    try {
+      const resp = await fetch("/api/composites/snapshot");
+      if (!resp.ok) return;
+      const body = await resp.json();
+      const list = Array.isArray(body?.tickers) ? body.tickers : Array.isArray(body?.items) ? body.items : [];
+      list.forEach((live) => {
+        const entry = resolveClientComposite(live.symbol);
+        if (!entry) return;
+        if (typeof live.value === "number" && Number.isFinite(live.value)) entry.value = live.value;
+        if (typeof live.change_24h === "number" && Number.isFinite(live.change_24h)) entry.change_24h = live.change_24h;
+        const card = document.querySelector(`.tv-comp-card[data-comp-symbol="${entry.symbol}"]`);
+        if (card) {
+          const valEl = card.querySelector(".tv-comp-val");
+          const chgEl = card.querySelector(".tv-comp-chg");
+          if (valEl) valEl.textContent = live.formatted_value || formatCompositeValue(entry.value, entry.unit);
+          if (chgEl) {
+            const c = Number(entry.change_24h) || 0;
+            chgEl.textContent = `${c >= 0 ? "+" : ""}${c.toFixed(2)}%`;
+            chgEl.className = `tv-comp-chg ${c >= 0 ? "up" : "down"}`;
+          }
+        }
+      });
+      if (body?.macro_regime) {
+        const regBox = el("tv-composites-regime");
+        const regPill = el("tv-comp-regime-pill");
+        const regSum = el("tv-comp-regime-summary");
+        const reg = body.macro_regime;
+        if (regBox && reg.regime) regBox.dataset.regime = reg.regime;
+        if (regPill && reg.regime) regPill.textContent = String(reg.regime).replace(/_/g, " ");
+        if (regSum && reg.summary) regSum.textContent = reg.summary;
+      }
+      if (state.data && state.data.symbol) syncActiveCompositeUI(state.data.symbol);
+    } catch {
+      /* Instant client-side fallback catalog stays active if snapshot endpoint is offline */
+    } finally {
+      _compositesSnapshotBusy = false;
+    }
+  }
+
+  function closeCompositesPanel() {
+    const panel = el("tv-composites-panel");
+    if (!panel || panel.classList.contains("hidden")) return;
+    panel.classList.add("hidden");
+    el("tv-composites-btn")?.setAttribute("aria-expanded", "false");
+    el("mobile-composites-btn")?.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleCompositesPanel(anchorBtn) {
+    const panel = el("tv-composites-panel");
+    if (!panel) return;
+    const willOpen = panel.classList.contains("hidden");
+    if (!willOpen) {
+      closeCompositesPanel();
+      return;
+    }
+    if (anchorBtn && !window.matchMedia("(max-width: 760px)").matches) {
+      const rect = anchorBtn.getBoundingClientRect();
+      const left = Math.max(12, Math.min(rect.left, window.innerWidth - Math.min(820, window.innerWidth - 24) - 12));
+      panel.style.left = `${left}px`;
+      panel.style.top = `${Math.max(48, rect.bottom + 8)}px`;
+    } else {
+      panel.style.left = "";
+      panel.style.top = "";
+    }
+    panel.classList.remove("hidden");
+    el("tv-composites-btn")?.setAttribute("aria-expanded", "true");
+    el("mobile-composites-btn")?.setAttribute("aria-expanded", "true");
+    refreshCompositesSnapshot();
+  }
+
+  function bindCompositesPanel() {
+    const deskBtn = el("tv-composites-btn");
+    const mobBtn = el("mobile-composites-btn");
+    const closeBtn = el("tv-composites-close");
+    const panel = el("tv-composites-panel");
+    if (deskBtn) {
+      deskBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleCompositesPanel(deskBtn);
+      });
+    }
+    if (mobBtn) {
+      mobBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleCompositesPanel(mobBtn);
+      });
+    }
+    if (closeBtn) {
+      closeBtn.addEventListener("click", closeCompositesPanel);
+    }
+    document.querySelectorAll(".tv-comp-tab[data-comp-cat]").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const cat = tab.dataset.compCat || "all";
+        document.querySelectorAll(".tv-comp-tab[data-comp-cat]").forEach((t) => {
+          const active = t === tab;
+          t.classList.toggle("active", active);
+          t.setAttribute("aria-selected", String(active));
+        });
+        document.querySelectorAll(".tv-comp-section[data-comp-section]").forEach((sec) => {
+          sec.classList.toggle("hidden", cat !== "all" && sec.dataset.compSection !== cat);
+        });
+      });
+    });
+    document.querySelectorAll(".tv-comp-card[data-comp-symbol]").forEach((card) => {
+      card.addEventListener("click", () => {
+        const sym = card.dataset.compSymbol;
+        const item = resolveClientComposite(sym) || { symbol: sym, name: sym };
+        closeCompositesPanel();
+        selectSymbol({
+          symbol: item.symbol,
+          asset_type: "crypto",
+          provider: "mexc",
+          exchange: "TradingView Index",
+          name: item.name,
+        });
+      });
+    });
+    document.addEventListener("mousedown", (e) => {
+      if (!panel || panel.classList.contains("hidden")) return;
+      if (panel.contains(e.target) || deskBtn?.contains(e.target) || mobBtn?.contains(e.target)) return;
+      closeCompositesPanel();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeCompositesPanel();
+    });
+    setTimeout(refreshCompositesSnapshot, 600);
+  }
+
   const MTS_AVATAR_COLORS = ["#f0b90b", "#23af91", "#5850ec", "#94a3b8", "#2962ff", "#f23645", "#089981"];
   function mtsAvatarColor(symbol) {
     let hash = 0;
@@ -10410,6 +10802,7 @@ const COLORS_LIGHT = {
   function renderMobileTickerResults() {
     const list = el("mts-list");
     list.innerHTML = "";
+    list.appendChild(buildFavoriteCompositePillsRow());
     const filter = document.querySelector(".mts-tab.active")?.dataset.filter || "all";
     const items = state.suggestions.filter((s) => filter === "all" || s.asset_type === filter);
     if (!items.length) {
@@ -10485,7 +10878,20 @@ const COLORS_LIGHT = {
   }
 
   function bindMobileTickerSearch() {
-    el("ticker-input").addEventListener("focus", openMobileTickerSearch);
+    el("ticker-input").addEventListener("focus", () => {
+      openMobileTickerSearch();
+      if (!window.matchMedia("(max-width: 760px)").matches) {
+        const val = el("ticker-input").value.trim();
+        const compHits = searchClientComposites(val);
+        if (compHits.length) {
+          state.suggestions = compHits;
+          state.activeSuggestionIndex = -1;
+          renderSuggestions();
+        } else {
+          showFavoriteCompositesInSuggestions();
+        }
+      }
+    });
     // The chart-strip symbol sits right next to the timeframe wheel, where
     // the thumb already is — tapping it opens the same search instead of
     // making the user reach back up to the toolbar field.
@@ -11911,7 +12317,8 @@ const COLORS_LIGHT = {
       const qLow = symbol.toLowerCase();
       const sameSymbol = (s) =>
         s.symbol.toLowerCase() === qLow || shortSymbol(s.symbol).toLowerCase() === qLow;
-      let exact = state.suggestions.find(sameSymbol);
+      const compDirect = resolveClientComposite(symbol);
+      let exact = compDirect ? compositeToSuggestion(compDirect) : state.suggestions.find(sameSymbol);
       hideSuggestions();
       closeMobileTickerSearch();
       if (!exact) {
@@ -11933,6 +12340,7 @@ const COLORS_LIGHT = {
     });
 
     bindTickerAutocomplete();
+    bindCompositesPanel();
     bindMobileTickerSearch();
     bindWatchlistAutocomplete();
     bindFavorites();

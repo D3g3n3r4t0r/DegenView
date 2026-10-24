@@ -88,7 +88,7 @@ export function age(ts) {
   return [`${Math.round(s / 86400)}d`, false];
 }
 
-const DS_CHAIN = { solana: "solana", robinhood: "robinhood", base: "base", bsc: "bsc", ethereum: "ethereum", arc: "arc" };
+const DS_CHAIN = { solana: "solana", robinhood: "robinhood", base: "base", bsc: "bsc", ethereum: "ethereum", arc: "arc", arbitrum: "arbitrum", optimism: "optimism", polygon: "polygon", avalanche: "avalanche", monad: "monad", zksync: "zksync", mantle: "mantle" };
 const CHAIN_MARK = {
   solana: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16.5h12.5l2-2H7zM5 7.5h12.5l2 2H7zM5 12h12.5l2-2H7" /></svg>',
   robinhood: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 12 12 21 4 12z" /></svg>',
@@ -96,6 +96,14 @@ const CHAIN_MARK = {
   bsc: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 15 6.5 12 9.5 9 6.5zM12 14.5l3 3-3 3-3-3zM6.5 9l3 3-3 3-3-3zM17.5 9l3 3-3 3-3-3zM12 9.5l2.5 2.5-2.5 2.5L9.5 12z" /></svg>',
   ethereum: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 6 12.2 12 16l6-3.8zM6 13.6l6 8 6-8-6 3.8z" /></svg>',
   arc: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19a8 8 0 0 1 16 0h-3.5a4.5 4.5 0 0 0-9 0z" /></svg>',
+  layer: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5zM3 12.5l9 5 9-5M3 17l9 4 9-4" /></svg>',
+  arbitrum: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3zm-2 6 4 7M14 9l-4 7" /></svg>',
+  optimism: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM14 15.5v-7h2.5a2.2 2.2 0 0 1 0 4.4H14" /></svg>',
+  polygon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7.5 4.5 9.5v4L8 15.5l3.5-2v-4L8 7.5zm8 1 3.5 2v4L16 16.5l-3.5-2v-4l3.5-2z" /></svg>',
+  avalanche: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 4.5 19h5l2.5-5 2.5 5h5L12 4z" /></svg>',
+  monad: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 20.5 12 12 20.5 3.5 12 12 3.5zm0 4.5L8 12l4 4 4-4-4-4z" /></svg>',
+  zksync: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12 10 7v3.5h5L10 14h4v3l-10-5zm16 0-6 5v-3.5H9l5-3.5h-4V7l10 5z" /></svg>',
+  mantle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9zm-3 6 3 3 3-3v6h-6V9z" /></svg>',
 };
 
 /** The token's logo: DexScreener's image, else its public logo for the

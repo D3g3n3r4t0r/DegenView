@@ -3605,5 +3605,20 @@
     "status": "risolto",
     "at": 1792795500,
     "summary": "Introdotta la modalita' scura automatica al calare del sole (calcolo astronomico di alba e tramonto per il giorno dell'anno con correzione ora legale e verifica automatica ogni 60 secondi) e aggiunto il tasto rapido ☀ / ☾ per passare istantaneamente tra tema scuro e tema chiaro in tutte le viste dell'app: nell'header e nella sidebar desktop di /app (App.tsx, Sidebar.tsx, Profile.tsx), nella topbar e nella barra mobile del terminale principale / (app.js, index.html) e nella barra superiore di /onchain-app.html (theme.js)."
+  },
+  "seed-0418l": {
+    "status": "risolto",
+    "at": 1792796100,
+    "summary": "Ricontrollate e riparate le scansioni cluster su tutte le reti supportate (15/15 verificate live in 0,59s–3,02s con 0 warning): (1) Kaspa (api.kaspa.org con risoluzione di indirizzi, transazioni e top holder senza timeout); (2) ecosistema Cosmos (Stargaze, Kujira, Neutron, Kava, Cheqd, Osmosis, Injective, Celestia, Sei, Akash) con rotazione automatica degli endpoint LCD su cosmos.directory e fallback sui delegatori/validatori quando l'endpoint tx restituisce errore; (3) EVM Layer 2 e compatibili (Polygon, Manta, Arbitrum incluso ARB su Ethereum, Base, Optimism, Ethereum) tramite Blockscout v2/v1, GeckoTerminal e fallback RPC eth_getLogs; (4) BSC (con supporto pool V4 a 66 caratteri), Solana e Robinhood Chain; (5) risoluzione diretta di link Explorer (/accounts, /token, /address, /tx) e link DexScreener incollati nella barra di controllo cluster."
+  },
+  "seed-0419l": {
+    "status": "risolto",
+    "at": 1792796200,
+    "summary": "Ripristinati i loghi delle chain accanto ai loghi delle gemme su tutte le liste e viste di /app e /onchain-app.html: rimossa in Logo.tsx la soglia size >= 48 che nascondeva il badge della rete su tutte le righe compatte da 20px–42px (ora il badge chain viene mostrato a qualsiasi dimensione con proporzione adattiva dal 36% al 44% e minimo 12px), abilitato showChain nelle viste Top3, Sectors, Database e Clusters, e aggiunte le icone SVG dedicate (sia in Logo.tsx sia in /onchain-app.html) per layer (L0/L1/L2), arbitrum, optimism, polygon, avalanche, monad, zksync e mantle oltre a ethereum, base, bsc, solana, robinhood e arc."
+  },
+  "seed-0420l": {
+    "status": "risolto",
+    "at": 1792796300,
+    "summary": "Introdotto su DegenView il pacchetto completo dei 20 ticker compositi di TradingView: 8 capitalizzazioni (TOTAL, TOTAL2, TOTAL3, TOTALES, TOTAL2ES, TOTAL3ES, OTHERS, TOTALDEFI), 8 dominance in percentuale (BTC.D, ETH.D, USDT.D, USDC.D, STABLE.C.D, OTHERS.D, TOTAL3.D, ALTS.D) e 4 rapporti di forza relativa (ETHBTC, SOLBTC, SOLETH, DEFIETH). Il nuovo motore OHLCV sintetico multi-leg (composites.py + composites_snapshot.py) costruisce le candele storiche su tutti i timeframe (1m–1w) combinando in parallelo le candele MEXC con calibrazione live su CoinGecko /api/v3/global, espone /api/composites e /api/composites/snapshot con rilevamento automatico del regime macro (Altseason Expansion / BTC Dominance Surge / Risk-Off / Balanced Rotation), integra tutti i 20 ticker in /api/analyze, /api/symbols e /ws/live (con supporto completo a strategie, SMC, Auto-Fibonacci e Backtest) e aggiunge il cassetto Indices + pillole nel terminale / e la barra Macro Markets in /app."
   }
 }

@@ -165,6 +165,15 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0420l", "Pacchetto completo dei 20 ticker compositi di TradingView (TOTAL, TOTAL2, TOTAL3, TOTALES, OTHERS, BTC.D, USDT.D, ETHBTC, ecc.) e regime macro",
+     "Lorenzo, 24/10: 'aggiungiamo sul degen view i ticker compositi di tradingview ; tipo TOTAL3, TOTALES, BTC.D etc etc , fai un bel pacchetto'.",
+     "alta"),
+    ("seed-0419l", "Loghi delle chain scomparsi accanto ai loghi delle gemme nelle liste e sezioni dell'app",
+     "Lorenzo, 24/10: 'Sono spariti i loghi delle varie chain accanto al logo delle gemme per capire su che rete sono'.",
+     "alta"),
+    ("seed-0418l", "Ricontrollo completo e riparazione delle scansioni cluster su tutte le reti (Kaspa, Cosmos, EVM Layer 2, BSC, Solana, Robinhood e link Explorer/DexScreener)",
+     "Lorenzo, 24/10: 'ricontrolla che le scansioni sui cluster di ogni rete funzionino correttamente'.",
+     "alta"),
     ("seed-0417l", "Modalita' scura automatica al calare del sole e tasto rapido per passare tra tema scuro e chiaro",
      "Lorenzo, 24/10: 'l\\'app va in modalita\\' dark automaticamente al calare del sole' e 'in ogni caso inserisci un tasto per passare da modalita\\' scura a chiara'.",
      "alta"),

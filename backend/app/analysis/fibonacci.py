@@ -40,7 +40,8 @@ def _get_swing_pivots(df: pd.DataFrame, timeframe_key: str) -> list[dict]:
 
 
 def _leg_pct(a: float, b: float) -> float:
-    return abs(b - a) / min(a, b)
+    denom = min(a, b)
+    return abs(b - a) / denom if denom > 0 else 0.0
 
 
 def compute_fib_zones(df: pd.DataFrame, timeframe_key: str, interval: str) -> list[FibZone]:

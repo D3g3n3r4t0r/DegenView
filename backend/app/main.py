@@ -289,6 +289,10 @@ def canonical_symbol(symbol: str, asset_type: AssetType, exchange: CryptoExchang
     it, typing "BTC" versus clicking the "BTCUSDT" suggestion produced two
     different symbols for the same chart, and drawings saved under one
     never showed up under the other."""
+    from app.providers import composites
+    comp = composites.resolve_composite(symbol)
+    if comp is not None:
+        return comp
     if asset_type == "dex":
         # Gia' canonico com'e' arrivato dalla ricerca (BASE@chain:pool) —
         # non c'e' un formato "come lo scrive l'utente" da normalizzare.
@@ -311,6 +315,9 @@ async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: s
 
     When since_ms is set, outputsize is ignored and the provider fetches all
     available candles from that timestamp to now."""
+    from app.providers import composites
+    if composites.is_composite_symbol(symbol):
+        provider = composites.composite_provider
     multiple = SYNTHETIC_DAY_INTERVALS.get(interval)
     if multiple is None:
         return await provider.fetch_ohlcv(symbol, interval, outputsize, since_ms=since_ms)
@@ -1784,6 +1791,8 @@ _PUBLIC_PATHS = frozenset({
                             # nei fatti: POST /api/issues resta protetto dalla sua stessa
                             # dependency (auth.get_current_user), non da questa lista.
     "/api/deepseek/studies",  # Claude reads DeepSeek's answers without a login (deepseek_studies.py)
+    "/api/composites",
+    "/api/composites/snapshot",
 })
 
 _PUBLIC_PREFIXES = ("/static/", "/api/deepseek/studies/")
@@ -2116,7 +2125,7 @@ async def _safe_search(
         # rendeva "non trova piu' i pair" vero per ogni exchange insieme a
         # lui — sia in Lab sia negli ordini spot/futures, stesso endpoint.
         return []
-    return [SymbolSuggestion(**r, asset_type=asset_type, provider=provider_id) for r in results]
+    return [SymbolSuggestion(**{**r, "asset_type": asset_type, "provider": provider_id}) for r in results]
 
 
 def _interleave(*lists: list) -> list:
@@ -2128,16 +2137,27 @@ def _interleave(*lists: list) -> list:
     return out
 
 
+_COMPOSITE_SEARCH_PREFIXES = (
+    "TOTAL", "BTC.", "ETH.", "USDT.", "USDC.", "STABLE",
+    "OTHERS", "ALTS", "DEFI", "SOLBTC", "SOLETH", "ETHBTC",
+)
+
+
 def _rank_suggestions(items: list[SymbolSuggestion], query: str) -> list[SymbolSuggestion]:
     """Sort by match quality: exact symbol first, then prefix, then rest."""
-    q = query.upper()
-    def _score(s: SymbolSuggestion) -> int:
+    from app.providers import composites
+    q = query.strip().upper()
+    is_comp_prefix = q.startswith(_COMPOSITE_SEARCH_PREFIXES) or composites.resolve_composite(q) is not None
+    def _score(s: SymbolSuggestion) -> tuple[int, int]:
         sym = s.symbol.upper()
-        if sym == q:
-            return 0
+        is_comp = composites.is_composite_symbol(sym)
+        if sym == q or (is_comp and composites.resolve_composite(q) == sym):
+            return (0, 0 if is_comp else 1)
         if sym.startswith(q):
-            return 1
-        return 2
+            return (1, 0 if is_comp else 1)
+        if is_comp and is_comp_prefix:
+            return (1, 0)
+        return (2, 0 if is_comp else 1)
     return sorted(items, key=_score)
 
 
@@ -2146,12 +2166,14 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
     # Single unified search across stocks and both crypto exchanges — no
     # upfront "stock vs crypto" toggle. The user picks the asset from results
     # that already say which market/exchange it's on.
+    from app.providers import composites
     q_norm = query.strip().upper()
     now_m = _time.monotonic()
     cached = _SYMBOL_SEARCH_CACHE.get(q_norm)
     if cached is not None and (now_m - cached[0]) < _SYMBOL_SEARCH_CACHE_TTL_S:
         return cached[1]
 
+    comp_res = [SymbolSuggestion(**{"asset_type": "crypto", "provider": "mexc", **r}) for r in composites.search_composites(query)]
     stock_res, mexc_res, kucoin_res, binance_res, kraken_res, dex_res = await asyncio.gather(
         _safe_search(twelvedata_provider, query, "stock", "stock")
         if settings.stocks_enabled else _no_results(),
@@ -2161,8 +2183,15 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
         _safe_search(kraken_provider, query, "crypto", "kraken"),
         _safe_search(dexscreener_provider, query, "dex", "dexscreener"),
     )
-    merged = _interleave(stock_res, mexc_res, kucoin_res, binance_res, kraken_res, dex_res)
-    ranked = _rank_suggestions(merged, query)[:25]
+    merged = comp_res + _interleave(stock_res, mexc_res, kucoin_res, binance_res, kraken_res, dex_res)
+    deduped: list[SymbolSuggestion] = []
+    seen_keys: set[tuple[str, str]] = set()
+    for item in merged:
+        k = (item.symbol.upper(), item.provider)
+        if k not in seen_keys:
+            seen_keys.add(k)
+            deduped.append(item)
+    ranked = _rank_suggestions(deduped, query)[:25]
     if ranked:
         if len(_SYMBOL_SEARCH_CACHE) >= _SYMBOL_SEARCH_CACHE_MAX:
             _SYMBOL_SEARCH_CACHE.pop(next(iter(_SYMBOL_SEARCH_CACHE)), None)
@@ -2214,6 +2243,18 @@ async def btc_regime_status() -> dict:
     with the Monday the verdict took effect. Closed weeks only, like the
     strategies."""
     return btc_regime.status()
+
+
+@app.get("/api/composites")
+async def list_composites() -> dict:
+    from app.providers import composites
+    return {"items": list(composites.COMPOSITES.values())}
+
+
+@app.get("/api/composites/snapshot")
+async def get_composites_snapshot_endpoint(force: bool = Query(False)) -> dict:
+    from app.providers import composites_snapshot
+    return await composites_snapshot.get_composites_snapshot(force=force)
 
 
 @app.get("/api/strategies", response_model=list[str])

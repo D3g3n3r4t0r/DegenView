@@ -4,6 +4,7 @@ import type { Gem } from "../lib/types";
 import { ClusterCheck, resolveClusterInput } from "../components/ClusterCheck";
 import { ClusterQueue } from "../components/ClusterQueue";
 import { CheckProgress, useClusterCheck } from "../components/CheckProgress";
+import { Logo } from "../components/Logo";
 import { SellsMap } from "../components/SellsMap";
 import { AnimatePresence, motion } from "motion/react";
 import { t } from "../lib/i18n";
@@ -232,6 +233,7 @@ export function Clusters({ onToken, inApp }: { onToken: (e: Gem) => void; inApp?
                     onClick={() => open(r.chain, r.token, r.symbol)}
                     className="flex w-full items-center gap-3 rounded-[12px] px-2.5 py-2.5 text-left transition-colors hover:bg-pill/60 active:bg-pill"
                   >
+                    <Logo size={36} symbol={r.symbol || short(r.token)} chain={r.chain} token={r.token} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
                         <b className="truncate text-[15px] font-semibold leading-tight">

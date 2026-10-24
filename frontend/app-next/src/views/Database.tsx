@@ -4,6 +4,7 @@ import * as api from "../lib/api";
 import type { Narrative, Project, ProjectStats } from "../lib/types";
 import { coverage, isHiddenIn, setNarratives, useHidden, useNarratives } from "../lib/store";
 import { num } from "../lib/format";
+import { Logo } from "../components/Logo";
 import { Sheet } from "../components/Sheet";
 import { t } from "../lib/i18n";
 
@@ -121,6 +122,7 @@ function ProjectRow({ p, i, onOpen }: { p: Project; i: number; onOpen: (p: Proje
   return (
     <motion.li initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.26, delay: Math.min(i, 8) * 0.02 }} className="mb-2 desk:col-span-1">
       <button type="button" onClick={() => onOpen(p)} className="flex w-full items-start gap-3 rounded-[20px] bg-card px-3.5 py-3 text-left active:bg-pill desk:h-full desk:hover:bg-press/40">
+        <Logo size={36} symbol={p.symbol} image={p.image} chain={p.chain} token={p.token} />
         <span className={`num w-7 flex-none pt-0.5 text-[15px] font-semibold ${out ? "line-through decoration-1 opacity-45" : ""}`}
           title={out ? t("Score, not on the board") : t("Score")}>{score}</span>
         <span className="min-w-0 flex-1">

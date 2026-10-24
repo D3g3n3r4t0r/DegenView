@@ -6,11 +6,13 @@ import websockets
 from fastapi import WebSocket
 
 from app.mexc_pb.PushDataV3ApiWrapper_pb2 import PushDataV3ApiWrapper
+from app.providers.composites import composite_provider, is_composite_symbol, resolve_composite
 from app.providers.mexc import format_symbol
 
 logger = logging.getLogger("mexc_stream")
 
 WS_URL = "wss://wbs-api.mexc.com/ws"
+COMPOSITE_POLL_INTERVAL_SECONDS = 20
 _CANONICAL_TO_WS_INTERVAL = {
     "1m": "Min1",
     "5m": "Min5",
@@ -42,7 +44,8 @@ class MexcStreamManager:
         self._lock = asyncio.Lock()
 
     async def add_client(self, ws: WebSocket, symbol: str, intervals: dict[str, str]) -> None:
-        formatted = format_symbol(symbol)
+        canon_comp = resolve_composite(symbol)
+        formatted = canon_comp if canon_comp is not None else format_symbol(symbol)
         key = (formatted, tuple(sorted(intervals.items())))
         self._clients[ws] = key
         await self._ensure_subscription(key)
@@ -70,6 +73,10 @@ class MexcStreamManager:
 
     async def _run(self, key: tuple[str, tuple]) -> None:
         symbol, interval_items = key
+        if is_composite_symbol(symbol):
+            await self._run_composite(symbol, interval_items)
+            return
+
         tf_by_channel = {}
         channels = []
         for tf_key, canonical_interval in interval_items:
@@ -99,6 +106,54 @@ class MexcStreamManager:
                 raise
             except Exception:
                 logger.exception("MEXC stream error for %s, reconnecting", symbol)
+                await asyncio.sleep(RECONNECT_DELAY_SECONDS)
+
+    async def _run_composite(self, symbol: str, interval_items: tuple) -> None:
+        """Synthesizes live composite kline updates from CompositeProvider without subscribing unknown spot pairs on MEXC WS."""
+        active_intervals = [
+            (tf_key, canonical_interval)
+            for tf_key, canonical_interval in interval_items
+            if canonical_interval in _CANONICAL_TO_WS_INTERVAL
+        ]
+        if not active_intervals:
+            return
+
+        while True:
+            try:
+                for tf_key, canonical_interval in active_intervals:
+                    try:
+                        df = await composite_provider.fetch_ohlcv(symbol, canonical_interval, 2)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        continue
+                    if df is None or df.empty:
+                        continue
+                    last_ts = df.index[-1]
+                    row = df.iloc[-1]
+                    candle = {
+                        "time": int(last_ts.timestamp()),
+                        "open": float(row["open"]),
+                        "high": float(row["high"]),
+                        "low": float(row["low"]),
+                        "close": float(row["close"]),
+                        "volume": float(row["volume"]),
+                    }
+                    payload = json.dumps({"symbol": symbol, "timeframe": tf_key, "candle": candle})
+                    dead: list[WebSocket] = []
+                    for client_ws, (client_symbol, _) in self._clients.items():
+                        if client_symbol != symbol:
+                            continue
+                        try:
+                            await client_ws.send_text(payload)
+                        except Exception:
+                            dead.append(client_ws)
+                    for d in dead:
+                        self._clients.pop(d, None)
+                await asyncio.sleep(COMPOSITE_POLL_INTERVAL_SECONDS)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
                 await asyncio.sleep(RECONNECT_DELAY_SECONDS)
 
     async def _ping_loop(self, ws: websockets.WebSocketClientProtocol) -> None:

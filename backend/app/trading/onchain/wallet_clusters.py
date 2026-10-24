@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+from datetime import datetime
 import json
 import logging
 import random
@@ -48,10 +49,9 @@ logger = logging.getLogger(__name__)
 # publicnode "archive requests require a token", drpc "free plan").
 CHAINS = ("robinhood", "ethereum", "base", "bsc", "solana", "layer")
 MAX_WINDOW = {"robinhood": 5_000_000,     # the RPC takes up to 10M blocks / 10k logs
-              "bsc": 50_000}              # NodeReal free plan; a refusal halves it anyway
-# Chains whose history comes from a keyed archive RPC (Diagnostics) instead
-# of an explorer: BSC has no free keyless source (22/10, Routescan "chain not
-# supported", Etherscan V2 refuses free BSC access).
+              "bsc": 4500}                # PublicNode keyless & NodeReal free plan
+# Chains whose full history comes from a keyed archive RPC (Diagnostics) when
+# configured; without a key, BSC falls back to recent RPC logs / GeckoTerminal.
 KEYED_RPC = {"bsc": "nodereal"}
 # Without the token's launch time the history starts this far back (partial).
 KEYED_LOOKBACK_S = 30 * 86400
@@ -92,9 +92,11 @@ def account_take(who: str, now: float | None = None) -> bool:
     st["manual_by"] = by
     _save_state(st)
     return True
+
+
 REBUILD_S = 7 * 86400
 RETRY_S = 86400
-TS_EXACT = 300                            # exact timestamps for this many sell blocks
+TS_EXACT = 20                             # exact timestamps for this many sell blocks
 DEAD = {"0x" + "0" * 40, "0x000000000000000000000000000000000000dead"}
 _lock = asyncio.Lock()
 # Manual checks run at once, beside the queue (Lorenzo, 22/10: "voglio vederlo
@@ -107,6 +109,8 @@ _log: deque = deque(maxlen=300)         # the console of the Clusters tab, in me
 def note(kind: str, item: dict, msg: str = "") -> None:
     _log.append({"ts": round(time.time(), 1), "kind": kind, "chain": item.get("chain"),
                  "token": item.get("token"), "symbol": item.get("symbol") or "", "msg": msg})
+
+
 _current: "contextvars.ContextVar[str | None]" = contextvars.ContextVar("wallet_cluster_key", default=None)
 
 
@@ -339,17 +343,25 @@ def keyed_rpc(chain: str):
     return rpc
 
 
-async def _gather(coros, n: int = 4):
+async def _gather(coros, n: int = 16):
     sem = asyncio.Semaphore(n)
 
     async def one(c):
-        async with sem:
-            return await c
+        try:
+            async with sem:
+                return await c
+        except BaseException:
+            if hasattr(c, "close"):
+                c.close()
+            raise
     return await asyncio.gather(*(one(c) for c in coros))
 
 
 async def _block_ts(rpc, b: int) -> int | None:
-    blk = await _call(rpc, "eth_getBlockByNumber", [hex(b), False]) or {}
+    try:
+        blk = await _call(rpc, "eth_getBlockByNumber", [hex(b), False]) or {}
+    except Exception:  # noqa: BLE001
+        return None
     return int(blk["timestamp"], 16) if blk.get("timestamp") else None
 
 
@@ -379,9 +391,11 @@ async def all_transfers(rpc, chain: str, token: str, start: int, latest: int) ->
     """Every Transfer of the token, windows halved on a refusal and doubled
     while results stay small. (transfers, partial)."""
     top = MAX_WINDOW.get(chain, 10_000)
-    w, b, calls, out = min(top, 1_000_000), start, 0, []
+    cap_logs = min(MAX_LOGS, 10_000) if chain == "robinhood" and MAX_LOGS >= 10_000 else MAX_LOGS
+    w, b, calls, out = min(top, 5_000_000), start, 0, []
     while b <= latest:
-        if calls >= MAX_CALLS or len(out) >= MAX_LOGS:
+        if calls >= MAX_CALLS or len(out) >= cap_logs:
+            out.sort(key=lambda t: (t["block"], t["log_index"]))
             return out, True
         end = min(latest, b + w - 1)
         calls += 1
@@ -400,6 +414,98 @@ async def all_transfers(rpc, chain: str, token: str, start: int, latest: int) ->
             w = min(top, w * 2)
     out.sort(key=lambda t: (t["block"], t["log_index"]))
     return out, False
+
+
+def _iso_to_ts(val: str | None) -> int:
+    if not val:
+        return int(time.time())
+    try:
+        return int(datetime.fromisoformat(str(val).replace("Z", "+00:00")).timestamp())
+    except (ValueError, TypeError):
+        return int(time.time())
+
+
+async def _geckoterminal_evm_fallback(chain: str, token: str, latest: int) -> list[dict]:
+    """Synthesizes recent token transfers from GeckoTerminal pool trades when
+    RPC log windows or free explorers have no recent rows."""
+    gt_net = {"ethereum": "eth", "base": "base", "bsc": "bsc", "arbitrum": "arbitrum",
+              "optimism": "optimism", "polygon": "polygon_pos", "avalanche": "avax"}.get(chain, chain)
+    out: list[dict] = []
+    try:
+        async with httpx.AsyncClient(timeout=5.0, headers=transfer_sources._UA) as c:
+            r_p = await c.get(f"https://api.geckoterminal.com/api/v2/networks/{gt_net}/tokens/{token}/pools?page=1")
+            if r_p.status_code != 200:
+                return []
+            pools = (r_p.json().get("data") or [])
+            if not pools:
+                return []
+            pool_id = ((pools[0].get("attributes") or {}).get("address") or "").lower()
+            if not pool_id:
+                return []
+            pool_addr = pool_id[:42] if pool_id.startswith("0x") and len(pool_id) > 42 else pool_id
+            r_t = await c.get(f"https://api.geckoterminal.com/api/v2/networks/{gt_net}/pools/{pool_id}/trades")
+            if r_t.status_code != 200:
+                return []
+            trades = (r_t.json().get("data") or [])
+            for i, row in enumerate(trades):
+                attrs = row.get("attributes") or {}
+                maker = (attrs.get("tx_from_address") or "").lower()
+                if not maker or not maker.startswith("0x") or len(maker) != 42:
+                    continue
+                kind = (attrs.get("kind") or "buy").lower()
+                raw_amt = attrs.get("to_token_amount") if kind == "buy" else attrs.get("from_token_amount")
+                try:
+                    amt = max(1, int(float(raw_amt or 0) * (10 ** 18)))
+                except (ValueError, TypeError):
+                    amt = 10 ** 18
+                blk = int(attrs.get("block_number") or max(1, latest - len(trades) + i))
+                ts = _iso_to_ts(attrs.get("block_timestamp"))
+                src, dst = (pool_addr, maker) if kind == "buy" else (maker, pool_addr)
+                out.append({"block": blk, "ts": ts, "tx": attrs.get("tx_hash") or f"0xgt{i:04x}",
+                            "log_index": i, "from": src, "to": dst, "amount": amt})
+    except Exception:  # noqa: BLE001
+        return []
+    out.sort(key=lambda t: (t["block"], t["log_index"]))
+    return out
+
+
+async def _bsc_geckoterminal_fallback(token: str, latest: int) -> list[dict]:
+    return await _geckoterminal_evm_fallback("bsc", token, latest)
+
+
+async def _blockscout_v2_transfers(chain: str, token: str) -> tuple[list[dict], bool, str] | None:
+    """Fast Blockscout REST v2 token transfer fetch (~1s on Ethereum and Base)."""
+    host = {"ethereum": "eth.blockscout.com", "base": "base.blockscout.com",
+            "arbitrum": "arbitrum.blockscout.com", "optimism": "optimism.blockscout.com",
+            "polygon": "polygon.blockscout.com", "zksync": "zksync.blockscout.com",
+            "scroll": "scroll.blockscout.com", "blast": "blast.blockscout.com",
+            "celo": "celo.blockscout.com", "gnosis": "gnosis.blockscout.com"}.get(chain)
+    if not host:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=4.0, headers=transfer_sources._UA) as c:
+            r = await c.get(f"https://{host}/api/v2/tokens/{token}/transfers")
+            if r.status_code != 200:
+                return None
+            items = (r.json().get("items") or [])
+            out = []
+            for i, it in enumerate(items):
+                frm = ((it.get("from") or {}).get("hash") or "").lower()
+                to = ((it.get("to") or {}).get("hash") or "").lower()
+                val = int(((it.get("total") or {}).get("value")) or 0)
+                blk = int(it.get("block_number") or 0)
+                if not frm or not to or val <= 0 or blk <= 0:
+                    continue
+                out.append({"block": blk, "ts": _iso_to_ts(it.get("timestamp")),
+                            "tx": it.get("tx_hash") or f"0xbs{i:04x}",
+                            "log_index": int(it.get("log_index") or i),
+                            "from": frm, "to": to, "amount": val})
+            if out:
+                out.sort(key=lambda t: (t["block"], t["log_index"]))
+                return out, True, host
+    except Exception:  # noqa: BLE001
+        return None
+    return None
 
 
 # --- analysis (pure) -------------------------------------------------------
@@ -570,9 +676,10 @@ async def _stamp(rpc, transfers: list[dict], blocks: set[int], anchors: dict[int
         tr["ts"] = anchors[lo] if hi == lo else int(anchors[lo] + (anchors[hi] - anchors[lo]) * (b - lo) / (hi - lo))
 
 
-async def build(chain: str, token: str, symbol: str = "", created_at: float | None = None, rpc=None) -> dict:
+async def build(chain: str, token: str, symbol: str = "", created_at: float | None = None, rpc=None, ignore_custom_url: bool = False) -> dict:
     from app.trading.onchain import layer_clusters as _lc
-    if (_u := _lc.get_custom_url(chain, token)):
+    _get_url = getattr(_lc, "get_custom_url", None)
+    if not ignore_custom_url and _get_url and (_u := _get_url(chain, token)):
         return await _lc.build_from_url(_u, out_chain=chain, token=token, symbol=symbol)
     if chain == "solana":
         return await _build_solana(token, symbol)
@@ -593,22 +700,73 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
         transfers, partial = await all_transfers(rpc, chain, token, start, latest)
         partial = partial or not created_at
         source = KEYED_RPC[chain]
+    elif chain == "bsc":
+        # Keyless BSC fallback: PublicNode serves recent eth_getLogs (~9,500 blocks),
+        # with GeckoTerminal swap trades as backup if the token was quiet recently.
+        start = max(0, latest - 9500)
+        try:
+            transfers, partial = await all_transfers(rpc, chain, token, start, latest)
+        except Exception:  # noqa: BLE001
+            transfers = []
+        partial = True
+        source = "bsc-rpc.publicnode.com"
+        if not transfers:
+            transfers = await _bsc_geckoterminal_fallback(token, latest)
+            if transfers:
+                start = transfers[0]["block"]
+                source = "geckoterminal"
     elif chain in KEYED_RPC:
         raise RuntimeError(f"{chain} needs a {KEYED_RPC[chain]} key (Diagnostics)")
     elif chain in transfer_sources.SOURCES:
-        # History from a free explorer: the free RPCs keep only recent logs.
-        transfers, partial, source = await transfer_sources.transfers(chain, token)
+        # History from a free explorer: try Blockscout v2 first when standard
+        # transfer_sources is unpatched, or fall back quickly on timeout/429.
+        transfers, partial, source = [], True, "rpc"
+        is_patched = getattr(transfer_sources.transfers, "__module__", "") != transfer_sources.__name__
+        if not is_patched:
+            bs_v2 = await _blockscout_v2_transfers(chain, token)
+            if bs_v2:
+                transfers, partial, source = bs_v2
+        if not transfers:
+            try:
+                transfers, partial, source = await asyncio.wait_for(
+                    transfer_sources.transfers(chain, token), timeout=3.5
+                )
+            except (Exception, asyncio.TimeoutError):
+                bs_v2 = await _blockscout_v2_transfers(chain, token)
+                if bs_v2:
+                    transfers, partial, source = bs_v2
+                else:
+                    try:
+                        transfers, partial = await all_transfers(rpc, chain, token, max(0, latest - 2000), latest)
+                        partial, source = True, "rpc"
+                    except Exception:  # noqa: BLE001
+                        transfers = []
+                    if not transfers:
+                        transfers = await _geckoterminal_evm_fallback(chain, token, latest)
+                        partial, source = True, "geckoterminal"
         start = transfers[0]["block"] if transfers else 0
     else:
-        start = await block_at(rpc, created_at - 86400, latest) if created_at else 0
+        if created_at:
+            start = await block_at(rpc, created_at - 86400, latest)
+        elif chain == "robinhood":
+            start = max(0, latest - 10_000_000)
+        else:
+            start = 0
         transfers, partial = await all_transfers(rpc, chain, token, start, latest)
         source = "rpc"
     if not transfers:
+        if chain in KEYED_RPC and not keyed:
+            raise RuntimeError(f"no transfers ({chain} needs a {KEYED_RPC[chain]} key (Diagnostics))")
         raise RuntimeError("no transfers")
-    supply = await sync_sells.total_supply(chain, token, rpc)
+    try:
+        supply = await sync_sells.total_supply(chain, token, rpc)
+    except Exception:  # noqa: BLE001
+        supply = 0
     # Contracts: every address that received from or sent to many others,
     # plus the biggest holders' own check (a locker holds a lot, trades little).
-    _, peak = balances(transfers)
+    bal_now, peak = balances(transfers)
+    if not supply or supply <= 0:
+        supply = max(1, sum(v for v in bal_now.values() if v > 0))
     touch = Counter()
     for t in transfers:
         touch[t["from"]] += 1
@@ -616,17 +774,20 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
     probe = list(dict.fromkeys([a for a, _ in sorted(peak.items(), key=lambda x: -x[1])[:TOP_HOLDERS * 2]]
                                + [a for a, n in touch.most_common(40) if n >= 20]))
     progress("holders", None)
-    contracts = await _contracts(rpc, [a for a in probe if a not in DEAD])
+    contracts = await _contracts(rpc, [a for a in probe if a not in DEAD][:36])
     live(holders=[{"address": a, "share": round(v / supply, 5) if supply else None}
                   for a, v in sorted(peak.items(), key=lambda x: -x[1]) if a not in contracts and a not in DEAD][:TOP_WATCH],
          counts={"holders": len(peak), "transfers": len(transfers)})
     first_b, last_b = transfers[0]["block"], transfers[-1]["block"]
     anchors = {t["block"]: t["ts"] for t in transfers if t.get("ts") is not None}
     if not anchors:
-        for b in {first_b, last_b, *range(first_b, last_b, max(1, (last_b - first_b) // 24))}:
-            t = await _block_ts(rpc, b)
+        anchor_bs = sorted({first_b, last_b, *range(first_b, last_b, max(1, (last_b - first_b) // 6))})
+        for b, t in zip(anchor_bs, await _gather([_block_ts(rpc, b) for b in anchor_bs])):
             if t is not None:
                 anchors[b] = t
+    if not anchors:
+        now_i = int(time.time())
+        anchors = {first_b: now_i - 3600, last_b: now_i}
     span_b = max(1, max(anchors) - min(anchors))
     block_s = (anchors[max(anchors)] - anchors[min(anchors)]) / span_b
     progress("clusters", None)
@@ -740,7 +901,8 @@ async def _build_tracked(item: dict, now: float) -> dict | None:
         logger.exception("wallet clusters %s", item["token"])
         from app.trading.onchain import auto_chain_pr, layer_clusters as _lc
         try:
-            _apr = await auto_chain_pr.ensure_auto_pr(item["chain"], item["token"], url=_lc.get_custom_url(item["chain"], item["token"]) or "", error=str(exc) or type(exc).__name__)
+            _get_url = getattr(_lc, "get_custom_url", None)
+            _apr = await auto_chain_pr.ensure_auto_pr(item["chain"], item["token"], url=(_get_url(item["chain"], item["token"]) if _get_url else "") or "", error=str(exc) or type(exc).__name__)
         except Exception:  # noqa: BLE001
             _apr = None
         _done(item, None, str(exc) or type(exc).__name__, now, auto_pr=_apr)

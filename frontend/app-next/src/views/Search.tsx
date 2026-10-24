@@ -3,13 +3,16 @@ import * as api from "../lib/api";
 import type { Project } from "../lib/types";
 import type { SectorsView } from "../lib/sectors";
 import { Logo } from "../components/Logo";
-import { usdShort } from "../lib/format";
+import { changeText, usdShort } from "../lib/format";
 import type { Gem } from "../lib/types";
 import { Scan } from "../components/Scan";
 import { ClusterCheck, ADDRESS } from "../components/ClusterCheck";
+import {
+  formatCompositeValue,
+  searchCompositeIndices,
+  useCompositesSnapshot,
+} from "../components/CompositeStrip";
 import { t } from "../lib/i18n";
-
-
 
 const RECENT_KEY = "search-recent-v1";
 const RECENT_MAX = 8;
@@ -21,11 +24,12 @@ function remember(s: string) {
   try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* private mode */ }
 }
 
-/** The one search (direction A, screen 6): projects in the database, sectors, and recent searches. */
+/** The one search (direction A, screen 6): projects in the database, composite indices, sectors, and recent searches. */
 export function Search({ sectors, onProject, onSector, onToken }: { sectors: SectorsView | null; onProject: (p: Project) => void; onSector: (key: string) => void; onToken: (e: Gem) => void }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Project[] | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const { items: compositeItems } = useCompositesSnapshot();
   const s = q.trim();
 
   useEffect(() => {
@@ -35,6 +39,7 @@ export function Search({ sectors, onProject, onSector, onToken }: { sectors: Sec
   }, [s]);
 
   const low = s.toLowerCase();
+  const compHits = !s ? [] : searchCompositeIndices(s, compositeItems);
   const secHits = !s ? [] : (sectors?.sectors ?? []).filter((x) => x.label.toLowerCase().includes(low) || x.key.toLowerCase().includes(low));
   const open = (p: Project) => { remember(p.symbol || s); onProject(p); };
   const last = recent();
@@ -50,6 +55,43 @@ export function Search({ sectors, onProject, onSector, onToken }: { sectors: Sec
 
       {s && (
         <>
+          {compHits.length > 0 && (
+            <>
+              <Label>{t("TradingView Composite Indices")}</Label>
+              <ol className="rounded-[16px] bg-card p-1.5">
+                {compHits.map((c) => {
+                  const [chg, sign] = changeText(c.change_24h);
+                  const chartHref = `/?symbol=${encodeURIComponent(c.symbol)}`;
+                  return (
+                    <li key={c.symbol}>
+                      <a
+                        href={chartHref}
+                        onClick={() => remember(c.symbol)}
+                        className="flex w-full items-center gap-3 rounded-[12px] px-2.5 py-2 text-left text-text no-underline transition-colors hover:bg-pill/60 active:bg-pill"
+                      >
+                        <span className="grid h-9 min-w-[44px] flex-none place-items-center rounded-[10px] bg-pill px-1.5 font-mono text-[11px] font-bold tracking-tight text-text">
+                          {c.symbol}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <b className="block truncate text-[14.5px] font-semibold leading-tight">{c.name}</b>
+                          <small className="block truncate font-mono text-[11.5px] text-text-3">{c.formula}</small>
+                        </span>
+                        <span className="flex flex-none items-center gap-2.5">
+                          <span className="flex flex-col items-end">
+                            <b className="num text-[13.5px] font-semibold">{formatCompositeValue(c)}</b>
+                            <em className={`num text-[11.5px] not-italic ${sign === "up" ? "text-up" : sign === "down" ? "text-down" : "text-text-3"}`}>{chg}</em>
+                          </span>
+                          <span className="rounded-full bg-ink px-2.5 py-1 text-[11.5px] font-semibold text-on-ink">
+                            Open Chart ↗
+                          </span>
+                        </span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ol>
+            </>
+          )}
           <Label>{t("Projects")}</Label>
           {hits == null ? <div className="h-16 animate-pulse rounded-[16px] bg-card" />
             : hits.length ? (

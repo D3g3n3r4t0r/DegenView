@@ -31,6 +31,10 @@ _last_good: dict[str, list[dict]] = {}
 
 
 def format_symbol(symbol: str) -> str:
+    from app.providers import composites
+    comp = composites.resolve_composite(symbol)
+    if comp:
+        return comp
     symbol = symbol.strip().upper().replace("/", "").replace("-", "")
     for quote in _QUOTE_ASSETS:
         if symbol.endswith(quote) and len(symbol) > len(quote):
@@ -58,6 +62,9 @@ class MexcProvider(DataProvider):
         self._base_url = base_url or BASE_URL
 
     async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int, since_ms: int | None = None) -> pd.DataFrame:
+        from app.providers import composites
+        if composites.is_composite_symbol(symbol):
+            return await composites.composite_provider.fetch_ohlcv(symbol, interval, outputsize, since_ms=since_ms)
         formatted_symbol = format_symbol(symbol)
         api_interval = _CANONICAL_TO_INTERVAL[interval]
         # MEXC silently ignores a lone endTime (no startTime) and just
@@ -193,8 +200,14 @@ class MexcProvider(DataProvider):
         matches = starts + contains
         matches.sort(key=lambda s: (not s.get("symbol", "").startswith(q), s.get("quoteAsset") != "USDT", len(s.get("symbol", ""))))
 
-        out = []
+        from app.providers import composites
+        comp_hits = composites.search_composites(query)
+        seen_comp = {c.get("symbol") for c in comp_hits}
+        out = list(comp_hits)
         for s in matches[:_MAX_SUGGESTIONS]:
+            sym = s.get("symbol", "")
+            if sym in seen_comp:
+                continue
             base, quote = s.get("baseAsset", ""), s.get("quoteAsset", "")
-            out.append({"symbol": s.get("symbol", ""), "name": s.get("fullName", "") or base, "exchange": f"MEXC ({quote})"})
-        return out
+            out.append({"symbol": sym, "name": s.get("fullName", "") or base, "exchange": f"MEXC ({quote})"})
+        return out[:_MAX_SUGGESTIONS]

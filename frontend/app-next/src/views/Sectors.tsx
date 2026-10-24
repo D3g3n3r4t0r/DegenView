@@ -73,7 +73,7 @@ function Champions({ list, fresh, onOpen }: { list: Sector[]; fresh: Set<string>
             <div className="mt-2 flex min-w-0 items-center gap-1.5">
               {s.top.slice(1).map((e) => (
                 <button key={gemId(e)} type="button" onClick={() => onOpen(e)} className="flex min-w-0 items-center gap-1 rounded-full bg-pill py-0.5 pl-0.5 pr-2">
-                  <span className="h-5 w-5 flex-none [&_.tile]:rounded-full"><Tile symbol={e.symbol} image={e.image} chain={e.chain} token={e.token_address} /></span>
+                  <span className="flex-none [&_.tile]:rounded-full"><Logo size={20} symbol={e.symbol} image={e.image} chain={e.chain} token={e.token_address} /></span>
                   <span className="num truncate text-[11.5px] text-text-2">{e.symbol}{wide ? ` ${Math.round(e.score ?? 0)}` : ""}</span>
                 </button>
               ))}

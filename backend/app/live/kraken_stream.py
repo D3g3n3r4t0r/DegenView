@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import websockets
 from fastapi import WebSocket
 
+from app.providers.composites import is_composite_symbol
 from app.providers.kraken import KrakenProvider
 
 logger = logging.getLogger("kraken_stream")
@@ -35,6 +36,8 @@ class KrakenStreamManager:
         self._lock = asyncio.Lock()
 
     async def add_client(self, ws: WebSocket, symbol: str, intervals: dict[str, str]) -> None:
+        if is_composite_symbol(symbol):
+            return  # composite indices are synthesized from MEXC constituent klines
         ws_symbol = await _provider.get_ws_symbol(symbol)
         if ws_symbol is None:
             return  # pair sconosciuto: il frontend resta sul polling

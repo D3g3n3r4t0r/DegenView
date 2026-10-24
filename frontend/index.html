@@ -33,6 +33,11 @@
       <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
     </button>
 
+    <button type="button" id="tv-composites-btn" class="tv-composites-btn" aria-expanded="false" aria-controls="tv-composites-panel" title="TradingView Market Cap, Dominance &amp; Ratio Indices (TOTAL, TOTAL2, TOTAL3, TOTALES, OTHERS, BTC.D, USDT.D…)">
+      <span class="tv-composites-btn-dot" aria-hidden="true"></span>
+      <span class="tv-composites-btn-label">Indices · <span id="tv-composites-btn-active">TOTAL3 / BTC.D</span> ▾</span>
+    </button>
+
     <div id="chart-settings-group" class="chart-settings-group">
       <div class="toolbar-intervals">
         <select id="interval-primary" class="interval-select" title="Chart timeframe — higher timeframes for confluence are derived automatically"></select>
@@ -64,6 +69,157 @@
       <button type="button" id="auth-logout-btn" class="hidden">Log out</button>
     </div>
   </header>
+
+  <div id="tv-composites-panel" class="tv-composites-panel hidden" role="dialog" aria-label="TradingView Composite Indices">
+    <div class="tv-comp-header">
+      <div class="tv-comp-title-row">
+        <div>
+          <span class="tv-comp-eyebrow">TradingView Crypto Indices</span>
+          <h3 class="tv-comp-title">Market Cap, Dominance &amp; Rotation</h3>
+        </div>
+        <button type="button" id="tv-composites-close" class="tv-comp-close" aria-label="Close indices drawer">✕</button>
+      </div>
+      <div id="tv-composites-regime" class="tv-comp-regime" data-regime="ALT_ROTATION">
+        <span class="tv-comp-regime-pill" id="tv-comp-regime-pill">ALT ROTATION</span>
+        <span class="tv-comp-regime-summary" id="tv-comp-regime-summary">TOTAL3 expanding while BTC.D softens — capital rotating into altcoins &amp; mid-caps.</span>
+      </div>
+      <div class="tv-comp-tabs" role="tablist" aria-label="Composite index categories">
+        <button type="button" class="tv-comp-tab active" data-comp-cat="all" role="tab" aria-selected="true">All (20)</button>
+        <button type="button" class="tv-comp-tab" data-comp-cat="market_cap" role="tab" aria-selected="false">Market Cap</button>
+        <button type="button" class="tv-comp-tab" data-comp-cat="dominance" role="tab" aria-selected="false">Dominance %</button>
+        <button type="button" class="tv-comp-tab" data-comp-cat="ratio" role="tab" aria-selected="false">Ratios</button>
+      </div>
+    </div>
+
+    <div class="tv-comp-body" id="tv-composites-body">
+      <section class="tv-comp-section" data-comp-section="market_cap">
+        <div class="tv-comp-section-head">
+          <span class="tv-comp-section-title">Market Cap Indices</span>
+          <span class="tv-comp-section-sub">Billions / Trillions USD ($B / $T)</span>
+        </div>
+        <div class="tv-comp-grid" id="tv-comp-grid-market_cap">
+          <button type="button" class="tv-comp-card" data-comp-symbol="TOTAL" data-comp-unit="B_USD">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">TOTAL</span><span class="tv-comp-chg up">+1.84%</span></div>
+            <div class="tv-comp-sub">Total Crypto Market Cap</div>
+            <div class="tv-comp-val">$3.12T</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="TOTAL2" data-comp-unit="B_USD">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">TOTAL2</span><span class="tv-comp-chg up">+2.35%</span></div>
+            <div class="tv-comp-sub">Total Market Cap excl. BTC</div>
+            <div class="tv-comp-val">$1.32T</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="TOTAL3" data-comp-unit="B_USD">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">TOTAL3</span><span class="tv-comp-chg up">+2.78%</span></div>
+            <div class="tv-comp-sub">Total Market Cap excl. BTC &amp; ETH</div>
+            <div class="tv-comp-val">$942.50B</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="TOTALES" data-comp-unit="B_USD">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">TOTALES</span><span class="tv-comp-chg up">+1.96%</span></div>
+            <div class="tv-comp-sub">Total Market Cap excl. Stablecoins</div>
+            <div class="tv-comp-val">$2.93T</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="TOTAL2ES" data-comp-unit="B_USD">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">TOTAL2ES</span><span class="tv-comp-chg up">+2.64%</span></div>
+            <div class="tv-comp-sub">Excl. BTC &amp; Stablecoins</div>
+            <div class="tv-comp-val">$1.13T</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="TOTAL3ES" data-comp-unit="B_USD">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">TOTAL3ES</span><span class="tv-comp-chg up">+3.15%</span></div>
+            <div class="tv-comp-sub">Pure Altcoin Cap (Excl. BTC, ETH &amp; Stables)</div>
+            <div class="tv-comp-val">$752.40B</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="OTHERS" data-comp-unit="B_USD">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">OTHERS</span><span class="tv-comp-chg up">+3.42%</span></div>
+            <div class="tv-comp-sub">Outside Top 10 Market Cap</div>
+            <div class="tv-comp-val">$384.20B</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="TOTALDEFI" data-comp-unit="B_USD">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">TOTALDEFI</span><span class="tv-comp-chg up">+2.18%</span></div>
+            <div class="tv-comp-sub">Total DeFi Market Cap</div>
+            <div class="tv-comp-val">$118.60B</div>
+          </button>
+        </div>
+      </section>
+
+      <section class="tv-comp-section" data-comp-section="dominance">
+        <div class="tv-comp-section-head">
+          <span class="tv-comp-section-title">Dominance %</span>
+          <span class="tv-comp-section-sub">Share of Total Crypto Market Cap (0–100%)</span>
+        </div>
+        <div class="tv-comp-grid" id="tv-comp-grid-dominance">
+          <button type="button" class="tv-comp-card" data-comp-symbol="BTC.D" data-comp-unit="PCT">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">BTC.D</span><span class="tv-comp-chg down">-0.42%</span></div>
+            <div class="tv-comp-sub">Bitcoin Dominance</div>
+            <div class="tv-comp-val">57.68%</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="ETH.D" data-comp-unit="PCT">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">ETH.D</span><span class="tv-comp-chg up">+0.18%</span></div>
+            <div class="tv-comp-sub">Ethereum Dominance</div>
+            <div class="tv-comp-val">12.14%</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="USDT.D" data-comp-unit="PCT">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">USDT.D</span><span class="tv-comp-chg down">-0.88%</span></div>
+            <div class="tv-comp-sub">Tether Dominance (Dry Powder)</div>
+            <div class="tv-comp-val">4.38%</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="USDC.D" data-comp-unit="PCT">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">USDC.D</span><span class="tv-comp-chg down">-0.64%</span></div>
+            <div class="tv-comp-sub">USD Coin Dominance</div>
+            <div class="tv-comp-val">1.72%</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="STABLE.C.D" data-comp-unit="PCT">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">STABLE.C.D</span><span class="tv-comp-chg down">-0.81%</span></div>
+            <div class="tv-comp-sub">USDT + USDC Combined Dominance</div>
+            <div class="tv-comp-val">6.10%</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="OTHERS.D" data-comp-unit="PCT">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">OTHERS.D</span><span class="tv-comp-chg up">+1.54%</span></div>
+            <div class="tv-comp-sub">Mid/Small-Cap Altcoin Dominance</div>
+            <div class="tv-comp-val">12.31%</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="TOTAL3.D" data-comp-unit="PCT">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">TOTAL3.D</span><span class="tv-comp-chg up">+0.92%</span></div>
+            <div class="tv-comp-sub">TOTAL3 Share of Market</div>
+            <div class="tv-comp-val">30.18%</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="ALTS.D" data-comp-unit="PCT">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">ALTS.D</span><span class="tv-comp-chg up">+0.76%</span></div>
+            <div class="tv-comp-sub">Total Altcoin Dominance (100% − BTC − Stables)</div>
+            <div class="tv-comp-val">36.22%</div>
+          </button>
+        </div>
+      </section>
+
+      <section class="tv-comp-section" data-comp-section="ratio">
+        <div class="tv-comp-section-head">
+          <span class="tv-comp-section-title">Benchmarks &amp; Ratios</span>
+          <span class="tv-comp-section-sub">Cross-Pair Relative Strength</span>
+        </div>
+        <div class="tv-comp-grid" id="tv-comp-grid-ratio">
+          <button type="button" class="tv-comp-card" data-comp-symbol="ETHBTC" data-comp-unit="RATIO">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">ETHBTC</span><span class="tv-comp-chg up">+0.62%</span></div>
+            <div class="tv-comp-sub">Ethereum / Bitcoin Ratio</div>
+            <div class="tv-comp-val">0.03642</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="SOLBTC" data-comp-unit="RATIO">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">SOLBTC</span><span class="tv-comp-chg up">+1.95%</span></div>
+            <div class="tv-comp-sub">Solana / Bitcoin Ratio</div>
+            <div class="tv-comp-val">0.002145</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="SOLETH" data-comp-unit="RATIO">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">SOLETH</span><span class="tv-comp-chg up">+1.32%</span></div>
+            <div class="tv-comp-sub">Solana / Ethereum Ratio</div>
+            <div class="tv-comp-val">0.05890</div>
+          </button>
+          <button type="button" class="tv-comp-card" data-comp-symbol="DEFIETH" data-comp-unit="RATIO">
+            <div class="tv-comp-card-top"><span class="tv-comp-sym">DEFIETH</span><span class="tv-comp-chg up">+0.44%</span></div>
+            <div class="tv-comp-sub">DeFi Index / Ethereum Ratio</div>
+            <div class="tv-comp-val">0.3128</div>
+          </button>
+        </div>
+      </section>
+    </div>
+  </div>
 
   <div id="error-banner" class="error-banner hidden"></div>
 
@@ -1525,6 +1681,7 @@
          ticker right where the thumb already is (next to the timeframe
          wheel) instead of reaching back up to the top toolbar. -->
     <button type="button" id="mobile-chart-symbol" class="mobile-chart-symbol">—</button>
+    <button type="button" id="mobile-composites-btn" class="mobile-composites-btn" aria-expanded="false" aria-controls="tv-composites-panel" title="TradingView Market Cap &amp; Dominance Indices">Indices ▾</button>
     <!-- Active strategy pill — tapping opens the Livelli panel where the
          strategy selector lives so the user can change it without hunting. -->
     <button type="button" id="mobile-strategy-pill" class="mobile-strategy-pill" title="Active strategy — tap to change">—</button>

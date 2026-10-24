@@ -45,7 +45,6 @@ import httpx
 _ENDPOINTS: dict[str, list[str]] = {
     "solana": [
         "https://api.mainnet-beta.solana.com",
-        "https://rpc.ankr.com/solana",
     ],
     "robinhood": [
         "https://rpc.mainnet.chain.robinhood.com",
@@ -58,6 +57,22 @@ _ENDPOINTS: dict[str, list[str]] = {
     "ethereum": ["https://ethereum-rpc.publicnode.com"],
     "base": ["https://base-rpc.publicnode.com", "https://mainnet.base.org"],
     "bsc": ["https://bsc-rpc.publicnode.com", "https://bsc-dataseed.bnbchain.org"],
+    "arbitrum": ["https://arbitrum-one-rpc.publicnode.com"],
+    "optimism": ["https://optimism-rpc.publicnode.com"],
+    "polygon": ["https://polygon-bor-rpc.publicnode.com"],
+    "avalanche": ["https://avalanche-c-chain-rpc.publicnode.com"],
+    "mantle": ["https://mantle-rpc.publicnode.com"],
+    "metis": ["https://andromeda.metis.io"],
+    "zksync": ["https://mainnet.era.zksync.io"],
+    "scroll": ["https://scroll-rpc.publicnode.com"],
+    "blast": ["https://blast-rpc.publicnode.com"],
+    "mode": ["https://mainnet.mode.network"],
+    "taiko": ["https://rpc.mainnet.taiko.xyz"],
+    "linea": ["https://linea-rpc.publicnode.com"],
+    "celo": ["https://celo-rpc.publicnode.com"],
+    "gnosis": ["https://gnosis-rpc.publicnode.com"],
+    "fantom": ["https://fantom-rpc.publicnode.com"],
+    "manta": ["https://pacific-rpc.manta.network/http"],
     # EVM copy trading (23/10). Arc: the node unlocks.py and pool_prices.py
     # already read. Monad: the official public node (docs.monad.xyz, network
     # information: chain id 143, 25 requests/s), not yet called from here.
