@@ -794,6 +794,14 @@ ALPHATREND_1H = "AlphaTrend 1H (long only)"
 # 2023 positive (+12 +39 +18); on 10 pairs outside the choice +64% / -12%.
 # The author's 14/1.0 gave the same 2021 and -21% in 2025; the whole area
 # period 14-21, multiplier 0.3-0.6 holds the result.
+# Overfitting checks (scripts/robust_1h.py, same code as here): walk-forward
+# (12 months to choose, 6 to test) on the 20 pairs 2021 +216%, 2022 -6%,
+# 2023-25 +8 / +57 / +1, efficiency 0.66 (10 other pairs 0.49, 2025 -28);
+# double costs cost ~5 points a year; deflated Sharpe 0.99 with 9 000
+# trials (0.88 on the other pairs); all 336 cells of the grid positive. But
+# grid PBO 0.27 / 0.39: the exact values do not matter and cannot be
+# picked reliably — the edge is AlphaTrend + the BTC filter, not 17/0.4.
+# MEXC candles (the site's) vs Binance: median -11 points since 2022-07.
 ALPHATREND_DEFAULT_PARAMS = {
     "at_period": 17,
     "at_coeff": 0.4,

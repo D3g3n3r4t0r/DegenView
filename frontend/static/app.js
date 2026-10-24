@@ -535,7 +535,7 @@ const COLORS_LIGHT = {
     "Gabriele 2 (RSI+BB long/short)": "RSI+BB both ways: the overbought signal opens a short instead of only closing the long.",
     "Accumulo / Distribuzione (long-term)": "Counter-trend: RSI divergences at swing lows and highs, range breakouts and bounces off the range support. Holds until the opposite signal.",
     "Lorenzo HF (minuti on-chain)": "Trend follower for minute candles of on-chain tokens.",
-    "AlphaTrend 1H (long only)": "AlphaTrend (TradingView, Kıvanç Özbilgiç), long only, for the 1-hour chart: buys when the AlphaTrend line turns up, sells when it turns down. Best of eighteen public trend strategies in the 1H test with the BTC filter and its exit on (median of 20 pairs: 2021 +135%, 2022 -5%, 2023–25 +12% / +39% / +18%).",
+    "AlphaTrend 1H (long only)": "AlphaTrend (TradingView, Kıvanç Özbilgiç), long only, for the 1-hour chart: buys when the AlphaTrend line turns up, sells when it turns down, with the BTC filter and its exit on. 1H test, walk-forward (values chosen on the past 12 months, tested on the next 6), 20 pairs: 2021 +216%, 2022 -6%, 2023–25 +8% / +57% / +1%; the period and multiplier matter little (every value of the grid is positive).",
   };
   // The best setup measured for each strategy, applied on request: the
   // defaults stay as they are, so saved results do not change.
