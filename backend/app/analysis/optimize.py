@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from app.analysis.backtest import run_backtest
 from app.analysis.cancel import stop_if_asked
 from app.analysis.strategies import (
+    ALPHATREND_DEFAULT_PARAMS,
     DEFAULT_PARAMS,
     EXHAUSTION_DEFAULT_PARAMS,
     LKI2_DEFAULT_PARAMS,
@@ -234,6 +235,14 @@ def _random_gabriele_params(rng: random.Random, base: dict | None = None) -> dic
     }
 
 
+def _random_alphatrend_params(rng: random.Random, base: dict | None = None) -> dict:
+    """Period and multiplier only; the RSI/MFI switch stays the user's."""
+    return {
+        "at_period": rng.randint(7, 30),
+        "at_coeff": round(rng.uniform(0.2, 1.5), 2),
+    }
+
+
 # Kept on every candidate the searches build (see optimize_strategy and
 # pipeline.run_pipeline): the user's switch, not a dimension of the search.
 STICKY_PARAMS = ("btc_filter", "btc_filter_exit")
@@ -244,6 +253,7 @@ _STRATEGY_SPACES: dict[str, tuple[dict, callable]] = {
     "Accumulo / Distribuzione (long-term)": (EXHAUSTION_DEFAULT_PARAMS, _random_exhaustion_params),
     "Gabriele (RSI+BB reversal)": (LKI_DEFAULT_PARAMS, _random_gabriele_params),
     "Gabriele 2 (RSI+BB long/short)": (LKI2_DEFAULT_PARAMS, _random_gabriele_params),
+    "AlphaTrend 1H (long only)": (ALPHATREND_DEFAULT_PARAMS, _random_alphatrend_params),
 }
 
 # Every whole value, not steps of 5: with only two dimensions the full grid
@@ -269,7 +279,14 @@ _GRID_EXHAUSTION = {
     "enable_range_bounce": [True, False],
 }  # 3^5 × 2^3 = 1 944 combinations
 
+# 24 x 14 = 336: every period of the 1H test, multiplier in steps of 0.1
+_GRID_ALPHATREND = {
+    "at_period": list(range(7, 31)),
+    "at_coeff": [round(0.2 + 0.1 * i, 1) for i in range(14)],
+}
+
 _GRID_SPACES: dict[str, dict] = {
+    "AlphaTrend 1H (long only)": _GRID_ALPHATREND,
     "Gabriele (RSI+BB reversal)": _GRID_GABRIELE,
     "Gabriele 2 (RSI+BB long/short)": _GRID_GABRIELE,
     "Accumulo / Distribuzione (long-term)": _GRID_EXHAUSTION,

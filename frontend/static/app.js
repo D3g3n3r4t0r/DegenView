@@ -476,6 +476,13 @@ const COLORS_LIGHT = {
       { key: "cl_ema_len", label: "Long average (candles)", type: "number", min: 10, default: 200 },
       { key: "cl_time_stop", label: "Time stop (candles)", type: "number", min: 1, default: 30 },
     ],
+    // AlphaTrend 1H (24/10): chosen out of eighteen public GitHub /
+    // TradingView trend strategies in the 1H test environment, long only.
+    "AlphaTrend 1H (long only)": [
+      { key: "at_period", label: "AlphaTrend period", type: "number", min: 1, default: 17 },
+      { key: "at_coeff", label: "AlphaTrend multiplier (× ATR)", type: "number", min: 0, step: 0.1, default: 0.4 },
+      { key: "at_use_rsi", label: "RSI instead of money flow (no volume data)", type: "checkbox", default: false },
+    ],
   };
 
   // Trend EMA Reversal (15/10): the very same fields as Trend EMA — same
@@ -504,13 +511,18 @@ const COLORS_LIGHT = {
       type: "checkbox", default: false,
     });
   });
+  // AlphaTrend 1H was chosen with the BTC filter and its exit on: on by
+  // default there, the switches stay the user's.
+  STRATEGY_PARAM_FIELDS["AlphaTrend 1H (long only)"].forEach((f) => {
+    if (f.key === "btc_filter" || f.key === "btc_filter_exit") f.default = true;
+  });
 
   // ── Strategy menu: grouped by kind, then one-line descriptions and the
   // recommended settings. Lorenzo, 16/10: Trend EMA Reversal together with
   // RSI+BB Reversal, Trend EMA (long/short) together with RSI+BB long/short,
   // no star. Anything new the backend adds goes under "Other".
   const STRATEGY_GROUPS = [
-    ["Reversal · long only", ["Lorenzo reversal (long only)", "Gabriele (RSI+BB reversal)", "Combined reversal (long only)"]],
+    ["Reversal · long only", ["Lorenzo reversal (long only)", "Gabriele (RSI+BB reversal)", "Combined reversal (long only)", "AlphaTrend 1H (long only)"]],
     ["Long / short", ["Lorenzo (trend-follower)", "Gabriele 2 (RSI+BB long/short)"]],
     ["Other", ["Accumulo / Distribuzione (long-term)", "Lorenzo HF (minuti on-chain)"]],
   ];
@@ -523,11 +535,13 @@ const COLORS_LIGHT = {
     "Gabriele 2 (RSI+BB long/short)": "RSI+BB both ways: the overbought signal opens a short instead of only closing the long.",
     "Accumulo / Distribuzione (long-term)": "Counter-trend: RSI divergences at swing lows and highs, range breakouts and bounces off the range support. Holds until the opposite signal.",
     "Lorenzo HF (minuti on-chain)": "Trend follower for minute candles of on-chain tokens.",
+    "AlphaTrend 1H (long only)": "AlphaTrend (TradingView, Kıvanç Özbilgiç), long only, for the 1-hour chart: buys when the AlphaTrend line turns up, sells when it turns down. Best of eighteen public trend strategies in the 1H test with the BTC filter and its exit on (median of 20 pairs: 2021 +135%, 2022 -5%, 2023–25 +12% / +39% / +18%).",
   };
   // The best setup measured for each strategy, applied on request: the
   // defaults stay as they are, so saved results do not change.
   const RECOMMENDED_SETTINGS = {
     "Lorenzo reversal (long only)": { btc_filter: true },
+    "AlphaTrend 1H (long only)": { at_period: 17, at_coeff: 0.4, btc_filter: true, btc_filter_exit: true },
     "Combined reversal (long only)": { btc_filter: true },
   };
 
@@ -1561,6 +1575,7 @@ const COLORS_LIGHT = {
     "Gabriele (RSI+BB reversal)",
     "Gabriele 2 (RSI+BB long/short)",
     "Claudio 4H",
+    "AlphaTrend 1H (long only)",
   ]);
 
   function updateOptimizeButtonVisibility() {
@@ -12716,6 +12731,7 @@ const COLORS_LIGHT = {
 
   // Strategies for which the backend has a full discrete grid (grid mode).
   const GRID_STRATEGIES = new Set([
+    "AlphaTrend 1H (long only)",
     "Gabriele (RSI+BB reversal)",
     "Gabriele 2 (RSI+BB long/short)",
     "Accumulo / Distribuzione (long-term)",

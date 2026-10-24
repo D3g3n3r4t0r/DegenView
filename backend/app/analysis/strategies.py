@@ -776,6 +776,86 @@ def compute_combined_reversal_signals(df: pd.DataFrame, params: dict | None = No
                          "exit_long": exit_, "exit_short": false}, index=df.index)
 
 
+ALPHATREND_1H = "AlphaTrend 1H (long only)"
+
+# Lorenzo, 24/10: "la miglior strategia sul time frame un'ora [...] dalle
+# fonti pubbliche di GitHub e TradingView", "solo long piu' uscita, quindi
+# reversal", "puoi modificare le strategie degli utenti [...] evitare
+# l'overfitting". AlphaTrend (indicator by KivancOzbilgic, strategy by
+# only_fibonacci, TradingView open-source): a line under the lows while the
+# money flow index is >= 50 and over the highs while it is below, that only
+# moves in the trade's favour; buy when it crosses above itself two bars
+# back, sell at the opposite cross, the two always alternating. Long only
+# here: the sell signal closes the long.
+# Chosen in the 1H test environment (scripts/public_1h.py, GRIDSET=v3) out of
+# eighteen public trend strategies: values picked on 2023 on with the BTC
+# weekly filter on and its exit, then 2021 and 2022 never seen — median of
+# 20 pairs 2021 +135%, 2022 -5% (buy & hold +285% / -72%), every year from
+# 2023 positive (+12 +39 +18); on 10 pairs outside the choice +64% / -12%.
+# The author's 14/1.0 gave the same 2021 and -21% in 2025; the whole area
+# period 14-21, multiplier 0.3-0.6 holds the result.
+ALPHATREND_DEFAULT_PARAMS = {
+    "at_period": 17,
+    "at_coeff": 0.4,
+    "at_use_rsi": False,     # the script's "no volume data" switch
+}
+
+
+def compute_alphatrend_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    p = {**ALPHATREND_DEFAULT_PARAMS, **(params or {})}
+    n, coeff = max(1, int(p["at_period"])), float(p["at_coeff"])
+    high, low, close = (df[k].to_numpy(dtype=float) for k in ("high", "low", "close"))
+    prev_close = np.concatenate([[np.nan], close[:-1]])
+    tr = np.nanmax(np.vstack([high - low, np.abs(high - prev_close), np.abs(low - prev_close)]), axis=0)
+    atr = pd.Series(tr).rolling(n).mean().to_numpy()            # ta.sma(ta.tr, AP)
+    use_rsi = p["at_use_rsi"]
+    if isinstance(use_rsi, str):
+        use_rsi = use_rsi.strip().lower() in ("1", "true", "yes", "on")
+    if use_rsi:
+        d = np.diff(close, prepend=close[0])
+        up = pd.Series(np.where(d > 0, d, 0.0)).ewm(alpha=1 / n, adjust=False).mean().to_numpy()
+        dn = pd.Series(np.where(d < 0, -d, 0.0)).ewm(alpha=1 / n, adjust=False).mean().to_numpy()
+        with np.errstate(divide="ignore", invalid="ignore"):
+            osc = np.where(dn > 0, 100 - 100 / (1 + up / dn), 100.0)
+    else:
+        tp = (high + low + close) / 3
+        flow = tp * df["volume"].to_numpy(dtype=float)
+        dtp = np.diff(tp, prepend=np.nan)
+        pos = pd.Series(np.where(dtp > 0, flow, 0.0)).rolling(n).sum().to_numpy()
+        neg = pd.Series(np.where(dtp < 0, flow, 0.0)).rolling(n).sum().to_numpy()
+        with np.errstate(divide="ignore", invalid="ignore"):
+            osc = np.where(neg > 0, 100 - 100 / (1 + pos / neg), 100.0)
+    bull = osc >= 50
+    up_t, dn_t = low - atr * coeff, high + atr * coeff
+    m = len(close)
+    line = np.zeros(m)
+    prev = 0.0
+    for i in range(m):
+        if np.isfinite(atr[i]):
+            if bull[i]:
+                prev = prev if up_t[i] < prev else up_t[i]
+            else:
+                prev = prev if dn_t[i] > prev else dn_t[i]
+        line[i] = prev
+    two_back = np.concatenate([[np.nan, np.nan], line[:-2]])
+    above = line > two_back
+    was_above = np.concatenate([[False], line[:-1] > two_back[:-1]])
+    below = line < two_back
+    was_below = np.concatenate([[False], line[:-1] < two_back[:-1]])
+    buy, sell = above & ~was_above, below & ~was_below
+    buy[:2] = sell[:2] = False
+    entry, exit_ = np.zeros(m, dtype=bool), np.zeros(m, dtype=bool)
+    last = 0
+    for i in range(m):
+        if buy[i] and last != 1:
+            entry[i], last = True, 1
+        elif sell[i] and last != -1:
+            exit_[i], last = True, -1
+    false = np.zeros(m, dtype=bool)
+    return pd.DataFrame({"entry_long": entry, "entry_short": false,
+                         "exit_long": exit_, "exit_short": false}, index=df.index)
+
+
 def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     base = compute_lki_signals(df, params)
     # L'uscita long dell'originale e' la condizione di ipercomprato: qui apre
@@ -807,6 +887,7 @@ STRATEGY_REGISTRY = {
     CLAUDIO_TREND_4H: compute_claudio_trend_signals,
     CLAUDIO_1D: compute_claudio_1d_signals,
     "Lorenzo HF (minuti on-chain)": compute_lorenzo_hf_signals,
+    ALPHATREND_1H: compute_alphatrend_signals,
 }
 
 
