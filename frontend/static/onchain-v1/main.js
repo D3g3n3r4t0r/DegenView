@@ -727,6 +727,13 @@ async function boot() {
   if (preloaded) signedIn = Boolean(preloaded.user);
   else try { signedIn = Boolean((await api.getSession())?.user); } catch { /* offline: si tratta come non loggato */ }
 
+  if (!signedIn) {
+    const m = (location.hash + " " + location.search).match(/(?:^|[#?&])token=([^:&]+)(?::|%3A)([^&# ]+)/i);
+    if (m) {
+      location.replace(`/share/${encodeURIComponent(decodeURIComponent(m[1]))}/${encodeURIComponent(decodeURIComponent(m[2]))}`);
+      return;
+    }
+  }
   view.login.hidden = signedIn;
   view.shell.hidden = !signedIn;
   if (view.dock) view.dock.hidden = !signedIn;

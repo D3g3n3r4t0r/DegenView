@@ -5158,7 +5158,7 @@ async def public_share_page(chain: str, token: str) -> HTMLResponse:
         or f"Dossier pubblico interattivo per {name} ({sym}) su {chain_clean.upper()}: grafico, pilastri, cluster wallet e analisi AI."
     )
     og_desc = _html.escape(str(summary)[:220], quote=True)
-    share_file = STATIC_DIR / "share.html"
+    share_file = FRONTEND_DIR / "static" / "share.html"
     tpl = share_file.read_text(encoding="utf-8")
     html_out = (
         tpl.replace("__OG_TITLE__", og_title)
