@@ -165,6 +165,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0422l", "Deploy di main bloccato dal controllo di stile e da un test del client RPC",
+     "Trovato il 24/10 lavorando alle sezioni senza grafico: il deploy di e31bd9f (seed-0418l-0420l) era fallito al passo Lint (variabile 'l' ambigua in composites.py, import inutilizzato in test_composites.py), e test_transport_failure_falls_back_to_secondary contava ancora su un secondo nodo Solana appena tolto.",
+     "alta"),
+    ("seed-0421l", "Alert, Trading e Strategie a tutta pagina, senza grafico",
+     "Lorenzo, 24/10: 'Le sezioni del sito classico Alert, Trading e Strategie non hanno la necessita' di mostrare il grafico, quindi puoi sfruttare tutta la pagina per impostare al meglio la visualizzazione grafica e il funzionamento delle varie finestre [...] costruire un modello molto performante a livello di visualizzazione e di facilita' d'uso'.",
+     "media"),
     ("seed-0420l", "Pacchetto completo dei 20 ticker compositi di TradingView (TOTAL, TOTAL2, TOTAL3, TOTALES, OTHERS, BTC.D, USDT.D, ETHBTC, ecc.) e regime macro",
      "Lorenzo, 24/10: 'aggiungiamo sul degen view i ticker compositi di tradingview ; tipo TOTAL3, TOTALES, BTC.D etc etc , fai un bel pacchetto'.",
      "alta"),

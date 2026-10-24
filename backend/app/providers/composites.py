@@ -593,19 +593,19 @@ class CompositeProvider(DataProvider):
             sup_b = SUPPLY_BILLIONS[coin]
             o = df["open"].to_numpy(dtype=float) * sup_b
             h = df["high"].to_numpy(dtype=float) * sup_b
-            l = df["low"].to_numpy(dtype=float) * sup_b
+            lo = df["low"].to_numpy(dtype=float) * sup_b
             c = df["close"].to_numpy(dtype=float) * sup_b
             v = df["volume"].to_numpy(dtype=float) * df["close"].to_numpy(dtype=float) / 1e9
-            return o, h, l, c, v
+            return o, h, lo, c, v
 
         def coin_price_ohlc(coin: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
             df = aligned[coin]
             o = df["open"].to_numpy(dtype=float)
             h = df["high"].to_numpy(dtype=float)
-            l = df["low"].to_numpy(dtype=float)
+            lo = df["low"].to_numpy(dtype=float)
             c = df["close"].to_numpy(dtype=float)
             v = df["volume"].to_numpy(dtype=float) * c / 1e9
-            return o, h, l, c, v
+            return o, h, lo, c, v
 
         # --- Direct Pair Ratios ---
         if canon in ("ETHBTC", "SOLBTC", "SOLETH"):
@@ -741,29 +741,29 @@ class CompositeProvider(DataProvider):
 
         # --- Dominance Index Dispatch (0.0 to 100.0 PCT) ---
         if canon == "BTC.D":
-            o, h, l, c = _ratio_ohlc(btc_o, btc_h, btc_l, btc_c, total_o, total_h, total_l, total_c, scale=100.0, is_pct=True)
-            return _pack_ohlcv(index, o, h, l, c, total_v)
+            o, h, lo, c = _ratio_ohlc(btc_o, btc_h, btc_l, btc_c, total_o, total_h, total_l, total_c, scale=100.0, is_pct=True)
+            return _pack_ohlcv(index, o, h, lo, c, total_v)
         if canon == "ETH.D":
-            o, h, l, c = _ratio_ohlc(eth_o, eth_h, eth_l, eth_c, total_o, total_h, total_l, total_c, scale=100.0, is_pct=True)
-            return _pack_ohlcv(index, o, h, l, c, total_v)
+            o, h, lo, c = _ratio_ohlc(eth_o, eth_h, eth_l, eth_c, total_o, total_h, total_l, total_c, scale=100.0, is_pct=True)
+            return _pack_ohlcv(index, o, h, lo, c, total_v)
         if canon == "USDT.D":
-            o, h, l, c = _const_num_dominance_ohlc(usdt_b, total_o, total_h, total_l, total_c)
-            return _pack_ohlcv(index, o, h, l, c, total_v)
+            o, h, lo, c = _const_num_dominance_ohlc(usdt_b, total_o, total_h, total_l, total_c)
+            return _pack_ohlcv(index, o, h, lo, c, total_v)
         if canon == "USDC.D":
-            o, h, l, c = _const_num_dominance_ohlc(usdc_b, total_o, total_h, total_l, total_c)
-            return _pack_ohlcv(index, o, h, l, c, total_v)
+            o, h, lo, c = _const_num_dominance_ohlc(usdc_b, total_o, total_h, total_l, total_c)
+            return _pack_ohlcv(index, o, h, lo, c, total_v)
         if canon == "STABLE.C.D":
-            o, h, l, c = _const_num_dominance_ohlc(stables_b, total_o, total_h, total_l, total_c)
-            return _pack_ohlcv(index, o, h, l, c, total_v)
+            o, h, lo, c = _const_num_dominance_ohlc(stables_b, total_o, total_h, total_l, total_c)
+            return _pack_ohlcv(index, o, h, lo, c, total_v)
         if canon == "OTHERS.D":
-            o, h, l, c = _ratio_ohlc(others_o, others_h, others_l, others_c, total_o, total_h, total_l, total_c, scale=100.0, is_pct=True)
-            return _pack_ohlcv(index, o, h, l, c, others_v)
+            o, h, lo, c = _ratio_ohlc(others_o, others_h, others_l, others_c, total_o, total_h, total_l, total_c, scale=100.0, is_pct=True)
+            return _pack_ohlcv(index, o, h, lo, c, others_v)
         if canon == "TOTAL3.D":
-            o, h, l, c = _ratio_ohlc(total3_o, total3_h, total3_l, total3_c, total_o, total_h, total_l, total_c, scale=100.0, is_pct=True)
-            return _pack_ohlcv(index, o, h, l, c, total3_v)
+            o, h, lo, c = _ratio_ohlc(total3_o, total3_h, total3_l, total3_c, total_o, total_h, total_l, total_c, scale=100.0, is_pct=True)
+            return _pack_ohlcv(index, o, h, lo, c, total3_v)
         if canon == "ALTS.D":
-            o, h, l, c = _ratio_ohlc(total2_o, total2_h, total2_l, total2_c, total_o, total_h, total_l, total_c, scale=100.0, is_pct=True)
-            return _pack_ohlcv(index, o, h, l, c, total2_v)
+            o, h, lo, c = _ratio_ohlc(total2_o, total2_h, total2_l, total2_c, total_o, total_h, total_l, total_c, scale=100.0, is_pct=True)
+            return _pack_ohlcv(index, o, h, lo, c, total2_v)
 
         raise ProviderError(f"Unsupported composite index: {canon}")
 
