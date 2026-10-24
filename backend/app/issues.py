@@ -207,6 +207,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0427l", "Rilevamento automatico della chain dei cluster in base all'indirizzo inserito",
+     "Lorenzo, 24/10: 'la chain dei cluster deve essere indivudata automaticamente in base all'indiriizzo che viene inserito', 'dai priorità massima al push di questa task dei cluster'.",
+     "alta"),
+    ("seed-0426l", "Pagina dedicata in tempo reale per DREGG (Dragon's Egg): monitoraggio multi-repository GitHub (8 repo), contributor + swarm multi-agente, Tech Tree, Horizon Map e progresso % verso la Mainnet",
+     "Lorenzo, 24/10: 'Vorrei aggiungere una funzione per quanto riguarda DREG (XkeTXo1125vz5H9svJpGiw4JvLbN8VmMu9cmMvspump)... voglio sapere esattamente dentro l'app quanti push fanno, quanto è attivo GitHub, chi ci sta lavorando, quanti sono, il progresso in percentuale per il goal della mainnet in base a quello che stanno facendo, quanto siamo lontani e quindi avere una pagina dedicata a DREG all'interno del token che mi fa vedere tutte queste informazioni in tempi reali e aggiornate'.",
+     "alta"),
     ("seed-0424l", "Risoluzione definitiva di tutti i punti aperti nel Cantiere e blocco delle segnalazioni auto-PR spurie",
      "Lorenzo, 24/10: 'risolvi tutti i punti nel cantiere e fai che non si ripresentino'.",
      "alta"),

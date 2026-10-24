@@ -11,6 +11,7 @@ import { Logo } from "../components/Logo";
 import { CandleChart } from "../components/CandleChart";
 import { SellsMap } from "../components/SellsMap";
 import { DevPayments, DREGG_MINT } from "../components/DevPayments";
+import { DreggPulseBanner, DreggPulseView } from "../components/DreggPulse";
 import { DeepFacts, DeepResult, DossierHead, Details, InfoFallback, WhyOf } from "./Dossier";
 import { t as tr } from "../lib/i18n";
 
@@ -60,7 +61,8 @@ type Recheck = { busy: boolean; own: boolean; failed: boolean; steps: RecheckPro
 export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void }) {
   const e = open.e;
   const m: Market = { chain: e.chain, token: e.token_address, symbol: e.symbol, pair: e.pair_address };
-  const [tab, setTab] = useState<"why" | "info">("why");
+  const isDregg = e.token_address === DREGG_MINT || (e.symbol || "").toUpperCase() === "DREGG";
+  const [tab, setTab] = useState<"dregg" | "why" | "info">(isDregg ? "dregg" : "why");
   const tabs = useRef<HTMLElement>(null);
   const [entry, setEntry] = useState<Entry | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,6 +94,7 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
 
   // The dossier: Why and Info complete whichever list opened the page.
   useEffect(() => {
+    setTab(isDregg ? "dregg" : "why");
     api.getToken(e.chain, e.token_address).then((r) => {
       if (!alive.current) return;
       setEntry(r.entry);
@@ -275,6 +278,7 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
           </span>
         </section>
         {entry && <Glance e={entry} />}
+        {isDregg && <DreggPulseBanner onOpenTab={() => { setTab("dregg"); tabs.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} />}
         <div className="mb-2 mt-4 flex items-center justify-between">
           <h3 className="text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">{tr("Price")}</h3>
           <div className="flex gap-1">
@@ -298,17 +302,19 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
        </div>
        <div className="@min-[960px]:min-h-0 @min-[960px]:overflow-y-auto @min-[960px]:pb-12">
         <nav ref={tabs} className="mt-[18px] flex scroll-mt-4 gap-1 rounded-full bg-pill p-1 @min-[960px]:sticky @min-[960px]:top-0 @min-[960px]:z-10 @min-[960px]:mt-1">
-          {(["why", "info"] as const).map((t) => (
+          {(isDregg ? (["dregg", "why", "info"] as const) : (["why", "info"] as const)).map((t) => (
             <button key={t} type="button" aria-current={tab === t ? "true" : undefined} onClick={() => setTab(t)}
               className={`relative h-9 flex-1 rounded-full text-[14px] font-medium ${tab === t ? "text-text" : "text-text-2"}`}>
               {tab === t && <motion.span layoutId="dt-tab" className="absolute inset-0 rounded-full bg-card shadow-[0_1px_2px_rgb(0_0_0/.06)]" transition={{ type: "spring", stiffness: 520, damping: 42 }} />}
-              <span className="relative">{t === "why" ? tr("Why") : tr("Info")}</span>
+              <span className="relative">{t === "dregg" ? "DREGG Mainnet · GitHub" : t === "why" ? tr("Why") : tr("Info")}</span>
             </button>
           ))}
         </nav>
 
         <div className="pt-2">
-          {tab === "why" ? (
+          {tab === "dregg" && isDregg ? (
+            <DreggPulseView />
+          ) : tab === "why" ? (
             <>
               {entry ? <WhyOf e={entry} deep={deep} /> : <p className="text-[14px] text-text-2">{loading ? tr("Loading…") : tr("Nothing to add yet.")}</p>}
               {entry && (

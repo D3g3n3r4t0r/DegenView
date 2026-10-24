@@ -5,6 +5,7 @@ import { Sheet } from "../components/Sheet";
 import { Logo } from "../components/Logo";
 import { changeText, usdShort } from "../lib/format";
 import { toggleWatch, watchId, watched, type Opened } from "./TokenPage";
+import { DREGG_MINT } from "../components/DevPayments";
 import { t, locale } from "../lib/i18n";
 
 /** Direction A, screen 3: a tap on a row opens this preview over the list; "Full dossier" opens the token page. */
@@ -65,6 +66,24 @@ export function TokenSheet({ open, onClose, onFull }: { open: Opened | null; onC
               </div>
             ))}
           </div>
+          {(e.token_address === DREGG_MINT || (g.symbol || "").toUpperCase() === "DREGG") && (
+            <button
+              type="button"
+              onClick={() => open && onFull(open)}
+              className="flex items-center justify-between rounded-[14px] border border-up/30 bg-up/10 px-3.5 py-2.5 text-left transition-opacity hover:opacity-90"
+            >
+              <div>
+                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-up">
+                  <span className="h-2 w-2 rounded-full bg-up animate-pulse" />
+                  DREGG Mainnet &amp; GitHub Live
+                </div>
+                <div className="text-[12.5px] font-medium text-text">
+                  Progresso Mainnet <b>65.2%</b> · 8 Repo (16.297+ commit) · 6 dev + 9 lane AI
+                </div>
+              </div>
+              <span className="text-[12px] font-semibold text-up">Apri ↗</span>
+            </button>
+          )}
           <div className="mt-1 flex gap-2">
             <button type="button" aria-pressed={watch} onClick={() => setWatch(toggleWatch(watchId(e)))}
               className="h-12 flex-1 rounded-full bg-pill text-[15px] font-semibold">{watch ? t("★ Watching") : t("☆ Watch")}</button>

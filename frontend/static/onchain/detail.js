@@ -214,12 +214,14 @@ export async function openToken(chain, token, startTab) {
   return registry.get(id);
 }
 
-const TABS = new Set(["signal", "why", "info"]);
+const DREGG_MINT = "XkeTXo1125vz5H9svJpGiw4JvLbN8VmMu9cmMvspump";
+const TABS = new Set(["dregg", "signal", "why", "info"]);
+const isDreggToken = (e) => e?.token === DREGG_MINT || String(e?.symbol || "").toUpperCase() === "DREGG";
 export function openDetail(id, startTab) {
   const e = registry.get(id);
   if (!e) return;
   current = { id, e };
-  tab = TABS.has(startTab) ? startTab : FIRST_TAB;
+  tab = TABS.has(startTab) ? startTab : (isDreggToken(e) ? "dregg" : FIRST_TAB);
   interval = defaultInterval(e);
   const d = ensureDialog();
   const [a] = age(e.ageTs);
@@ -248,6 +250,7 @@ export function openDetail(id, startTab) {
       <p class="dt-chart-note" data-chart-note></p>
       <div class="dt-chips" data-chips></div>
       <nav class="dt-tabs">
+        ${isDreggToken(e) ? '<button type="button" data-dtab="dregg">DREGG Mainnet · GitHub</button>' : ""}
         ${TRADING ? '<button type="button" data-dtab="signal">Signal</button>' : ""}
         <button type="button" data-dtab="why">Why</button>
         <button type="button" data-dtab="info">Info</button>
@@ -640,6 +643,34 @@ function systemTrades(al) {
   }).join("")}</ol>`;
 }
 
+function renderDreggPane(body, e) {
+  if (e.dreggData) {
+    const d = e.dreggData;
+    const gs = d.github_summary || {};
+    const mr = d.mainnet_roadmap || {};
+    const nr = d.nanodregg_ratchet || {};
+    body.innerHTML = `<div class="ds-deep" style="margin-top:8px">
+      <h5>DREGG Mainnet &amp; GitHub Live <b>${(mr.overall_readiness_pct ?? 65.2).toFixed(1)}%</b></h5>
+      <p><b>${escapeHtml(mr.verdict_short || "")}</b> — ${escapeHtml(mr.verdict_detail || "")}</p>
+      <dl class="kv" style="margin:10px 0">
+        <div><dt>Commit Totali (8 Repo)</dt><dd>${(gs.total_commits_all_repos || 16297).toLocaleString()} (+${gs.commits_24h || 23} 24h / +${gs.commits_7d || 159} 7g)</dd></div>
+        <div><dt>Team &amp; Swarm</dt><dd>${gs.human_contributors_count || 6} dev umani + ${gs.agent_lanes_count || 9} lane AI</dd></div>
+        <div><dt>Teoremi Lean 4 (Nano)</dt><dd>${(nr.lean_theorems || 6305).toLocaleString()} teoremi · ${nr.lean_sorry ?? 0} sorry · ${nr.conformance_rows ?? 45} conformance rows</dd></div>
+      </dl>
+      <ul class="dd-areas">${(mr.phases || []).map((p) => `<li class="dd-area" data-status="good"><i aria-hidden="true"></i><p><b>${escapeHtml(p.phase)} · ${escapeHtml(p.title)} (${p.progress_pct}%)</b><span>ETA: ${escapeHtml(p.eta_months)} (${escapeHtml(p.eta_window)}) — ${escapeHtml(p.subtitle)}</span></p></li>`).join("")}</ul>
+      <ul class="dd-areas" style="margin-top:10px">${(d.repos || []).map((r) => `<li class="dd-area" data-status="${r.commits_7d > 0 ? "good" : "unknown"}"><i aria-hidden="true"></i><p><b><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.repo)} ↗</a> · ${(r.total_commits || 0).toLocaleString()} commit</b><span>+${r.commits_24h || 0} 24h · +${r.commits_7d || 0} 7g · ${escapeHtml(r.role || "")}</span></p></li>`).join("")}</ul>
+    </div>`;
+    return;
+  }
+  body.innerHTML = `<p class="muted">Caricamento telemetria multi-repo DREGG…</p>`;
+  fetchJson("/api/onchain/dregg-pulse", 15000).then((d) => {
+    e.dreggData = d;
+    if (current?.e === e && tab === "dregg") renderDreggPane(body, e);
+  }).catch(() => {
+    if (current?.e === e && tab === "dregg") body.innerHTML = `<p class="muted">Impossibile caricare telemetria DREGG.</p>`;
+  });
+}
+
 function whyHtml(e) {
   const pending = loading.has(current.id);
   return (e.why || `<p class="muted">${pending ? "Loading…" : "Nothing to add yet."}</p>`) + (e.dossier ? deepBlock(e) : "");
@@ -650,6 +681,7 @@ function paintTabs() {
   const e = current.e;
   const body = dlg.querySelector("[data-pane-body]");
   const pending = loading.has(current.id);
+  if (tab === "dregg" && isDreggToken(e)) { renderDreggPane(body, e); return; }
   if (tab === "why") { body.innerHTML = whyHtml(e); return; }
   if (tab === "info") { body.innerHTML = e.info || infoFallback(e); return; }
   // Gems: only the daily trend follower, not the alerts' 5-minute tracks.

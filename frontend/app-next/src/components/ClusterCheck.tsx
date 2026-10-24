@@ -1,15 +1,58 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import type { Gem } from "../lib/types";
 import { t } from "../lib/i18n";
 
-const EVM_RE = /^0x[0-9a-fA-F]{40}$/;
+const EVM_RE = /^0x[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?$/;
 const EVM_EXTRACT_RE = /0x[0-9a-fA-F]{40}/;
 const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]{32,48}$/;
+const KASPA_ADDR_RE = /^kaspa:[a-z0-9]{40,75}$/i;
+const BECH32_ADDR_RE = /^([a-z]{2,14})1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,85}$/i;
 const URL_RE = /^https?:\/\/\S+$/i;
 const LAYER_RE = /^(kas-kaspa|kaspa|kas|octa-octaspace|octaspace|octa|cheqd-network|cheqd|cheq|inj-injective-protocol|injective|inj|arb-arbitrum|arbitrum|arb|op-optimism|optimism|op|tia-celestia|celestia|tia|sei-sei|sei|zro-layerzero|layerzero|zro|mnt-mantle|mantle|mnt|metis-metisdao|metis|zk-zksync|zksync|zk|zeta-zetachain|zetachain|zeta|axl-axelar|axelar|axl|w-wormhole|wormhole|[a-z0-9]{2,12}-[a-z0-9-]{2,40})$/i;
-export const ADDRESS = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,48}|https?:\/\/\S+|(kas-kaspa|kaspa|kas|octa-octaspace|octaspace|octa|cheqd-network|cheqd|cheq|inj-injective-protocol|injective|inj|arb-arbitrum|arbitrum|arb|op-optimism|optimism|op|tia-celestia|celestia|tia|sei-sei|sei|zro-layerzero|layerzero|zro|mnt-mantle|mantle|mnt|metis-metisdao|metis|zk-zksync|zksync|zk|zeta-zetachain|zetachain|zeta|axl-axelar|axelar|axl|w-wormhole|wormhole|[a-z0-9]{2,12}-[a-z0-9-]{2,40}))$/i;
-const EVM = [["robinhood", "Robinhood"], ["ethereum", "Ethereum"], ["base", "Base"], ["bsc", "BSC"]] as const;
+export const ADDRESS = /^(0x[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?|[1-9A-HJ-NP-Za-km-z]{32,48}|kaspa:[a-z0-9]{40,75}|[a-z]{2,14}1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,85}|https?:\/\/\S+|(kas-kaspa|kaspa|kas|octa-octaspace|octaspace|octa|cheqd-network|cheqd|cheq|inj-injective-protocol|injective|inj|arb-arbitrum|arbitrum|arb|op-optimism|optimism|op|tia-celestia|celestia|tia|sei-sei|sei|zro-layerzero|layerzero|zro|mnt-mantle|mantle|mnt|metis-metisdao|metis|zk-zksync|zksync|zk|zeta-zetachain|zetachain|zeta|axl-axelar|axelar|axl|w-wormhole|wormhole|[a-z0-9]{2,12}-[a-z0-9-]{2,40}))$/i;
+
+const BECH32_PREFIXES: Record<string, [string, string, string]> = {
+  cheqd: ["cheqd-network", "CHEQ", "Cheqd"],
+  osmo: ["osmo-osmosis", "OSMO", "Osmosis"],
+  cosmos: ["atom-cosmos", "ATOM", "Cosmos Hub"],
+  inj: ["inj-injective-protocol", "INJ", "Injective"],
+  celestia: ["tia-celestia", "TIA", "Celestia"],
+  sei: ["sei-sei", "SEI", "Sei"],
+  stars: ["stars-stargaze", "STARS", "Stargaze"],
+  kujira: ["kuji-kujira", "KUJI", "Kujira"],
+  neutron: ["ntrn-neutron", "NTRN", "Neutron"],
+  akash: ["akt-akash-network", "AKT", "Akash"],
+  juno: ["juno-juno-network", "JUNO", "Juno"],
+  kava: ["kava-kava", "KAVA", "Kava"],
+  dym: ["dym-dymension", "DYM", "Dymension"],
+  saga: ["saga-saga", "SAGA", "Saga"],
+  archway: ["arch-archway", "ARCH", "Archway"],
+  desmos: ["dsm-desmos", "DSM", "Desmos"],
+  secret: ["scrt-secret", "SCRT", "Secret"],
+  axelar: ["axl-axelar", "AXL", "Axelar"],
+};
+
+const CHAIN_LABELS: Record<string, string> = {
+  ethereum: "Ethereum",
+  base: "Base",
+  bsc: "BSC",
+  robinhood: "Robinhood Chain",
+  solana: "Solana",
+  arbitrum: "Arbitrum",
+  optimism: "Optimism",
+  polygon: "Polygon",
+  avalanche: "Avalanche",
+  monad: "Monad",
+  mantle: "Mantle",
+  zksync: "zkSync",
+  manta: "Manta",
+  octaspace: "OctaSpace",
+  kaspa: "Kaspa",
+  cheqd: "Cheqd",
+  injective: "Injective",
+  layer: "Layer 0/1/2",
+};
 
 const QUICK_SCANS = [
   { label: "OctaSpace · OCTA", raw: "octa-octaspace", url: "https://scan.octa.space/accounts" },
@@ -23,6 +66,7 @@ export function resolveClusterInput(raw: string): {
   chain: string;
   token: string;
   symbol?: string;
+  detectedLabel?: string;
   isUrl: boolean;
   isEvm: boolean;
   sol: boolean;
@@ -33,9 +77,23 @@ export function resolveClusterInput(raw: string): {
   const low = s.toLowerCase();
   const isUrl = URL_RE.test(s);
   const isEvm = !isUrl && EVM_RE.test(s);
-  const sol = !isUrl && !isEvm && SOL_RE.test(s);
-  const isLayer = !isUrl && !isEvm && !sol && LAYER_RE.test(s);
+  const isKaspaAddr = !isUrl && !isEvm && KASPA_ADDR_RE.test(s);
+  const bechMatch = !isUrl && !isEvm && !isKaspaAddr ? low.match(BECH32_ADDR_RE) : null;
+  const sol = !isUrl && !isEvm && !isKaspaAddr && !bechMatch && SOL_RE.test(s);
+  const isLayer = !isUrl && !isEvm && !sol && (isKaspaAddr || !!bechMatch || LAYER_RE.test(s));
   const ok = isUrl || isEvm || sol || isLayer;
+
+  if (isKaspaAddr) {
+    return { chain: "layer", token: "kas-kaspa", symbol: "KAS", detectedLabel: "Kaspa · KAS", isUrl: false, isEvm: false, sol: false, isLayer: true, ok: true };
+  }
+  if (bechMatch) {
+    const hrp = bechMatch[1].toLowerCase();
+    const mapped = BECH32_PREFIXES[hrp];
+    if (mapped) {
+      return { chain: "layer", token: mapped[0], symbol: mapped[1], detectedLabel: `${mapped[2]} · ${mapped[1]}`, isUrl: false, isEvm: false, sol: false, isLayer: true, ok: true };
+    }
+    return { chain: "layer", token: hrp, symbol: hrp.toUpperCase(), detectedLabel: `${hrp.toUpperCase()} · Cosmos`, isUrl: false, isEvm: false, sol: false, isLayer: true, ok: true };
+  }
 
   if (
     low === "octa" ||
@@ -44,7 +102,7 @@ export function resolveClusterInput(raw: string): {
     low.includes("scan.octa.space") ||
     low.includes("octa.space")
   ) {
-    return { chain: "layer", token: "octa-octaspace", symbol: "OCTA", isUrl, isEvm, sol, isLayer: !isUrl, ok: true };
+    return { chain: "layer", token: "octa-octaspace", symbol: "OCTA", detectedLabel: "OctaSpace · OCTA", isUrl, isEvm, sol, isLayer: !isUrl, ok: true };
   }
   if (
     low === "cheq" ||
@@ -54,7 +112,7 @@ export function resolveClusterInput(raw: string): {
     low.includes("cheqd.io") ||
     low.includes("cheqd.net")
   ) {
-    return { chain: "layer", token: "cheqd-network", symbol: "CHEQ", isUrl, isEvm, sol, isLayer: !isUrl, ok: true };
+    return { chain: "layer", token: "cheqd-network", symbol: "CHEQ", detectedLabel: "Cheqd · CHEQ", isUrl, isEvm, sol, isLayer: !isUrl, ok: true };
   }
   if (
     low === "kas" ||
@@ -63,7 +121,7 @@ export function resolveClusterInput(raw: string): {
     low.includes("kaspa.org") ||
     low.includes("kas.fyi")
   ) {
-    return { chain: "layer", token: "kas-kaspa", symbol: "KAS", isUrl, isEvm, sol, isLayer: !isUrl, ok: true };
+    return { chain: "layer", token: "kas-kaspa", symbol: "KAS", detectedLabel: "Kaspa · KAS", isUrl, isEvm, sol, isLayer: !isUrl, ok: true };
   }
   if (
     low === "inj" ||
@@ -72,29 +130,38 @@ export function resolveClusterInput(raw: string): {
     low.includes("injective.network") ||
     low.includes("injective")
   ) {
-    return { chain: "layer", token: "inj-injective-protocol", symbol: "INJ", isUrl, isEvm, sol, isLayer: !isUrl, ok: true };
+    return { chain: "layer", token: "inj-injective-protocol", symbol: "INJ", detectedLabel: "Injective · INJ", isUrl, isEvm, sol, isLayer: !isUrl, ok: true };
   }
   if (low === "arb" || low === "arbitrum" || low === "arb-arbitrum") {
-    return { chain: "layer", token: "arb-arbitrum", symbol: "ARB", isUrl, isEvm, sol, isLayer: true, ok: true };
+    return { chain: "layer", token: "arb-arbitrum", symbol: "ARB", detectedLabel: "Arbitrum · ARB", isUrl, isEvm, sol, isLayer: true, ok: true };
   }
   if (low === "op" || low === "optimism" || low === "op-optimism") {
-    return { chain: "layer", token: "op-optimism", symbol: "OP", isUrl, isEvm, sol, isLayer: true, ok: true };
+    return { chain: "layer", token: "op-optimism", symbol: "OP", detectedLabel: "Optimism · OP", isUrl, isEvm, sol, isLayer: true, ok: true };
   }
   if (low === "tia" || low === "celestia" || low === "tia-celestia") {
-    return { chain: "layer", token: "tia-celestia", symbol: "TIA", isUrl, isEvm, sol, isLayer: true, ok: true };
+    return { chain: "layer", token: "tia-celestia", symbol: "TIA", detectedLabel: "Celestia · TIA", isUrl, isEvm, sol, isLayer: true, ok: true };
   }
   if (low === "sei" || low === "sei-sei") {
-    return { chain: "layer", token: "sei-sei", symbol: "SEI", isUrl, isEvm, sol, isLayer: true, ok: true };
+    return { chain: "layer", token: "sei-sei", symbol: "SEI", detectedLabel: "Sei · SEI", isUrl, isEvm, sol, isLayer: true, ok: true };
   }
 
   if (isUrl) {
     const evmMatch = s.match(EVM_EXTRACT_RE);
+    let urlNetLabel = "Explorer / DEX";
+    if (low.includes("basescan.org") || low.includes("/base/")) urlNetLabel = "Base";
+    else if (low.includes("etherscan.io") || low.includes("/ethereum/")) urlNetLabel = "Ethereum";
+    else if (low.includes("bscscan.com") || low.includes("/bsc/")) urlNetLabel = "BSC";
+    else if (low.includes("arbiscan.io") || low.includes("/arbitrum/")) urlNetLabel = "Arbitrum";
+    else if (low.includes("polygonscan.com") || low.includes("/polygon/")) urlNetLabel = "Polygon";
+    else if (low.includes("optimistic.etherscan.io") || low.includes("/optimism/")) urlNetLabel = "Optimism";
+    else if (low.includes("solscan.io") || low.includes("/solana/")) urlNetLabel = "Solana";
     if (evmMatch) {
       const addr = evmMatch[0].toLowerCase();
       return {
         chain: "layer",
         token: addr,
         symbol: `${addr.slice(0, 4)}…${addr.slice(-4)}`,
+        detectedLabel: urlNetLabel,
         isUrl: true,
         isEvm: false,
         sol: false,
@@ -108,6 +175,7 @@ export function resolveClusterInput(raw: string): {
       chain: "layer",
       token: s,
       symbol: slug,
+      detectedLabel: `${urlNetLabel} · ${slug}`,
       isUrl: true,
       isEvm: false,
       sol: false,
@@ -118,7 +186,7 @@ export function resolveClusterInput(raw: string): {
 
   if (isLayer) {
     const sym = s.split("-")[0].toUpperCase().slice(0, 10);
-    return { chain: "layer", token: low, symbol: sym, isUrl: false, isEvm: false, sol: false, isLayer: true, ok: true };
+    return { chain: "layer", token: low, symbol: sym, detectedLabel: `${sym} · Layer`, isUrl: false, isEvm: false, sol: false, isLayer: true, ok: true };
   }
 
   if (sol) {
@@ -126,6 +194,7 @@ export function resolveClusterInput(raw: string): {
       chain: "solana",
       token: s,
       symbol: `${s.slice(0, 4)}…${s.slice(-4)}`,
+      detectedLabel: "Solana",
       isUrl: false,
       isEvm: false,
       sol: true,
@@ -137,9 +206,10 @@ export function resolveClusterInput(raw: string): {
   if (isEvm) {
     const addr = s.toLowerCase();
     return {
-      chain: "robinhood",
+      chain: "auto",
       token: addr,
       symbol: `${addr.slice(0, 4)}…${addr.slice(-4)}`,
+      detectedLabel: "Auto-Detect EVM",
       isUrl: false,
       isEvm: true,
       sol: false,
@@ -148,11 +218,11 @@ export function resolveClusterInput(raw: string): {
     };
   }
 
-  return { chain: "robinhood", token: s, isUrl: false, isEvm: false, sol: false, isLayer: false, ok: false };
+  return { chain: "auto", token: s, isUrl: false, isEvm: false, sol: false, isLayer: false, ok: false };
 }
 
-/** A pasted address, Layer 0/1/2 chain id, or Explorer/DEX link: check its wallet clusters now
- *  (Lorenzo, 22-23/10: also covers Layer 0/1/2 chains and custom links for unsupported networks). */
+/** A pasted address, Layer 0/1/2 chain id, or Explorer/DEX link: automatically detects the
+ *  blockchain from the address and checks its wallet clusters immediately. */
 export function ClusterCheck({
   address,
   onOpen,
@@ -166,24 +236,79 @@ export function ClusterCheck({
 }) {
   const resolved = resolveClusterInput(address);
   const { isUrl, isEvm, sol, isLayer, ok } = resolved;
-  const [pick, setPick] = useState("robinhood");
+  const [detected, setDetected] = useState<{
+    forAddress: string;
+    chain: string;
+    token: string;
+    symbol?: string;
+    url?: string;
+    networkLabel: string;
+  } | null>(null);
+  const [detecting, setDetecting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+
+  // Automatically probe the backend whenever an EVM 0x address (or any valid address) is entered
+  useEffect(() => {
+    const trimmed = address.trim();
+    if (!ok || !trimmed) {
+      setDetected(null);
+      setDetecting(false);
+      return;
+    }
+    if (!isEvm) {
+      setDetected(null);
+      setDetecting(false);
+      return;
+    }
+    let alive = true;
+    setDetecting(true);
+    const timer = setTimeout(() => {
+      api
+        .detectClusterChain(trimmed, "auto")
+        .then((res) => {
+          if (!alive) return;
+          const netKey = (res.detected_network || res.chain || "ethereum").toLowerCase();
+          const netLabel = CHAIN_LABELS[netKey] || netKey.charAt(0).toUpperCase() + netKey.slice(1);
+          setDetected({
+            forAddress: trimmed,
+            chain: res.chain,
+            token: res.token || trimmed.toLowerCase(),
+            symbol: res.symbol,
+            url: res.url,
+            networkLabel: res.symbol && !res.symbol.includes("…") ? `${netLabel} · ${res.symbol}` : netLabel,
+          });
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (alive) setDetecting(false);
+        });
+    }, 120);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [address, ok, isEvm]);
+
+  const activeDetected = detected && detected.forAddress === address.trim() ? detected : null;
 
   const runTarget = async (targetRaw: string, customUrl?: string) => {
     const res = resolveClusterInput(targetRaw);
     if (!res.ok || busy) return;
-    const targetChain = res.isEvm ? pick : res.chain;
-    const linkUrl = customUrl || (res.isUrl ? targetRaw.trim() : undefined);
+    const isCurrentEvm = res.isEvm && activeDetected && targetRaw.trim() === address.trim();
+    const targetChain = isCurrentEvm ? activeDetected.chain : res.chain;
+    const targetToken = isCurrentEvm ? activeDetected.token : res.token;
+    const linkUrl = customUrl || (isCurrentEvm ? activeDetected.url : undefined) || (res.isUrl ? targetRaw.trim() : undefined);
     setBusy(true);
     setMsg("");
-    onStart?.(targetChain, res.token, res.symbol);
+    onStart?.(targetChain === "auto" ? "ethereum" : targetChain, targetToken, isCurrentEvm ? activeDetected.symbol : res.symbol);
     try {
-      const r = await api.askClusterCheck(targetChain, res.token, linkUrl);
-      const outChain = r.chain || targetChain;
-      const outToken = r.token || res.token;
+      const r = await api.askClusterCheck(targetChain, targetToken, linkUrl);
+      const outChain = r.chain || (targetChain === "auto" ? "ethereum" : targetChain);
+      const outToken = r.token || targetToken;
       const sym =
         r.symbol ||
+        (isCurrentEvm ? activeDetected.symbol : undefined) ||
         res.symbol ||
         (res.isUrl
           ? outToken.slice(0, 8).toUpperCase()
@@ -201,15 +326,22 @@ export function ClusterCheck({
   };
 
   const go = () => runTarget(address);
-  const badge = isUrl ? t("Link analysis") : isLayer ? (resolved.symbol ? `${resolved.symbol} · Layer` : "Layer 0/1/2") : sol ? "Solana" : EVM.find(([k]) => k === pick)![1];
+  const badge = isEvm
+    ? activeDetected
+      ? activeDetected.networkLabel
+      : detecting
+        ? t("Detecting chain…")
+        : "Auto-Detect EVM"
+    : resolved.detectedLabel || (isUrl ? t("Link analysis") : isLayer ? (resolved.symbol ? `${resolved.symbol} · Layer` : "Layer 0/1/2") : sol ? "Solana" : "Auto");
 
   return (
     <div className="rounded-[16px] bg-card p-4">
       <div className="flex items-baseline gap-2">
         <b className="flex-1 text-[15px] font-semibold">{t("Check wallet clusters")}</b>
         {ok && (
-          <small className="text-[12.5px] text-text-3">
-            {isUrl ? (resolved.symbol ? `${resolved.symbol} · ${t("Explorer / DEX link")}` : t("Explorer / DEX link")) : isLayer ? "Layer 0/1/2" : sol ? t("Detected: Solana") : t("Pick the chain")}
+          <small className="flex items-center gap-1.5 text-[12.5px] font-medium text-up">
+            <span className="h-2 w-2 rounded-full bg-up animate-pulse" />
+            {detecting ? t("Detecting chain…") : `${t("Detected:")} ${badge}`}
           </small>
         )}
       </div>
@@ -230,43 +362,20 @@ export function ClusterCheck({
         ))}
       </div>
 
-      {isEvm && (
-        <div className="mt-3 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Chain">
-          {EVM.map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              role="radio"
-              aria-checked={pick === k}
-              onClick={() => setPick(k)}
-              className={`h-8 rounded-full px-3 text-[13px] transition-colors ${pick === k ? "bg-sage font-semibold text-on-sage" : "bg-pill text-text-2"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
       <button
         type="button"
         disabled={!ok || busy}
         onClick={go}
-        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-sage text-[15.5px] font-semibold text-on-sage transition-opacity disabled:opacity-40"
+        className="mt-3 flex h-12 w-full items-center justify-between rounded-full bg-ink px-5 text-[15px] font-semibold text-on-ink transition-opacity disabled:bg-pill disabled:text-text-3"
       >
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <circle cx="7" cy="8" r="3" />
-          <circle cx="17" cy="7" r="2.2" />
-          <circle cx="14" cy="17" r="3.5" />
-          <path d="m9.6 9.6 2.3 4.4M9.9 7.7l4.9-.5M16.6 9.2l-1.6 4.3" />
-        </svg>
-        {busy ? t("Starting…") : ok ? `${t("Start cluster check")} · ${badge}` : t("Start cluster check")}
+        <span>{busy ? t("Starting…") : ok ? t("Check clusters") : t("Paste a token address above")}</span>
+        {ok && <small className="font-normal opacity-80">{badge}</small>}
       </button>
-      {!ok && address && (
-        <p className="mt-2 text-[13px] text-down">
-          {t("Paste a 0x… address, Solana mint, Layer 0/1/2 chain (e.g. kaspa, injective), or an explorer/DexScreener link (https://…).")}
+      {msg && (
+        <p role="status" className="mt-2 text-[13px] text-text-2">
+          {msg}
         </p>
       )}
-      {!address && <p className="mt-2 text-[13px] text-text-3">{t("Paste a token address or an explorer link (https://…) above, or tap a Quick-Scan network.")}</p>}
-      {msg && <p className="mt-2 text-[13px] text-down">{msg}</p>}
     </div>
   );
 }

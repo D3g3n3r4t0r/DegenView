@@ -131,6 +131,11 @@ export const getClusterCheck = (chain: string, token: string): Promise<ClusterCh
 // A cluster check on demand for a pasted address (wallet_clusters, first in line).
 export const askClusterCheck = (chain: string, token: string, url?: string) =>
   post<{ queued?: boolean; position?: number | null; error?: string | null; manual_left?: number; chain?: string; token?: string; symbol?: string }>("/api/onchain/coordinated-sells/check", url ? { chain, token, url } : { chain, token });
+export const detectClusterChain = (address: string, hint = "") =>
+  get<{ chain: string; token: string; symbol?: string; url?: string; detected_network?: string }>(
+    `/api/onchain/clusters/detect-chain?address=${encodeURIComponent(address)}${hint ? `&hint=${encodeURIComponent(hint)}` : ""}`,
+    10000,
+  );
 export const getCoordinatedSells = () => fetchDedup<{ sample?: boolean; reports?: SellsReport[] }>("/api/onchain/coordinated-sells", 20000);
 
 // The scanner (sheets.js openScan): a server job streamed as NDJSON; if the
@@ -213,5 +218,153 @@ export type DevReport = {
 };
 export const getDevPayments = (token: string) =>
   get<{ watched: boolean; can_edit: boolean; busy: boolean; error?: string; report: DevReport | null }>(`/api/onchain/dev-payments?token=${encodeURIComponent(token)}`, 15000);
+
+
 export const watchDevPayments = (token: string, symbol: string, feeAccount: string) =>
   post<{ ok: boolean }>("/api/onchain/dev-payments/watch", { token, symbol, fee_accounts: [feeAccount] });
+
+export type DreggRepo = {
+  repo: string;
+  name: string;
+  codename: string;
+  role: string;
+  tier: string;
+  total_commits: number;
+  commits_24h: number;
+  commits_7d: number;
+  active_days_recent: number;
+  pushed_at: string;
+  stars: number;
+  open_issues: number;
+  language: string;
+  authors_recent: string[];
+  recent_commits?: { sha: string; date: string; author: string; message: string }[];
+  url: string;
+  live: boolean;
+};
+
+export type DreggContributor = {
+  handle: string;
+  name: string;
+  role: string;
+  commits_total: number;
+  repos: string[];
+  recent_focus: string;
+  active_now: boolean;
+};
+
+export type DreggPhase = {
+  id: string;
+  phase: string;
+  title: string;
+  subtitle: string;
+  progress_pct: number;
+  eta_months: string;
+  eta_window: string;
+  status: string;
+  completed_items: string[];
+  remaining_blockers: string[];
+};
+
+export type DreggGoal = {
+  id: string;
+  title: string;
+  done: number;
+  wip: number;
+  planned: number;
+  total: number;
+  pct: number;
+  strict_pct: number;
+  remaining: string[];
+};
+
+export type DreggPulseData = {
+  token: string;
+  symbol: string;
+  name: string;
+  updated_at: number;
+  lead_developer: {
+    github: string;
+    name: string;
+    organization: string;
+    location: string;
+    background: string;
+    website: string;
+    horizon_url: string;
+    tech_tree_url: string;
+    laboratory_url: string;
+    coin_url: string;
+  };
+  github_summary: {
+    repos_tracked: number;
+    repos_active_7d: number;
+    total_commits_all_repos: number;
+    commits_24h: number;
+    commits_7d: number;
+    latest_push_at: string;
+    primary_active_repo: string;
+    human_contributors_count: number;
+    agent_lanes_count: number;
+  };
+  repos: DreggRepo[];
+  recent_commits: { repo: string; sha: string; date: string; author: string; message: string }[];
+  contributors: DreggContributor[];
+  agent_swarm: {
+    model: string;
+    total_lanes: number;
+    active_agents_estimate: string;
+    lanes: { lane: string; scope: string }[];
+    gate_discipline: string;
+  };
+  nanodregg_ratchet: {
+    lean_lines: number;
+    lean_modules: number;
+    lean_theorems: number;
+    lean_sorry: number;
+    lean_partial: number;
+    rust_lines: number;
+    conformance_rows: number;
+    defect_ledger_closed: number;
+    defect_ledger_total: number;
+    proof_ratio: number;
+  };
+  tech_tree: {
+    total_nodes: number;
+    active_nodes: number;
+    built: number;
+    in_progress: number;
+    planned: number;
+    obsolete: number;
+    strict_pct: number;
+    weighted_pct: number;
+    goals: DreggGoal[];
+  };
+  horizon_map: {
+    total_milestones: number;
+    research_lines: number;
+    holds_today: number;
+    being_fought: number;
+    queued: number;
+    far_shore: number;
+    strict_pct: number;
+    weighted_pct: number;
+  };
+  mainnet_roadmap: {
+    overall_readiness_pct: number;
+    strict_built_pct: number;
+    verdict_short: string;
+    verdict_detail: string;
+    phases: DreggPhase[];
+  };
+  cost_and_capacity: {
+    live_monitoring_llm_tokens: number;
+    live_monitoring_cost_usd_week: number;
+    github_api_calls_per_refresh: number;
+    cache_ttl_seconds: number;
+    weekly_capacity_burn_pct: string;
+    note: string;
+  };
+};
+
+export const getDreggPulse = (force = false) =>
+  get<DreggPulseData>(`/api/onchain/dregg-pulse${force ? "?force=1" : ""}`, 20000);

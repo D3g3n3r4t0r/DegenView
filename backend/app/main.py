@@ -4242,6 +4242,37 @@ async def onchain_dev_payments_watch(body: dict = Body(...), user: User = Depend
     return {"ok": True, "token": cfg["token"]}
 
 
+@app.get("/api/onchain/dregg-pulse")
+async def onchain_dregg_pulse(
+    force: bool = False,
+    user: User = Depends(auth.get_current_user),
+) -> dict:
+    """Dedicated real-time DREGG (Dragon's Egg, XkeTXo1125vz5H9svJpGiw4JvLbN8VmMu9cmMvspump)
+    multi-repository GitHub & Mainnet readiness observatory."""
+    from app.trading.onchain import dregg_pulse
+    _require_onchain_enabled()
+    if not (_full_score(user) or _next_for(user)):
+        raise HTTPException(status_code=404, detail="Not found.")
+    return await dregg_pulse.get_dregg_pulse(force=bool(force))
+
+
+@app.get("/api/onchain/clusters/detect-chain")
+async def onchain_clusters_detect_chain(
+    address: str,
+    hint: str = "",
+    user: User = Depends(auth.get_current_user),
+) -> dict:
+    """Automatically detects the blockchain and symbol for any pasted address,
+    Bech32 wallet, Kaspa address, Solana mint, EVM 0x contract/pair, or URL."""
+    from app.trading.onchain import layer_clusters
+    if not (_full_score(user) or _next_for(user)):
+        raise HTTPException(status_code=404, detail="Not found.")
+    try:
+        return await layer_clusters.detect_chain_for_address(address, hint_chain=hint)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/onchain/coordinated-sells/check")
 async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends(auth.get_current_user)) -> dict:
     """Check a token by hand (Lorenzo, 22/10): {"chain", "token"}. Queued first
@@ -4255,6 +4286,21 @@ async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends
     from app.trading.onchain import layer_clusters
     custom_url = str(body.get("url") or "").strip()
     sym = str(body.get("symbol") or "").strip()
+    detected_network = chain
+    if not custom_url and (
+        chain in ("", "auto")
+        or token.lower().startswith("kaspa:")
+        or bool(layer_clusters._BECH32_ADDR_RE.match(token.lower()))
+        or (token.startswith("0x") and chain in ("", "auto", "layer"))
+    ):
+        detected = await layer_clusters.detect_chain_for_address(token, hint_chain=chain)
+        chain = str(detected.get("chain") or chain or "ethereum").lower()
+        token = str(detected.get("token") or token).strip()
+        if not sym and detected.get("symbol"):
+            sym = str(detected["symbol"])
+        if detected.get("url"):
+            custom_url = str(detected["url"])
+        detected_network = str(detected.get("detected_network") or chain)
     if token.startswith(("http://", "https://")) and not custom_url:
         custom_url = token
     if custom_url:
@@ -4284,7 +4330,7 @@ async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends
         raise HTTPException(status_code=400, detail="token: not an address of that chain")
     wallet_clusters.account_take(str(user.id))
     started = wallet_clusters.start_manual(chain, token, sym, force=bool(custom_url or chain == 'layer'))
-    return {"queued": started, "started": started, "chain": chain, "token": token, "symbol": sym, **wallet_clusters.token_status(chain, token)}
+    return {"queued": started, "started": started, "chain": chain, "token": token, "symbol": sym, "detected_network": detected_network, **wallet_clusters.token_status(chain, token)}
 
 
 @app.get("/api/onchain/coordinated-sells/check")

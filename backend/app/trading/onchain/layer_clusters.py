@@ -1956,6 +1956,285 @@ _HOST_CHAIN_MAP: dict[str, str] = {
 }
 
 
+BECH32_CHAIN_MAP: dict[str, tuple[str, str]] = {
+    "cheqd": ("cheqd-network", "CHEQ"),
+    "osmo": ("osmo-osmosis", "OSMO"),
+    "cosmos": ("atom-cosmos", "ATOM"),
+    "inj": ("inj-injective-protocol", "INJ"),
+    "celestia": ("tia-celestia", "TIA"),
+    "sei": ("sei-sei", "SEI"),
+    "stars": ("stars-stargaze", "STARS"),
+    "kujira": ("kuji-kujira", "KUJI"),
+    "neutron": ("ntrn-neutron", "NTRN"),
+    "akash": ("akt-akash-network", "AKT"),
+    "juno": ("juno-juno-network", "JUNO"),
+    "kava": ("kava-kava", "KAVA"),
+    "dym": ("dym-dymension", "DYM"),
+    "saga": ("saga-saga", "SAGA"),
+    "archway": ("arch-archway", "ARCH"),
+    "desmos": ("dsm-desmos", "DSM"),
+    "secret": ("scrt-secret", "SCRT"),
+    "axelar": ("axl-axelar", "AXL"),
+}
+
+_BECH32_ADDR_RE = re.compile(r"^([a-z]{2,14})1([qpzry9x8gf2tvdw0s3jn54khce6mua7l]{20,85})$")
+_EVM_ADDR_RE = re.compile(r"^0x[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?$")
+_SOL_ADDR_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,48}$")
+_EVM_DETECT_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+async def detect_chain_for_address(raw_input: str, hint_chain: str = "") -> dict:
+    """Automatically detects the blockchain, normalized token identifier, symbol,
+    and optional explorer/DEX URL from any pasted address, Bech32 wallet, Kaspa
+    address, Solana mint, EVM 0x contract/pair, Layer slug, or URL.
+    """
+    from app.trading.onchain import wallet_clusters
+
+    s = (raw_input or "").strip()
+    hint = (hint_chain or "").strip().lower()
+    if not s:
+        return {"chain": hint or "solana", "token": "", "symbol": "", "detected_network": hint or "solana"}
+
+    # 1. Full Explorer / DEX URL
+    if s.startswith(("http://", "https://")):
+        parsed = parse_explorer_url(s)
+        ch = parsed["chain"]
+        tok = parsed["token"]
+        sym = str(parsed.get("symbol") or "")
+        set_custom_url(ch, tok, s)
+        return {
+            "chain": ch,
+            "token": tok,
+            "symbol": sym,
+            "url": s,
+            "detected_network": parsed.get("cosmos_slug") or (ch if ch != "layer" else sym.lower() or "layer"),
+        }
+
+    low = s.lower()
+
+    # 2. Kaspa native address (`kaspa:qp...`)
+    if low.startswith("kaspa:") and len(low) >= 40:
+        return {
+            "chain": "layer",
+            "token": "kas-kaspa",
+            "symbol": "KAS",
+            "detected_network": "kaspa",
+        }
+
+    # 3. Cosmos Bech32 address (`cheqd1...`, `osmo1...`, `inj1...`, `celestia1...`, etc.)
+    m_bech = _BECH32_ADDR_RE.match(low)
+    if m_bech:
+        hrp = m_bech.group(1)
+        if hrp in BECH32_CHAIN_MAP:
+            cid, csym = BECH32_CHAIN_MAP[hrp]
+            return {
+                "chain": "layer",
+                "token": cid,
+                "symbol": csym,
+                "detected_network": hrp,
+            }
+        cid, csym = resolve_layer_token(hrp)
+        return {
+            "chain": "layer",
+            "token": cid,
+            "symbol": csym,
+            "detected_network": hrp,
+        }
+
+    # 4. Known Layer alias / slug (`octa`, `cheqd`, `kaspa`, `arb-arbitrum`, etc.)
+    if not _EVM_ADDR_RE.match(s) and not _SOL_ADDR_RE.match(s):
+        cid, csym = resolve_layer_token(low)
+        return {
+            "chain": "layer",
+            "token": cid,
+            "symbol": csym,
+            "detected_network": cid.split("-")[0],
+        }
+
+    # 5. Solana Base58 address
+    if not s.startswith("0x") and _SOL_ADDR_RE.match(s):
+        row = projects_db.get("solana", s)
+        sym = (row.get("symbol") if row else "") or f"{s[:4]}…{s[-4:]}"
+        return {
+            "chain": "solana",
+            "token": s,
+            "symbol": sym,
+            "detected_network": "solana",
+        }
+
+    # 6. EVM `0x...` address (42-char contract/wallet or 66-char V4 pool id)
+    if _EVM_ADDR_RE.match(s):
+        addr = low
+        # If user explicitly picked a concrete chain other than "auto"/"layer"/"", respect it only if valid
+        if hint in ("ethereum", "base", "bsc", "robinhood", "arc") and hint_chain != "auto":
+            row = projects_db.get(hint, addr)
+            if row is not None:
+                return {
+                    "chain": hint,
+                    "token": addr,
+                    "symbol": row.get("symbol") or f"{addr[:4]}…{addr[-4:]}",
+                    "detected_network": hint,
+                }
+
+        now = time.time()
+        cached = _EVM_DETECT_CACHE.get(addr)
+        if cached and now - cached[0] < 600:
+            res_cached = dict(cached[1])
+            if res_cached.get("url"):
+                set_custom_url(res_cached["chain"], res_cached["token"], res_cached["url"])
+            return res_cached
+
+        # 6a. Instant check in local projects_db & existing cluster reports
+        for ch_cand in ("base", "ethereum", "bsc", "robinhood", "arc"):
+            row = projects_db.get(ch_cand, addr)
+            if row is not None:
+                res = {
+                    "chain": ch_cand,
+                    "token": addr,
+                    "symbol": row.get("symbol") or f"{addr[:4]}…{addr[-4:]}",
+                    "detected_network": ch_cand,
+                }
+                _EVM_DETECT_CACHE[addr] = (now, res)
+                return res
+            if (wallet_clusters._dir() / f"{wallet_clusters._key(ch_cand, addr)}.json").exists():
+                res = {
+                    "chain": ch_cand,
+                    "token": addr,
+                    "symbol": f"{addr[:4]}…{addr[-4:]}",
+                    "detected_network": ch_cand,
+                }
+                _EVM_DETECT_CACHE[addr] = (now, res)
+                return res
+
+        # Check canonical L1/L2 contracts table
+        for cid, (c_chain, c_addr) in _CANONICAL_CONTRACTS.items():
+            if c_addr.lower() == addr:
+                _, c_sym = resolve_layer_token(cid)
+                if c_chain in wallet_clusters.CHAINS and c_chain != "layer":
+                    res = {"chain": c_chain, "token": addr, "symbol": c_sym, "detected_network": c_chain}
+                else:
+                    u = f"https://dexscreener.com/{c_chain}/{addr}"
+                    set_custom_url("layer", addr, u)
+                    res = {"chain": "layer", "token": addr, "symbol": c_sym, "url": u, "detected_network": c_chain}
+                _EVM_DETECT_CACHE[addr] = (now, res)
+                return res
+
+        # 6b. Multi-chain DexScreener lookup (covers 80+ chains in a single HTTP request)
+        async with httpx.AsyncClient(timeout=3.5, headers={"accept": "application/json", "user-agent": "Mozilla/5.0"}) as client:
+            try:
+                ds_url = (
+                    f"https://api.dexscreener.com/latest/dex/tokens/{addr}"
+                    if len(addr) == 42
+                    else f"https://api.dexscreener.com/latest/dex/search?q={addr}"
+                )
+                r_ds = await client.get(ds_url)
+                if r_ds.status_code == 200:
+                    pairs = (r_ds.json() or {}).get("pairs") or []
+                    if isinstance(pairs, list) and pairs:
+                        best = max(
+                            pairs,
+                            key=lambda p: (
+                                float((p.get("liquidity") or {}).get("usd") or 0),
+                                float(p.get("fdv") or p.get("marketCap") or 0),
+                            ),
+                        )
+                        ds_chain = str(best.get("chainId") or "").lower()
+                        ds_chain = _PAPRIKA_PLATFORM_MAP.get(ds_chain, ds_chain)
+                        base_tok = best.get("baseToken") or {}
+                        tok_addr = str(base_tok.get("address") or addr).strip().lower()
+                        if not tok_addr.startswith("0x"):
+                            tok_addr = addr
+                        sym = str(base_tok.get("symbol") or "").strip().upper() or f"{tok_addr[:4]}…{tok_addr[-4:]}"
+                        if ds_chain in ("ethereum", "base", "bsc", "robinhood", "arc"):
+                            res = {
+                                "chain": ds_chain,
+                                "token": tok_addr if len(addr) == 42 else addr,
+                                "symbol": sym,
+                                "detected_network": ds_chain,
+                            }
+                            _EVM_DETECT_CACHE[addr] = (now, res)
+                            return res
+                        if ds_chain:
+                            pair_url = str(best.get("url") or f"https://dexscreener.com/{ds_chain}/{tok_addr}")
+                            set_custom_url("layer", tok_addr, pair_url)
+                            res = {
+                                "chain": "layer",
+                                "token": tok_addr,
+                                "symbol": sym,
+                                "url": pair_url,
+                                "detected_network": ds_chain,
+                            }
+                            _EVM_DETECT_CACHE[addr] = (now, res)
+                            return res
+            except Exception:  # noqa: BLE001
+                pass
+
+            # 6c. Parallel Blockscout v2 probe across Robinhood, Base, Ethereum, Arbitrum, Optimism, Polygon, OctaSpace
+            probes = [
+                ("robinhood", "https://explorer.testnet.chain.robinhood.com"),
+                ("base", "https://base.blockscout.com"),
+                ("ethereum", "https://eth.blockscout.com"),
+                ("arbitrum", "https://arbitrum.blockscout.com"),
+                ("optimism", "https://optimism.blockscout.com"),
+                ("polygon", "https://polygon.blockscout.com"),
+                ("octaspace", "https://scan.octa.space"),
+            ]
+
+            async def _probe_one(net_name: str, origin: str) -> tuple[int, str, str, str] | None:
+                try:
+                    rt = await client.get(f"{origin}/api/v2/tokens/{addr}", timeout=2.2)
+                    if rt.status_code == 200:
+                        td = rt.json() or {}
+                        sym = str(td.get("symbol") or "").strip().upper() or f"{addr[:4]}…{addr[-4:]}"
+                        holders = int(td.get("holders") or td.get("holders_count") or 1)
+                        return (1000 + holders, net_name, sym, origin)
+                    ra = await client.get(f"{origin}/api/v2/addresses/{addr}", timeout=2.2)
+                    if ra.status_code == 200:
+                        ad = ra.json() or {}
+                        if ad.get("is_contract") or ad.get("token") or ad.get("has_token_transfers"):
+                            tok_info = ad.get("token") or {}
+                            sym = str(tok_info.get("symbol") or ad.get("name") or "").strip().upper()[:10] or f"{addr[:4]}…{addr[-4:]}"
+                            return (10, net_name, sym, origin)
+                except Exception:  # noqa: BLE001
+                    pass
+                return None
+
+            probe_results = await asyncio.gather(*(_probe_one(n, o) for n, o in probes), return_exceptions=True)
+            valid_hits = [r for r in probe_results if isinstance(r, tuple)]
+            if valid_hits:
+                valid_hits.sort(key=lambda x: -x[0])
+                _, net_name, sym, origin = valid_hits[0]
+                if net_name in ("robinhood", "base", "ethereum", "bsc"):
+                    res = {
+                        "chain": net_name,
+                        "token": addr,
+                        "symbol": sym,
+                        "detected_network": net_name,
+                    }
+                else:
+                    u = f"{origin}/token/{addr}"
+                    set_custom_url("layer", addr, u)
+                    res = {
+                        "chain": "layer",
+                        "token": addr,
+                        "symbol": sym,
+                        "url": u,
+                        "detected_network": net_name,
+                    }
+                _EVM_DETECT_CACHE[addr] = (now, res)
+                return res
+
+        fallback_chain = hint if hint in ("ethereum", "base", "bsc", "robinhood") else "ethereum"
+        return {
+            "chain": fallback_chain,
+            "token": addr,
+            "symbol": f"{addr[:4]}…{addr[-4:]}",
+            "detected_network": fallback_chain,
+        }
+
+    return {"chain": hint or "layer", "token": s, "symbol": s[:8].upper(), "detected_network": hint or "layer"}
+
+
 def _custom_urls_file():
     from app.trading.onchain import storage
     return storage.data_file("cluster_custom_urls.json")
