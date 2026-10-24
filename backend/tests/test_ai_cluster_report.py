@@ -66,7 +66,7 @@ def test_ensure_builds_a_missing_report_and_waits_for_it(monkeypatch, tmp_path):
 def test_ensure_does_not_build_a_chain_it_cannot_read(monkeypatch, tmp_path):
     monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
     monkeypatch.setattr(wc, "report_state", REAL_STATE)
-    assert asyncio.run(REAL_ENSURE("arc", TOKEN)) == "chain not covered"
+    assert asyncio.run(REAL_ENSURE("sui", TOKEN)) == "chain not covered"
 
 
 def test_the_veto_waits_for_a_missing_report_and_queues_it_first(monkeypatch):
