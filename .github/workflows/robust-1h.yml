@@ -1,0 +1,79 @@
+name: 1H overfitting checks
+
+# On demand: scripts/robust_1h.py (AlphaTrend 1H, the site's code, every cell
+# of the Lab grid at the site's costs and at double costs, month by month,
+# plus MEXC's candles) on the 20 pairs of the choice and 10 never used, then
+# scripts/robust_1h_summary.py: walk-forward, PBO, deflated Sharpe, PBO of
+# the strategy choice over the public runs. Results as annotations.
+on:
+  workflow_dispatch:
+    inputs:
+      public_runs:
+        description: 'strategy-1h run ids with the public strategies (space-separated)'
+        required: false
+        default: '40094616346 40095783929'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  pair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PAIRS: '["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","BNBUSDT","ADAUSDT","DOGEUSDT","LINKUSDT","LTCUSDT","AVAXUSDT","DOTUSDT","ATOMUSDT","TRXUSDT","ETCUSDT","XLMUSDT","COMPUSDT","SNXUSDT","KSMUSDT","CHZUSDT","ZILUSDT","NEARUSDT","FILUSDT","UNIUSDT","AAVEUSDT","ALGOUSDT","VETUSDT","EOSUSDT","XTZUSDT","BCHUSDT","NEOUSDT"]'
+    strategy:
+      fail-fast: false
+      matrix:
+        chunk: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt
+      - run: |
+          cd backend; rc=0
+          for PAIR in $(python -c "import json,os; print(' '.join(json.loads(os.environ['PAIRS'])[${{ matrix.chunk }}::10]))"); do
+            echo "::group::$PAIR"
+            PAIR=$PAIR PYTHONPATH=. python ../scripts/robust_1h.py || { echo "::error::$PAIR failed"; rc=1; }
+            echo "::endgroup::"
+          done
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rob-${{ matrix.chunk }}
+          path: backend/rob-*.json.gz
+          if-no-files-found: ignore
+
+  summary:
+    needs: pair
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install numpy
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rob-*
+          path: rob
+      - run: |
+          mkdir -p public
+          for r in ${{ inputs.public_runs }}; do
+            gh run download "$r" --repo "${{ github.repository }}" --pattern 'r1h-*' --dir "public/$r" || echo "::warning::run $r not downloaded"
+          done
+      - run: python scripts/robust_1h_summary.py rob public
+      - uses: actions/upload-artifact@v4
+        with:
+          name: robust-1h
+          path: robust-1h.md
