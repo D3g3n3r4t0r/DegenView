@@ -4004,7 +4004,21 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
             "backtests": onchain_strategy_lab.status(_top_entries(50))}
 
 
+_ARENA_POOL_CACHE: dict[tuple, tuple[float, list[dict], list[dict]]] = {}
+
+
 def _safe_arena_pool(narrative: str = "", full: bool = False) -> tuple[list[dict], list[dict]]:
+    cache_key = (narrative, bool(full), id(_top_entries), id(_kobra_lists), len(onchain_leaderboard._entries))
+    now_ts = time.monotonic()
+    hit = _ARENA_POOL_CACHE.get(cache_key)
+    if hit and now_ts - hit[0] < 6.0:
+        return [dict(e) for e in hit[1]], [dict(e) for e in hit[2]]
+    pool, early = _compute_safe_arena_pool(narrative, full=full)
+    _ARENA_POOL_CACHE[cache_key] = (now_ts, [dict(e) for e in pool], [dict(e) for e in early])
+    return pool, early
+
+
+def _compute_safe_arena_pool(narrative: str = "", full: bool = False) -> tuple[list[dict], list[dict]]:
     """Self-healing arena pool: if a strict filter (_kobra_lists/_gem_view) or a
     30-day analysis cutoff collapses the visible projects (e.g. from ~46 down
     to 2), automatically restores the full _top_entries pool so Sectors and
@@ -4620,7 +4634,7 @@ def _cluster_candidates() -> list[dict]:
                                    {"chain": "layer", "token": "inj-injective-protocol", "symbol": "INJ"}]), True),
              ("early", lambda: onchain_leaderboard.early_list(), False),
              ("early", lambda: _kobra_early(), False),
-             ("quality", lambda: (_quality_view().get("accepted") or []) + (_quality_view().get("waiting") or []), False)]
+             ("quality", lambda: [x for qv in (_quality_view(),) for x in (qv.get("accepted") or []) + (qv.get("waiting") or [])], False)]
     for section, fn, top in steps:
         try:
             for e in fn():

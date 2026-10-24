@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import * as api from "./lib/api";
 import type { Arena, Gem, Project } from "./lib/types";
@@ -9,14 +9,15 @@ import { Top3 } from "./components/Top3";
 import { Sheet } from "./components/Sheet";
 import { gemId } from "./components/TokenRow";
 import { Arenas } from "./views/Arenas";
-import { Database } from "./views/Database";
+const Database = lazy(() => import("./views/Database").then((m) => ({ default: m.Database })));
 import { GemList } from "./views/GemList";
 import { Sectors } from "./views/Sectors";
 import { Today } from "./views/Today";
 import { getSectors, type SectorsView } from "./lib/sectors";
-import { TokenPage, type Opened } from "./views/TokenPage";
+import type { Opened } from "./views/TokenPage";
+const TokenPage = lazy(() => import("./views/TokenPage").then((m) => ({ default: m.TokenPage })));
 import { Quality, qualityContext } from "./views/Quality";
-import { Scout } from "./views/Scout";
+const Scout = lazy(() => import("./views/Scout").then((m) => ({ default: m.Scout })));
 import { Watch } from "./views/Watch";
 import { Search } from "./views/Search";
 import { TokenSheet } from "./views/TokenSheet";
@@ -97,11 +98,23 @@ export function App() {
     const t = setInterval(() => document.visibilityState === "visible" && go(), POLL_MS);
     return () => clearInterval(t);
   }, [wantSec]);
-  useEffect(() => { loadHidden(); coverage().then((l) => setLabels(Object.fromEntries(l.map((n) => [n.key, n.label ?? n.key])))); }, []);
+  useEffect(() => {
+    const t1 = setTimeout(() => { loadHidden(); coverage().then((l) => setLabels(Object.fromEntries(l.map((n) => [n.key, n.label ?? n.key])))); }, 300);
+    const t2 = setTimeout(() => { import("./views/TokenPage").catch(() => {}); }, 700);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
   // Quality is one account's (quality.js): its button shows only when the list answers.
-  useEffect(() => { fetch("/api/onchain/quality").then((r) => setQuality(r.ok)).catch(() => {}); }, []);
+  useEffect(() => { const id = setTimeout(() => fetch("/api/onchain/quality").then((r) => setQuality(r.ok)).catch(() => {}), 550); return () => clearTimeout(id); }, []);
   // Coordinated sells is one account's too (sells.js): a pill at the top of Scout, with the highest risk, opening the Clusters tab.
   useEffect(() => {
+    const id = setTimeout(() => {
+      api.getCoordinatedSells().then((d) => {
+        const top = Math.max(-1, ...(d.reports ?? []).map((r) => r.risk?.score ?? -1));
+        setSells({ risk: top < 0 ? null : top });
+      }).catch(() => {});
+    }, 2200);
+    return () => clearTimeout(id);
+    if (false)
     api.getCoordinatedSells().then((d) => {
       const top = Math.max(-1, ...(d.reports ?? []).map((r) => r.risk?.score ?? -1));
       setSells({ risk: top < 0 ? null : top });
@@ -191,7 +204,7 @@ export function App() {
                     <ScanButton onClick={() => setView("search")} />
                     {data ? <Arenas arenas={data.arenas} filtered={narr.length > 0} labels={labels} onOpen={openArena} /> : <Skeleton />}
                   </>
-                ) : <Database onOpen={openProject} scan={<ScanButton onClick={() => setView("search")} />} />}
+                ) : <Suspense fallback={<Skeleton />}><Database onOpen={openProject} scan={<ScanButton onClick={() => setView("search")} />} /></Suspense>}
               </>
             )}
             {view === "pearl" && data && (
@@ -211,7 +224,7 @@ export function App() {
                 empty={t("The ranking is filling up: gems appear as they pass the checks.")} />
             )}
             {view === "quality" && <Quality onOpen={openWith(qualityContext)} />}
-            {view === "agent" && <Scout sells={sells} onSells={() => setView("clusters")} />}
+            {view === "agent" && <Suspense fallback={<Skeleton />}><Scout sells={sells} onSells={() => setView("clusters")} /></Suspense>}
             {view === "clusters" && <Clusters onToken={(e) => setOpen({ e, context: t("Cluster check") })} inApp={inApp} />}
             {view === "profile" && <Profile onOpen={(e, context) => setPeek({ e, context })} />}
           </motion.div>
@@ -231,7 +244,7 @@ export function App() {
       </Sheet>
       <TokenSheet open={peek} onClose={() => setPeek(null)} onFull={(o) => { setPeek(null); setOpen(o); }} />
       <div style={{ "--tp-left": split ? `${238 + LIST_W}px` : "238px" } as React.CSSProperties}>
-        <AnimatePresence>{open && <TokenPage key={gemId(open.e)} open={open} onClose={closePage} />}</AnimatePresence>
+        <Suspense fallback={null}><AnimatePresence>{open && <TokenPage key={gemId(open.e)} open={open} onClose={closePage} />}</AnimatePresence></Suspense>
       </div>
     </MotionConfig>
   );

@@ -1,3 +1,17 @@
+# 2026-10-24 — Accelerazione Velocità e Reattività su `/app`, DegenView Classico (`/`) e Backend API (`seed-0429l`)
+
+Lorenzo, 24/10: "ora che abbiamo appesantito un bel po anche l'app , trova metodi per ripristinare la velocità e reattività".
+- **Code-Splitting & Riduzione dell'81% del Bundle Iniziale di `/app` (`frontend/app-next/vite.config.ts`, `src/App.tsx`, `src/views/TokenPage.tsx`, `seed-0429l`):**
+  - Separati i chunk vendor immutabili (`vendor-react`, `vendor-motion`) e convertiti a `React.lazy` + `<Suspense>` `TokenPage`, `Database`, `Scout`, `DreggPulseBanner` e `DreggPulseView` (con pre-caricamento in background di `TokenPage` dopo 700 ms di idle). Il bundle entry iniziale `index-*.js` scende da **605 kB (188 kB gzip)** a **116,9 kB (33,5 kB gzip, −81%)**.
+- **Eliminazione della Tempesta di Chiamate all'Avvio e del Doppio Fetch Candele (`src/App.tsx`, `src/views/TokenPage.tsx`):**
+  - Differite dopo il primo paint le chiamate secondarie (`loadHidden`, `coverage`, `/api/onchain/quality` a +300/550 ms e `getCoordinatedSells` a +2,2 s) così `getSectors()` / `getTop()` ha il 100% della priorità di rete e main-thread a `t=0ms`.
+  - In `TokenPage.tsx` spostato `live.pair` in `livePairRef` fuori dalle dipendenze di `paint()`, eliminando il secondo fetch identico delle candele che scattava 150 ms dopo l'apertura di ogni token.
+- **Ottimizzazione Backend Hot-Path (`backend/app/main.py`, `backend/app/trading/onchain/dregg_pulse.py`):**
+  - Aggiunta cache in-memory a breve termine (`_ARENA_POOL_CACHE`, TTL 6 s, invalidata automaticamente su cambio stato/monkeypatch) in `_safe_arena_pool()` per evitare che le chiamate concorrenti `/api/onchain/top` e `/api/onchain/sectors` eseguano due volte la scansione di 800 righe JSON su SQLite; eliminata la doppia chiamata a `_quality_view()` in `_cluster_candidates()`.
+  - In `dregg_pulse.py` sostituite le 26 chiamate HTTP sequenziali con `asyncio.gather` parallelo + aggiornamento *stale-while-revalidate* in background (`<0,5 ms` di risposta).
+- **Accelerazione Rendering DOM su DegenView Classico (`frontend/static/style.css`):**
+  - Aggiunto `content-visibility: auto; contain-intrinsic-size: auto 96px;` sulle liste di card (`.arch-card`, `.journal-row`, `.alert-log-cards > li`, `.watchlist-cards > li`, `.pa-list > li`, `.ct-row`) e `content-visibility: hidden` sui `.tab-content:not(.active)`.
+
 # 2026-10-24 — Layout e Distribuzione dello Spazio in Archivio Strategie e Trading → Copy trading (`seed-0428l`)
 
 Lorenzo, 24/10 (con 2 screenshot): "sta parte del sito degenview è un pò incasinata come layout e scelta di come occupare lo spazio", "anche questa migliorabile".

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import * as api from "../lib/api";
 import { askPush } from "../lib/push";
@@ -11,7 +11,8 @@ import { Logo } from "../components/Logo";
 import { CandleChart } from "../components/CandleChart";
 import { SellsMap } from "../components/SellsMap";
 import { DevPayments, DREGG_MINT } from "../components/DevPayments";
-import { DreggPulseBanner, DreggPulseView } from "../components/DreggPulse";
+const DreggPulseBanner = lazy(() => import("../components/DreggPulse").then((m) => ({ default: m.DreggPulseBanner })));
+const DreggPulseView = lazy(() => import("../components/DreggPulse").then((m) => ({ default: m.DreggPulseView })));
 import { DeepFacts, DeepResult, DossierHead, Details, InfoFallback, WhyOf } from "./Dossier";
 import { t as tr } from "../lib/i18n";
 
@@ -72,6 +73,8 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
   const rcRef = useRef(rc);
   rcRef.current = rc;
   const [live, setLive] = useState<{ cap?: number; change?: number; supply?: number; pair?: string }>({});
+  const livePairRef = useRef(live.pair);
+  livePairRef.current = live.pair;
   const [interval, setIv] = useState<Interval>("1d");
   const [chart, setChart] = useState<Chart>({ state: "loading" });
   const [libFailed, setLibFailed] = useState(false);
@@ -124,9 +127,9 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
     }
     if (candles.length >= 2) { setChart({ state: "candles", candles, shown }); return; }
     if (stale) return;
-    const pair = m.pair || live.pair;
+    const pair = m.pair || livePairRef.current;
     setChart(pair && DS_EMBED.has(m.chain) ? { state: "embed", pair } : { state: "none", text: tr("No trades to chart yet.") });
-  }, [e.chain, e.token_address, live.pair]);
+  }, [e.chain, e.token_address]);
 
   useEffect(() => { paint(interval); }, [interval, paint]);
 
@@ -278,7 +281,7 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
           </span>
         </section>
         {entry && <Glance e={entry} />}
-        {isDregg && <DreggPulseBanner onOpenTab={() => { setTab("dregg"); tabs.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} />}
+        {isDregg && <Suspense fallback={null}><DreggPulseBanner onOpenTab={() => { setTab("dregg"); tabs.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} /></Suspense>}
         <div className="mb-2 mt-4 flex items-center justify-between">
           <h3 className="text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">{tr("Price")}</h3>
           <div className="flex gap-1">
@@ -313,7 +316,7 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
 
         <div className="pt-2">
           {tab === "dregg" && isDregg ? (
-            <DreggPulseView />
+            <Suspense fallback={<p className="text-[14px] text-text-2">{tr("Loading…")}</p>}><DreggPulseView /></Suspense>
           ) : tab === "why" ? (
             <>
               {entry ? <WhyOf e={entry} deep={deep} /> : <p className="text-[14px] text-text-2">{loading ? tr("Loading…") : tr("Nothing to add yet.")}</p>}

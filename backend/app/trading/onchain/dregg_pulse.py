@@ -22,6 +22,7 @@ complete embedded baseline fallback so rate limits never break the view.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -799,7 +800,25 @@ def _build_mainnet_roadmap(tech: dict, horizon: dict, size: dict) -> dict:
 async def get_dregg_pulse(force: bool = False) -> dict:
     """Returns the complete real-time DREGG GitHub & Mainnet dossier."""
     now = time.time()
-    if not force and _cache["data"] is not None and now - float(_cache["at"] or 0) < CACHE_TTL_S:
+    if not force and _cache["data"] is not None:
+        if now - float(_cache["at"] or 0) < CACHE_TTL_S:
+            return _cache["data"]  # type: ignore[return-value]
+        if not _cache.get("refreshing"):
+            _cache["refreshing"] = True
+
+            async def _bg() -> None:
+                try:
+                    await get_dregg_pulse(force=True)
+                except Exception:  # noqa: BLE001
+                    pass
+                finally:
+                    _cache["refreshing"] = False
+
+            try:
+                asyncio.get_running_loop().create_task(_bg())
+                return _cache["data"]  # type: ignore[return-value]
+            except RuntimeError:
+                _cache["refreshing"] = False
         return _cache["data"]  # type: ignore[return-value]
 
     dt_now = datetime.now(timezone.utc)
@@ -811,12 +830,20 @@ async def get_dregg_pulse(force: bool = False) -> dict:
 
     if httpx is not None and legit is not None:
         async with httpx.AsyncClient() as client:
-            size_metrics = await _fetch_size_metrics(client)
-            tech_tree, horizon = await _fetch_horizon_and_techtree(client)
-            for spec in REPOS:
-                r_data, r_commits = await _fetch_repo_live(spec, client, since_24h, since_7d)
-                repos_out.append(r_data)
+            size_task = _fetch_size_metrics(client)
+            th_task = _fetch_horizon_and_techtree(client)
+            repo_tasks = [_fetch_repo_live(spec, client, since_24h, since_7d) for spec in REPOS]
+            size_metrics, (tech_tree, horizon), *repo_results = await asyncio.gather(size_task, th_task, *repo_tasks)
+            repos_out.extend(r_data for r_data, _ in repo_results)
+            for _, r_commits in repo_results:
+
+
+
+
                 all_recent_commits.extend(r_commits)
+
+
+
     else:
         size_metrics = _parse_size_md("")
         tech_tree = dict(_BASELINE_TECH_TREE)

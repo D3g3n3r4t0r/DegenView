@@ -8224,3 +8224,20 @@ html[data-theme="dark"] .tv-comp-chg.down {
   }
 }
 
+
+/* ==========================================================================
+   Performance & Layout Containment (Offscreen List Rendering Acceleration)
+   ========================================================================== */
+.arch-card,
+.journal-row,
+.alert-log-cards > li,
+.watchlist-cards > li,
+.pa-list > li,
+.ct-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+
+.tab-content:not(.active) {
+  content-visibility: hidden;
+}

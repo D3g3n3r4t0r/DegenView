@@ -1,4 +1,10 @@
 {
+  "seed-0429l": {
+    "status": "risolto",
+    "at": 1792834900,
+    "summary": "Ripristinata la velocita' e reattivita' su /app, DegenView classico e backend API tramite code-splitting (entry JS ridotto dell'81%, da 605 kB a 116 kB), caricamento differito delle chiamate secondarie, cache in-memory per _safe_arena_pool, fetch parallelo + stale-while-revalidate su DREGG e content-visibility sulle liste lunghe.",
+    "detail": "1) vite.config.ts + App.tsx + TokenPage.tsx: separati vendor-react e vendor-motion e resi lazy TokenPage, Database, Scout e DreggPulse (bundle iniziale index.js ridotto a 116.9 kB / 33.5 kB gzip, con preload di TokenPage in idle); differite dopo il primo paint le chiamate /api/onchain/quality, /api/onchain/coordinated-sells e coverage/hidden, ed eliminato il doppio fetch delle candele in TokenPage causato da live.pair nelle dipendenze di paint(). 2) backend/app/main.py + dregg_pulse.py: aggiunta cache TTL 6s (_ARENA_POOL_CACHE) su _safe_arena_pool per evitare doppie scansioni SQLite concorrenti tra /api/onchain/top e /api/onchain/sectors; rimossa la doppia invocazione di _quality_view() in _cluster_candidates(); parallelizzate con asyncio.gather tutte le 10 task HTTP di dregg_pulse.py con stale-while-revalidate in background. 3) frontend/static/style.css: aggiunto content-visibility: auto sulle schede fuori schermo e content-visibility: hidden sui tab inattivi."
+  },
   "seed-0428l": {
     "status": "risolto",
     "at": 1792833600,

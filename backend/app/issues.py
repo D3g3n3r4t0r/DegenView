@@ -207,6 +207,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0429l", "Ripristino della velocita' e reattivita' su /app, DegenView classico e backend API (code-splitting, SWR, deduplica chiamate e cache arena pool)",
+     "Lorenzo, 24/10: 'ora che abbiamo appesantito un bel po anche l'app , trova metodi per ripristinare la velocità e reattività'.",
+     "alta"),
     ("seed-0428l", "Layout e distribuzione dello spazio migliorati in Archivio Strategie e Trading → Copy trading",
      "Lorenzo, 24/10 (con 2 screenshot): 'sta parte del sito degenview è un pò incasinata come layout e scelta di come occupare lo spazio', 'anche questa migliorabile'.",
      "alta"),
