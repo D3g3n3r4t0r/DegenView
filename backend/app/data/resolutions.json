@@ -1,4 +1,9 @@
 {
+  "seed-0423l": {
+    "status": "risolto",
+    "at": 1792829127,
+    "summary": "La colonna di navigazione a sinistra passa da 214 a 176 pixel, con voci un po' piu' compatte; in inglese ogni voce resta su una riga. Il grafico guadagna spazio: a 1440 px Livelli da 770 a 808, Analizza da 764 a 786, Lab da 642 a 750. In Lab il pannello dei parametri ha ora una larghezza fissa e il grafico prende tutto il resto: la divisione in percentuali lasciava una striscia vuota accanto al pannello."
+  },
   "seed-0422l": {
     "status": "risolto",
     "at": 1792828323,

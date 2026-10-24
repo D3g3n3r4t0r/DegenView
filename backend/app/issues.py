@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0423l", "Colonna di navigazione a sinistra piu' stretta, piu' spazio al grafico in Analizza, Livelli e Lab",
+     "Lorenzo, 24/10: 'Riduci un po la larghezza della colonna a sinistra che contiene tutte le sezioni del sito classico in modo da avere piu' spazio per il grafico su Analisi, Livelli e Lab'.",
+     "media"),
     ("seed-0422l", "Deploy di main bloccato dal controllo di stile e da un test del client RPC",
      "Trovato il 24/10 lavorando alle sezioni senza grafico: il deploy di e31bd9f (seed-0418l-0420l) era fallito al passo Lint (variabile 'l' ambigua in composites.py, import inutilizzato in test_composites.py), e test_transport_failure_falls_back_to_secondary contava ancora su un secondo nodo Solana appena tolto.",
      "alta"),
