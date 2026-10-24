@@ -139,8 +139,7 @@ async function onClick(event) {
 // Share: the app's own link to this token, the same one the Telegram
 // alerts use. Whoever opens it signed in lands on this token (Lorenzo, 29/09).
 export function tokenLink(e) {
-  return ${location.origin}/share//;
-}/onchain-app.html#${view}&token=${encodeURIComponent(e.chain)}:${encodeURIComponent(e.token)}`;
+  return `${location.origin}/share/${encodeURIComponent(e.chain)}/${encodeURIComponent(e.token || e.token_address || "")}`;
 }
 async function shareToken(btn, e) {
   if (!e.token) return;
