@@ -47,9 +47,10 @@ logger = logging.getLogger(__name__)
 # Chains with a free RPC that serves the whole log history. Base, BSC and
 # Ethereum public RPCs answer getLogs only for the last hours (22/10, probed:
 # publicnode "archive requests require a token", drpc "free plan").
-CHAINS = ("robinhood", "ethereum", "base", "bsc", "solana", "layer")
+CHAINS = ("robinhood", "ethereum", "base", "bsc", "arc", "solana", "layer")
 MAX_WINDOW = {"robinhood": 5_000_000,     # the RPC takes up to 10M blocks / 10k logs
-              "bsc": 4500}                # PublicNode keyless & NodeReal free plan
+              "bsc": 4500,                # PublicNode keyless & NodeReal free plan
+              "arc": 4500}                # Arc mainnet RPC max range is 5,000 blocks
 # Chains whose full history comes from a keyed archive RPC (Diagnostics) when
 # configured; without a key, BSC falls back to recent RPC logs / GeckoTerminal.
 KEYED_RPC = {"bsc": "nodereal"}
@@ -257,16 +258,34 @@ def _done(item: dict, result: dict | None, error: str | None, now: float, auto_p
 def token_status(chain: str, token: str) -> dict:
     """One token: queued (and where), building, built, failed. No addresses."""
     st = _state()
-    k = _key((chain or "").lower(), sync_watch._n(token or ""))
+    norm_tok = sync_watch._n(token or "")
+    k = _key((chain or "").lower(), norm_tok)
+    if (
+        len(norm_tok) >= 32
+        and k not in _running
+        and k not in (st.get("tokens") or {})
+        and not any(q.get("key") == k for q in st.get("queue", []))
+    ):
+        suffix = f":{norm_tok}"
+        alt_k = (
+            next((rk for rk in _running if rk.endswith(suffix)), None)
+            or next((q["key"] for q in st.get("queue", []) if str(q.get("key") or "").endswith(suffix)), None)
+            or next((tk for tk in (st.get("tokens") or {}) if tk.endswith(suffix)), None)
+        )
+        if alt_k:
+            k = alt_k
     pos = next((n for n, q in enumerate(st.get("queue", [])) if q.get("key") == k), None)
     rec = (st.get("tokens") or {}).get(k) or {}
     run = _running.get(k) or {}
+    is_active = bool(run) or pos is not None
     return {"queued": pos is not None, "position": pos, "busy": _lock.locked(),
             "running": bool(run), "phase": run.get("phase"), "progress": run.get("progress"),
             "started_at": run.get("started_at"), "live": run.get("live"),
             "built_at": rec.get("built_at"), "clusters": rec.get("clusters"), "wallets": rec.get("wallets"),
-            "partial": rec.get("partial"), "error": rec.get("error") if rec.get("failed_at") else None,
-            "failed_at": rec.get("failed_at"), "auto_pr": rec.get("auto_pr"),
+            "partial": rec.get("partial"),
+            "error": None if is_active else (rec.get("error") if rec.get("failed_at") else None),
+            "failed_at": None if is_active else rec.get("failed_at"),
+            "auto_pr": rec.get("auto_pr"),
             "manual_left": MANUAL_PER_DAY - (st.get("manual_today", 0) if st.get("day") ==
                                              time.strftime("%Y-%m-%d", time.gmtime()) else 0)}
 
@@ -381,10 +400,16 @@ async def block_at(rpc, ts: float, latest: int) -> int:
 def _parse(lg: dict) -> dict | None:
     if len(lg.get("topics") or []) < 3:
         return None
-    return {"block": int(lg["blockNumber"], 16), "tx": lg.get("transactionHash"),
-            "log_index": int(lg.get("logIndex") or "0x0", 16),
-            "from": sync_sells._topic_addr(lg["topics"][1]), "to": sync_sells._topic_addr(lg["topics"][2]),
-            "amount": int(lg.get("data") or "0x0", 16)}
+    out = {"block": int(lg["blockNumber"], 16), "tx": lg.get("transactionHash"),
+           "log_index": int(lg.get("logIndex") or "0x0", 16),
+           "from": sync_sells._topic_addr(lg["topics"][1]), "to": sync_sells._topic_addr(lg["topics"][2]),
+           "amount": int(lg.get("data") or "0x0", 16)}
+    if lg.get("blockTimestamp"):
+        try:
+            out["ts"] = int(lg["blockTimestamp"], 16)
+        except (ValueError, TypeError):
+            pass
+    return out
 
 
 async def all_transfers(rpc, chain: str, token: str, start: int, latest: int) -> tuple[list[dict], bool]:
@@ -506,6 +531,89 @@ async def _blockscout_v2_transfers(chain: str, token: str) -> tuple[list[dict], 
     except Exception:  # noqa: BLE001
         return None
     return None
+
+
+async def _goplus_holders_and_pools(chain: str, token: str) -> tuple[list[tuple[str, int]], set[str], int]:
+    """Fetches GoPlus token security (holders, pool_manager/pair contracts, total_supply)
+    for chains like Arc (5042), BSC (56), Ethereum (1), Base (8453), etc."""
+    cid = {"ethereum": "1", "bsc": "56", "base": "8453", "arbitrum": "42161",
+           "polygon": "137", "optimism": "10", "avalanche": "43114", "arc": "5042"}.get(chain)
+    if not cid:
+        return [], set(), 0
+    holders: list[tuple[str, int]] = []
+    contracts: set[str] = set()
+    supply = 0
+    try:
+        async with httpx.AsyncClient(timeout=4.5, headers=transfer_sources._UA) as c:
+            r = await c.get(f"https://api.gopluslabs.io/api/v1/token_security/{cid}?contract_addresses={token.lower()}")
+            if r.status_code != 200:
+                return [], set(), 0
+            res = (r.json().get("result") or {})
+            info = res.get(token.lower()) or next(iter(res.values()), None) or {}
+            try:
+                ts_f = float(info.get("total_supply") or 0)
+                if ts_f > 0:
+                    supply = int(ts_f * (10 ** 18))
+            except (ValueError, TypeError):
+                pass
+            for d in info.get("dex") or []:
+                if isinstance(d, dict):
+                    for k in ("pool_manager", "pair"):
+                        v = str(d.get(k) or "").lower()
+                        if v.startswith("0x") and len(v) == 42:
+                            contracts.add(v)
+            for lst_key in ("holders", "lp_holders"):
+                for h in info.get(lst_key) or []:
+                    if not isinstance(h, dict):
+                        continue
+                    addr = str(h.get("address") or "").lower()
+                    if not addr.startswith("0x") or len(addr) != 42:
+                        continue
+                    if str(h.get("is_contract") or "0") == "1" or lst_key == "lp_holders":
+                        contracts.add(addr)
+                    if lst_key == "holders":
+                        try:
+                            bal = int(float(h.get("balance") or 0) * (10 ** 18))
+                        except (ValueError, TypeError):
+                            bal = 0
+                        if bal > 0 and addr not in DEAD:
+                            holders.append((addr, bal))
+    except Exception:  # noqa: BLE001
+        return [], set(), 0
+    return holders, contracts, supply
+
+
+def _prepend_opening_holders(transfers: list[dict], holders: list[tuple[str, int]], latest: int) -> list[dict]:
+    """Prepends synthetic opening balances from 0x00..00 so `balances(transfers)`
+    reconstructs exact top holder shares even when `transfers` is a recent window."""
+    if not holders:
+        return transfers
+    net_bal: dict[str, int] = {}
+    for t in transfers:
+        net_bal[t["from"]] = net_bal.get(t["from"], 0) - int(t["amount"])
+        net_bal[t["to"]] = net_bal.get(t["to"], 0) + int(t["amount"])
+    first_block = transfers[0]["block"] if transfers else max(2, latest - 1)
+    open_block = max(1, first_block - 1)
+    first_ts = transfers[0].get("ts") if transfers else int(time.time()) - 3600
+    zero = "0x0000000000000000000000000000000000000000"
+    opening: list[dict] = []
+    for idx, (addr, val) in enumerate(holders):
+        diff = val - net_bal.get(addr, 0)
+        if diff > 0:
+            opening.append({
+                "block": open_block,
+                "ts": first_ts,
+                "tx": f"open-gp-{idx}",
+                "log_index": idx,
+                "from": zero,
+                "to": addr,
+                "amount": diff,
+            })
+    if not opening:
+        return transfers
+    merged = opening + transfers
+    merged.sort(key=lambda t: (t["block"], t["log_index"]))
+    return merged
 
 
 # --- analysis (pure) -------------------------------------------------------
@@ -693,6 +801,9 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
     if created_at and created_at > 1e12:
         created_at /= 1000
     progress("transfers", 0)
+    gp_holders: list[tuple[str, int]] = []
+    gp_contracts: set[str] = set()
+    gp_supply = 0
     if keyed:
         # Archive RPC with the full log history: read it like Robinhood's.
         since = created_at - 86400 if created_at else time.time() - KEYED_LOOKBACK_S
@@ -700,6 +811,24 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
         transfers, partial = await all_transfers(rpc, chain, token, start, latest)
         partial = partial or not created_at
         source = KEYED_RPC[chain]
+    elif chain == "arc":
+        # Arc mainnet RPC allows up to 5,000 blocks per eth_getLogs call; scan
+        # recent 36,000 blocks and combine with GoPlus 5042 top holders & PoolManager.
+        start = max(0, latest - 36_000)
+        try:
+            (transfers, partial), (gp_holders, gp_contracts, gp_supply) = await asyncio.gather(
+                all_transfers(rpc, chain, token, start, latest),
+                _goplus_holders_and_pools(chain, token),
+            )
+        except Exception:  # noqa: BLE001
+            transfers = []
+            gp_holders, gp_contracts, gp_supply = await _goplus_holders_and_pools(chain, token)
+        if gp_holders:
+            transfers = _prepend_opening_holders(transfers, gp_holders, latest)
+            if transfers:
+                start = transfers[0]["block"]
+        partial = True
+        source = "rpc.mainnet.arc.io+goplus" if gp_holders else "rpc.mainnet.arc.io"
     elif chain == "bsc":
         # Keyless BSC fallback: PublicNode serves recent eth_getLogs (~9,500 blocks),
         # with GeckoTerminal swap trades as backup if the token was quiet recently.
@@ -753,7 +882,7 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
         elif chain == "robinhood":
             start = max(0, latest - 10_000_000)
         else:
-            start = 0
+            start = max(0, latest - 45_000) if latest > 50_000 else 0
         transfers, partial = await all_transfers(rpc, chain, token, start, latest)
         source = "rpc"
     if not transfers:
@@ -764,6 +893,8 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
         supply = await sync_sells.total_supply(chain, token, rpc)
     except Exception:  # noqa: BLE001
         supply = 0
+    if (not supply or supply <= 0) and gp_supply > 0:
+        supply = gp_supply
     # Contracts: every address that received from or sent to many others,
     # plus the biggest holders' own check (a locker holds a lot, trades little).
     bal_now, peak = balances(transfers)
@@ -776,7 +907,7 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
     probe = list(dict.fromkeys([a for a, _ in sorted(peak.items(), key=lambda x: -x[1])[:TOP_HOLDERS * 2]]
                                + [a for a, n in touch.most_common(40) if n >= 20]))
     progress("holders", None)
-    contracts = await _contracts(rpc, [a for a in probe if a not in DEAD][:36])
+    contracts = (await _contracts(rpc, [a for a in probe if a not in DEAD and a not in gp_contracts][:36])) | gp_contracts
     live(holders=[{"address": a, "share": round(v / supply, 5) if supply else None}
                   for a, v in sorted(peak.items(), key=lambda x: -x[1]) if a not in contracts and a not in DEAD][:TOP_WATCH],
          counts={"holders": len(peak), "transfers": len(transfers)})
@@ -948,6 +1079,12 @@ def start_manual(chain: str, token: str, symbol: str = "", force: bool = False) 
 
 def _spawn(chain: str, token: str, symbol: str, why: str) -> asyncio.Task:
     k = _key(chain, token)
+    st = _state()
+    rec = (st.get("tokens") or {}).get(k)
+    if rec and (rec.get("failed_at") or rec.get("error")):
+        rec["failed_at"] = None
+        rec["error"] = None
+        _save_state(st)
     item = {"key": k, "chain": chain, "token": token, "symbol": str(symbol or "")[:24], "manual": True}
     _running[k] = {"phase": "waiting", "progress": None, "started_at": int(time.time()), "chain": chain,
                    "token": token, "symbol": item["symbol"], "manual": True}

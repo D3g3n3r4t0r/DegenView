@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>__OG_TITLE__</title>
+  <meta property="og:title" content="__OG_TITLE__" />
+  <meta property="og:description" content="__OG_DESC__" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="__OG_TITLE__" />
+  <meta name="twitter:description" content="__OG_DESC__" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root, html[data-theme="dark"] {
+      --bg: #080b10;
+      --bg-elevated: #0f141c;
+      --card: #121822;
+      --card-hover: #171f2c;
+      --pill: #1b2433;
+      --line: rgba(255, 255, 255, 0.08);
+      --line-strong: rgba(255, 255, 255, 0.15);
+      --text: #f3f6fa;
+      --text-2: #a2b0c4;
+      --text-3: #68778d;
+      --sage: #10b981;
+      --sage-soft: rgba(16, 185, 129, 0.14);
+      --up: #10b981;
+      --down: #f43f5e;
+      --down-soft: rgba(244, 63, 94, 0.14);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --violet: #8b5cf6;
+      --violet-soft: rgba(139, 92, 246, 0.15);
+      --shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.55);
+    }
+    html[data-theme="light"] {
+      --bg: #f4f6f9;
+      --bg-elevated: #ffffff;
+      --card: #ffffff;
+      --card-hover: #f8fafc;
+      --pill: #edf1f7;
+      --line: rgba(15, 23, 42, 0.08);
+      --line-strong: rgba(15, 23, 42, 0.15);
+      --text: #0f172a;
+      --text-2: #475569;
+      --text-3: #64748b;
+      --sage: #059669;
+      --sage-soft: rgba(5, 150, 105, 0.12);
+      --up: #059669;
+      --down: #e11d48;
+      --down-soft: rgba(225, 29, 72, 0.11);
+      --amber: #d97706;
+      --amber-soft: rgba(217, 119, 6, 0.12);
+      --violet: #7c3aed;
+      --violet-soft: rgba(124, 58, 237, 0.12);
+      --shadow: 0 10px 28px -8px rgba(15, 23, 42, 0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      padding-bottom: 56px;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--line);
+    }
+    .topbar-inner {
+      max-width: 1380px;
+      margin: 0 auto;
+      height: 62px;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-logo {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: var(--sage); color: #fff; font-weight: 800; font-size: 16px;
+      display: grid; place-items: center;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    }
+    .brand-title { font-weight: 700; font-size: 15px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+    .badge-public {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 2px 8px; border-radius: 999px;
+      background: var(--sage-soft); color: var(--sage);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .brand-sub { font-size: 11px; color: var(--text-3); display: block; }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .btn-pill {
+      height: 36px; padding: 0 13px; border-radius: 999px;
+      background: var(--pill); border: 1px solid var(--line);
+      font-size: 12.5px; font-weight: 600; color: var(--text);
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: transform 0.12s, background 0.15s;
+    }
+    .btn-pill:hover { background: var(--card-hover); }
+    .btn-sage {
+      height: 36px; padding: 0 15px; border-radius: 999px;
+      background: var(--sage); color: #fff;
+      font-size: 12.5px; font-weight: 700;
+      display: inline-flex; align-items: center; gap: 6px;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+    }
+
+    .container { max-width: 1380px; margin: 0 auto; padding: 20px; }
+    .notice-bar {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 10px 16px; border-radius: 14px;
+      background: var(--card); border: 1px solid var(--line);
+      margin-bottom: 20px; font-size: 12.5px; color: var(--text-2);
+    }
+    .notice-left { display: flex; align-items: center; gap: 8px; }
+    .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--up);
+      box-shadow: 0 0 0 4px var(--sage-soft);
+    }
+    .main-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.42fr) minmax(360px, 1fr);
+      gap: 22px;
+      align-items: start;
+    }
+    @media (max-width: 1024px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+    .col-stack { display: flex; flex-direction: column; gap: 18px; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .hero-top {
+      display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px;
+    }
+    .token-id { display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .token-avatar {
+      width: 56px; height: 56px; border-radius: 16px; flex-shrink: 0;
+      background: linear-gradient(135deg, rgba(16,185,129,0.25), rgba(139,92,246,0.25));
+      border: 1px solid var(--line-strong);
+      display: grid; place-items: center; font-weight: 800; font-size: 20px; color: var(--sage);
+      overflow: hidden;
+    }
+    .token-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .token-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .token-name { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+    .chip {
+      font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+      background: var(--pill); color: var(--text-2); border: 1px solid var(--line);
+    }
+    .chip-sage { background: var(--sage-soft); color: var(--sage); border-color: rgba(16,185,129,0.3); }
+    .chip-violet { background: var(--violet-soft); color: var(--violet); border-color: rgba(139,92,246,0.3); }
+    .chip-amber { background: var(--amber-soft); color: var(--amber); border-color: rgba(245,158,11,0.3); }
+    .chip-down { background: var(--down-soft); color: var(--down); border-color: rgba(244,63,94,0.3); }
+
+    .token-sub-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; color: var(--text-2); }
+    .addr-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 2px 9px; border-radius: 999px; background: var(--pill);
+      border: 1px solid var(--line); font-size: 11.5px; color: var(--text-2);
+    }
+    .hero-mc { text-align: right; }
+    .hero-mc-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); }
+    .hero-mc-val { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+    .hero-mc-chg { font-size: 13px; font-weight: 700; }
+    .text-up { color: var(--up); }
+    .text-down { color: var(--down); }
+    .text-amber { color: var(--amber); }
+    .text-sage { color: var(--sage); }
+
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 18px;
+    }
+    @media (max-width: 680px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    .kpi-box {
+      background: var(--pill); border: 1px solid var(--line);
+      border-radius: 14px; padding: 10px 12px;
+    }
+    .kpi-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); }
+    .kpi-val { font-size: 16px; font-weight: 800; margin-top: 2px; }
+    .kpi-sub { font-size: 11px; color: var(--text-2); }
+
+    .sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .sec-title { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); }
+    .tf-group { display: flex; gap: 4px; }
+    .tf-btn {
+      padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+      background: var(--pill); color: var(--text-2);
+    }
+    .tf-btn.active { background: var(--text); color: var(--bg); }
+    .chart-wrap {
+      height: 270px; border-radius: 14px; background: var(--bg-elevated);
+      border: 1px solid var(--line); position: relative; overflow: hidden; padding: 12px;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+
+    .bar-track {
+      height: 9px; border-radius: 999px; background: var(--pill);
+      overflow: hidden; display: flex; margin: 10px 0 14px;
+    }
+    .cluster-list { display: flex; flex-direction: column; gap: 8px; }
+    .cluster-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 10px 12px; border-radius: 12px; background: var(--pill); border: 1px solid var(--line);
+      font-size: 12.5px;
+    }
+    .cluster-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    .tab-bar {
+      display: flex; gap: 4px; padding: 4px; border-radius: 999px;
+      background: var(--pill); border: 1px solid var(--line);
+    }
+    .tab-btn {
+      flex: 1; height: 36px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+      color: var(--text-2); transition: all 0.15s;
+    }
+    .tab-btn.active {
+      background: var(--card); color: var(--text);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .pillar-row {
+      padding: 12px; border-radius: 14px; background: var(--pill); border: 1px solid var(--line);
+      margin-top: 10px;
+    }
+    .pillar-head { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    .pillar-bar { height: 6px; border-radius: 999px; background: var(--card); overflow: hidden; margin-bottom: 6px; }
+    .pillar-fill { height: 100%; border-radius: 999px; background: var(--sage); }
+
+    .repo-card {
+      padding: 11px 13px; border-radius: 13px; background: var(--pill); border: 1px solid var(--line);
+      margin-bottom: 8px;
+    }
+    .repo-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+    .repo-desc { font-size: 11.5px; color: var(--text-2); margin-top: 3px; }
+    .commit-row {
+      display: flex; align-items: center; gap: 8px; font-size: 11.5px;
+      padding: 7px 10px; border-radius: 10px; background: var(--pill); margin-bottom: 5px;
+    }
+
+    .toast {
+      position: fixed; bottom: 20px; right: 20px; z-index: 100;
+      background: var(--sage); color: #fff; font-weight: 700; font-size: 13px;
+      padding: 10px 18px; border-radius: 999px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      opacity: 0; transform: translateY(10px); pointer-events: none;
+      transition: all 0.2s ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <a href="/app" class="brand-logo">D</a>
+        <div>
+          <div class="brand-title">
+            <span>DegenView</span>
+            <span class="badge-public">Public Share Dossier</span>
+          </div>
+          <span class="brand-sub">Accessibile a chiunque · Nessun login richiesto</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button type="button" class="btn-pill" id="themeBtn">☀️ / 🌙 Tema</button>
+        <button type="button" class="btn-pill" id="shareBtn">🔗 Condividi Link</button>
+        <a href="/app" class="btn-sage">Apri DegenView ↗</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="notice-bar">
+      <div class="notice-left">
+        <span class="pulse-dot"></span>
+        <span id="noticeText"><strong>Dossier Pubblico Live:</strong> caricamento metriche on-chain, cluster wallet e analisi AI…</span>
+      </div>
+      <span class="mono" style="font-size:11.5px;color:var(--text-3)" id="shareSlug">/share/__CHAIN__/__TOKEN__</span>
+    </div>
+
+    <div class="main-grid">
+      <!-- LEFT COLUMN -->
+      <div class="col-stack">
+        <!-- HERO IDENTITY CARD -->
+        <section class="card">
+          <div class="hero-top">
+            <div class="token-id">
+              <div class="token-avatar" id="tokAvatar">?</div>
+              <div>
+                <div class="token-title-row">
+                  <h1 class="token-name" id="tokName">Caricamento…</h1>
+                  <span class="chip" id="tokChain">__CHAIN__</span>
+                  <span class="chip chip-sage hidden" id="tokRank"></span>
+                </div>
+                <div class="token-sub-row">
+                  <strong style="color:var(--text)" id="tokSym">…</strong>
+                  <button type="button" class="addr-btn mono" id="addrCopyBtn" title="Copia indirizzo contratto">
+                    <span id="tokAddrShort">…</span> <span>📋</span>
+                  </button>
+                  <a href="#" target="_blank" rel="noopener" id="dexLinkTop" style="font-size:12px;color:var(--sage);font-weight:600">DexScreener ↗</a>
+                </div>
+              </div>
+            </div>
+            <div class="hero-mc">
+              <div class="hero-mc-label">Market Cap</div>
+              <div class="hero-mc-val mono" id="tokMcap">—</div>
+              <div class="hero-mc-chg mono" id="tokChg">—</div>
+            </div>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi-box">
+              <div class="kpi-label">Score Globale</div>
+              <div class="kpi-val mono text-sage" id="kpiScore">—</div>
+              <div class="kpi-sub" id="kpiVerdict">Analisi DegenView</div>
+            </div>
+            <div class="kpi-box">
+              <div class="kpi-label">Liquidità Pool</div>
+              <div class="kpi-val mono" id="kpiLiq">—</div>
+              <div class="kpi-sub" id="kpiFdv">FDV —</div>
+            </div>
+            <div class="kpi-box">
+              <div class="kpi-label">Volume 24h</div>
+              <div class="kpi-val mono" id="kpiVol">—</div>
+              <div class="kpi-sub" id="kpiPrice">Prezzo —</div>
+            </div>
+            <div class="kpi-box">
+              <div class="kpi-label">Holders</div>
+              <div class="kpi-val mono" id="kpiHolders">—</div>
+              <div class="kpi-sub" id="kpiAge">Età —</div>
+            </div>
+            <div class="kpi-box">
+              <div class="kpi-label">Rischio Cluster</div>
+              <div class="kpi-val mono" id="kpiRisk">—</div>
+              <div class="kpi-sub" id="kpiClusters">Wallet cluster</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CHART CARD -->
+        <section class="card">
+          <div class="sec-head">
+            <span class="sec-title" id="chartTitle">Grafico Prezzo / Market Cap</span>
+            <div class="tf-group" id="tfGroup">
+              <button type="button" class="tf-btn" data-tf="15m">15m</button>
+              <button type="button" class="tf-btn" data-tf="1h">1h</button>
+              <button type="button" class="tf-btn active" data-tf="4h">4h</button>
+              <button type="button" class="tf-btn" data-tf="1d">1d</button>
+            </div>
+          </div>
+          <div class="chart-wrap" id="chartBox">
+            <div style="margin:auto;color:var(--text-3);font-size:13px">Caricamento grafico…</div>
+          </div>
+        </section>
+
+        <!-- WALLET CLUSTERS & COORDINATED SELLS -->
+        <section class="card" id="clustersCard">
+          <div class="sec-head">
+            <span class="sec-title">Mappa Cluster & Vendite Coordinate</span>
+            <span class="chip" id="clusterRiskChip">In attesa</span>
+          </div>
+          <div id="clustersBody">
+            <p style="font-size:13px;color:var(--text-2)">Caricamento analisi cluster…</p>
+          </div>
+        </section>
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div class="col-stack">
+        <div class="tab-bar" id="tabBar">
+          <button type="button" class="tab-btn hidden" data-tab="dregg" id="tabBtnDregg">🐉 DREGG Mainnet</button>
+          <button type="button" class="tab-btn active" data-tab="why" id="tabBtnWhy">Perché & AI</button>
+          <button type="button" class="tab-btn" data-tab="info" id="tabBtnInfo">Info & Link</button>
+        </div>
+
+        <!-- TAB: DREGG PULSE -->
+        <div id="pane-dregg" class="col-stack hidden"></div>
+
+        <!-- TAB: WHY & AI DOSSIER -->
+        <div id="pane-why" class="col-stack">
+          <section class="card">
+            <div class="sec-head">
+              <span class="sec-title">Pagella 3 Pilastri & Giudizio AI</span>
+              <span class="chip chip-sage" id="whyScoreBadge">—</span>
+            </div>
+            <p style="font-size:13.5px;color:var(--text);margin-bottom:12px" id="whySummary">Caricamento sintesi del progetto…</p>
+            <div id="pillarsBox"></div>
+          </section>
+
+          <section class="card" id="judgeCard">
+            <div class="sec-head">
+              <span class="sec-title">Verdetto Giudice & Deep Re-check</span>
+              <span class="chip" id="judgeVerdictChip">—</span>
+            </div>
+            <div id="judgeBody" style="font-size:13px;color:var(--text-2)">Nessun verdetto AI registrato.</div>
+          </section>
+
+          <section class="card hidden" id="codeCard">
+            <div class="sec-head">
+              <span class="sec-title">Revisione del Codice (GitHub)</span>
+              <span class="chip chip-violet" id="codeComplexityChip">—</span>
+            </div>
+            <div id="codeBody" style="font-size:13px;color:var(--text-2)"></div>
+          </section>
+        </div>
+
+        <!-- TAB: INFO & LINKS -->
+        <div id="pane-info" class="col-stack hidden">
+          <section class="card">
+            <div class="sec-head">
+              <span class="sec-title">Dettagli Contratto & Link Ufficiali</span>
+            </div>
+            <div id="infoLinksBox" class="cluster-list"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast">Link copiato negli appunti ✓</div>
+
+  <script>
+    const CHAIN = "__CHAIN__";
+    const TOKEN = "__TOKEN__";
+    let dossierData = null;
+
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 2000);
+    }
+
+    async function copyText(txt, msg = "Copiato negli appunti ✓") {
+      try {
+        await navigator.clipboard.writeText(txt);
+        showToast(msg);
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = txt;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); showToast(msg); } catch {}
+        ta.remove();
+      }
+    }
+
+    document.getElementById("themeBtn").addEventListener("click", () => {
+      const html = document.documentElement;
+      html.dataset.theme = html.dataset.theme === "dark" ? "light" : "dark";
+    });
+
+    document.getElementById("shareBtn").addEventListener("click", async () => {
+      const url = window.location.href;
+      const sym = dossierData?.entry?.symbol || TOKEN.slice(0, 6);
+      if (navigator.share) {
+        try { await navigator.share({ title: `${sym} · DegenView Dossier`, text: `Guarda l'analisi completa di ${sym} su DegenView`, url }); return; }
+        catch (e) { if (e && e.name === "AbortError") return; }
+      }
+      copyText(url, "Link pubblico di condivisione copiato ✓");
+    });
+
+    document.getElementById("addrCopyBtn").addEventListener("click", () => {
+      copyText(TOKEN, "Indirizzo contratto copiato ✓");
+    });
+
+    const usdShort = (v) => {
+      if (v == null || !Number.isFinite(Number(v))) return "—";
+      const n = Number(v);
+      if (n >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
+      if (n >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M";
+      if (n >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K";
+      if (n >= 1) return "$" + n.toFixed(2);
+      return "$" + n.toPrecision(3);
+    };
+    const pct = (v) => (v == null ? "—" : (Number(v) * 100).toFixed(Number(v) < 0.01 ? 2 : 1) + "%");
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    function setTab(tab) {
+      ["dregg", "why", "info"].forEach((k) => {
+        const pane = document.getElementById("pane-" + k);
+        const btn = document.querySelector(`[data-tab="${k}"]`);
+        if (pane) pane.classList.toggle("hidden", k !== tab);
+        if (btn) btn.classList.toggle("active", k === tab);
+      });
+    }
+    document.querySelectorAll("[data-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => setTab(btn.dataset.tab));
+    });
+
+    function renderChart(candles, kMult = 1) {
+      const box = document.getElementById("chartBox");
+      if (!Array.isArray(candles) || candles.length < 2) {
+        box.innerHTML = `<div style="margin:auto;color:var(--text-3);font-size:13px">Dati candele non disponibili per questo intervallo.</div>`;
+        return;
+      }
+      const W = 720, H = 220, PAD_T = 14, PAD_B = 18, PAD_R = 64;
+      const pts = candles.slice(-48);
+      const highs = pts.map((c) => Number(c.high ?? c.close) * kMult);
+      const lows = pts.map((c) => Number(c.low ?? c.close) * kMult);
+      let lo = Math.min(...lows), hi = Math.max(...highs);
+      if (hi <= lo) { hi = lo * 1.05 + 1; lo = lo * 0.95; }
+      const span = hi - lo;
+      const y = (v) => PAD_T + (1 - (v - lo) / span) * (H - PAD_T - PAD_B);
+      const stepX = (W - PAD_R - 16) / Math.max(1, pts.length);
+      const lineD = pts.map((c, i) => `${i ? "L" : "M"}${(12 + i * stepX).toFixed(1)},${y(Number(c.close) * kMult).toFixed(1)}`).join(" ");
+      const areaD = `${lineD} L${(12 + (pts.length - 1) * stepX).toFixed(1)},${H} L12,${H} Z`;
+      const candlesSvg = pts.map((c, i) => {
+        const cx = 12 + i * stepX;
+        const o = Number(c.open ?? c.close) * kMult;
+        const cl = Number(c.close) * kMult;
+        const h = Number(c.high ?? Math.max(o, cl)) * kMult;
+        const l = Number(c.low ?? Math.min(o, cl)) * kMult;
+        const up = cl >= o;
+        const col = up ? "var(--up)" : "var(--down)";
+        const yTop = y(Math.max(o, cl));
+        const yBot = y(Math.min(o, cl));
+        const bh = Math.max(2, yBot - yTop);
+        const bw = Math.max(3, Math.min(9, stepX * 0.62));
+        return `<line x1="${cx.toFixed(1)}" y1="${y(h).toFixed(1)}" x2="${cx.toFixed(1)}" y2="${y(l).toFixed(1)}" stroke="${col}" stroke-width="1.2"/>
+                <rect x="${(cx - bw / 2).toFixed(1)}" y="${yTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="1" fill="${col}"/>`;
+      }).join("");
+      const ticks = [0, 0.5, 1].map((f) => {
+        const val = lo + span * (1 - f);
+        const yy = PAD_T + f * (H - PAD_T - PAD_B);
+        return `<line x1="0" y1="${yy.toFixed(1)}" x2="${W - PAD_R}" y2="${yy.toFixed(1)}" stroke="var(--line)" stroke-dasharray="3 3"/>
+                <text x="${W - 4}" y="${(yy + 4).toFixed(1)}" text-anchor="end" fill="var(--text-3)" font-size="10.5" class="mono">${usdShort(val)}</text>`;
+      }).join("");
+      box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:100%;overflow:visible">
+        <defs>
+          <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--sage)" stop-opacity="0.22"/>
+            <stop offset="100%" stop-color="var(--sage)" stop-opacity="0.0"/>
+          </linearGradient>
+        </defs>
+        ${ticks}
+        <path d="${areaD}" fill="url(#cg)"/>
+        ${candlesSvg}
+      </svg>`;
+    }
+
+    function renderClusters(rep) {
+      const chip = document.getElementById("clusterRiskChip");
+      const body = document.getElementById("clustersBody");
+      if (!rep || !Array.isArray(rep.clusters) || !rep.clusters.length) {
+        chip.textContent = "Nessun cluster critico";
+        chip.className = "chip";
+        body.innerHTML = `<p style="font-size:13px;color:var(--text-2)">Nessun cluster sospetto rilevato o scansione non ancora eseguita per questo token.</p>`;
+        return;
+      }
+      const risk = rep.risk?.score;
+      const real = rep.clusters.filter((c) => c.id !== "top");
+      const held = real.reduce((s, c) => s + Number(c.share || 0), 0);
+      document.getElementById("kpiRisk").textContent = risk != null ? `${Math.round(risk)}/100` : "—";
+      document.getElementById("kpiClusters").textContent = `${real.length} cluster · ${pct(held)} supply`;
+      chip.textContent = risk != null ? `Rischio ${Math.round(risk)}/100` : `${real.length} cluster`;
+      chip.className = "chip " + (risk >= 60 ? "chip-down" : risk >= 30 ? "chip-amber" : "chip-sage");
+
+      const colors = ["#f43f5e", "#f59e0b", "#8b5cf6", "#06b6d4", "#10b981", "#ec4899"];
+      const barSegs = rep.clusters.map((c, idx) => {
+        const w = Math.max(0.5, Number(c.share || 0) * 100);
+        const col = c.id === "top" ? "var(--text-3)" : colors[idx % colors.length];
+        return `<div style="width:${w.toFixed(2)}%;background:${col}" title="${esc(c.id)}: ${pct(c.share)}"></div>`;
+      }).join("");
+
+      const rows = rep.clusters.slice(0, 6).map((c, idx) => {
+        const col = c.id === "top" ? "var(--text-3)" : colors[idx % colors.length];
+        const title = c.id === "top" ? "Top Holders (non collegati)" : `Cluster #${idx + 1}`;
+        const links = (c.links || []).map((l) => `<span class="chip" style="font-size:10px">${esc(l.replace(/_/g, " "))}</span>`).join("");
+        return `<div class="cluster-item">
+          <div class="cluster-left">
+            <span class="dot" style="background:${col}"></span>
+            <strong>${esc(title)}</strong>
+            <span style="color:var(--text-2)">${(c.wallets || []).length} wallet</span>
+            ${links}
+          </div>
+          <strong class="mono">${pct(c.share)}</strong>
+        </div>`;
+      }).join("");
+
+      const reasons = (rep.risk?.reasons || []).map((r) => `<li style="margin-left:16px;font-size:12px;color:var(--text-2)">${esc(r)}</li>`).join("");
+      body.innerHTML = `
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2)">
+          <span>Supply nei cluster collegati</span>
+          <strong class="mono" style="color:var(--text)">${pct(held)}</strong>
+        </div>
+        <div class="bar-track">${barSegs}</div>
+        ${reasons ? `<ul style="margin-bottom:12px">${reasons}</ul>` : ""}
+        <div class="cluster-list">${rows}</div>
+      `;
+    }
+
+    function renderDregg(d) {
+      const pane = document.getElementById("pane-dregg");
+      if (!d) return;
+      const gs = d.github_summary || {};
+      const nr = d.nanodregg_ratchet || {};
+      const repos = (d.repos || []).slice(0, 6).map((r) => `
+        <div class="repo-card">
+          <div class="repo-top">
+            <a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--sage)">${esc(r.repo)} ↗</a>
+            <span class="mono" style="font-size:11.5px">${r.total_commits || 0} commit (${r.commits_7d || 0} 7d)</span>
+          </div>
+          <div class="repo-desc">${esc(r.role || "")} · <span class="mono">${esc(r.language || "")}</span></div>
+        </div>
+      `).join("");
+      const commits = (d.recent_commits || []).slice(0, 6).map((c) => `
+        <div class="commit-row">
+          <span class="chip chip-violet mono">${esc(c.sha)}</span>
+          <strong style="font-size:11px;color:var(--sage)">${esc((c.repo || "").split("/")[1] || c.repo)}</strong>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.message)}</span>
+        </div>
+      `).join("");
+      pane.innerHTML = `
+        <section class="card">
+          <div class="sec-head">
+            <span class="sec-title">🐉 DREGG Mainnet & GitHub Observatory</span>
+            <span class="chip chip-sage">${gs.total_commits_all_repos || 0} Commit Totali</span>
+          </div>
+          <p style="font-size:13px;color:var(--text-2);margin-bottom:12px">
+            Lead Architect: <strong>${esc(d.lead_developer?.name)} (@${esc(d.lead_developer?.github)})</strong> · ${esc(d.lead_developer?.organization)}
+          </p>
+          <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px;margin-bottom:14px">
+            <div class="kpi-box"><div class="kpi-label">Commit 24h / 7d</div><div class="kpi-val mono text-sage">+${gs.commits_24h || 0} / +${gs.commits_7d || 0}</div></div>
+            <div class="kpi-box"><div class="kpi-label">Teoremi Lean 4</div><div class="kpi-val mono">${nr.lean_theorems || 0} (0 sorry)</div></div>
+            <div class="kpi-box"><div class="kpi-label">Target Mainnet</div><div class="kpi-val mono">${esc(d.mainnet_forecast?.full_mainnet_target_window || "Q3 2027")}</div></div>
+          </div>
+          <div class="sec-title" style="margin-bottom:8px">Repository Ufficiali Monitorati</div>
+          ${repos}
+          <div class="sec-title" style="margin:12px 0 8px">Ultimi Commit Live</div>
+          ${commits}
+        </section>
+      `;
+    }
+
+    function renderDossier(data) {
+      dossierData = data;
+      const e = data.entry || {};
+      const sym = e.symbol || TOKEN.slice(0, 6).toUpperCase();
+      const name = e.name || sym;
+      const chain = e.chain || CHAIN;
+      document.title = `${sym} (${name}) · DegenView Public Share`;
+      document.getElementById("noticeText").innerHTML = `<strong>Dossier Pubblico Condiviso:</strong> dati in tempo reale verificati da DegenView per <strong>${esc(name)} (${esc(sym)})</strong>.`;
+      document.getElementById("shareSlug").textContent = `/share/${chain}/${TOKEN.slice(0, 10)}…`;
+
+      const av = document.getElementById("tokAvatar");
+      if (e.image) {
+        av.innerHTML = `<img src="${esc(e.image)}" alt="${esc(sym)}" onerror="this.parentElement.textContent='${esc(sym.slice(0,3))}'"/>`;
+      } else {
+        av.textContent = sym.slice(0, 3);
+      }
+      document.getElementById("tokName").textContent = name;
+      document.getElementById("tokSym").textContent = "$" + sym;
+      document.getElementById("tokChain").textContent = chain.toUpperCase();
+      document.getElementById("tokAddrShort").textContent = TOKEN.length > 14 ? `${TOKEN.slice(0, 6)}…${TOKEN.slice(-4)}` : TOKEN;
+
+      const rankEl = document.getElementById("tokRank");
+      if (e.top_rank || e.rank) {
+        rankEl.textContent = `Top #${e.top_rank || e.rank}`;
+        rankEl.classList.remove("hidden");
+      }
+
+      const dexUrl = e.pair_url || `https://dexscreener.com/${encodeURIComponent(chain)}/${encodeURIComponent(TOKEN)}`;
+      document.getElementById("dexLinkTop").href = dexUrl;
+
+      document.getElementById("tokMcap").textContent = usdShort(e.market_cap);
+      const chgEl = document.getElementById("tokChg");
+      if (e.change_24h != null && Number.isFinite(Number(e.change_24h))) {
+        const c = Number(e.change_24h);
+        chgEl.textContent = `${c >= 0 ? "+" : ""}${c.toFixed(2)}% (24h)`;
+        chgEl.className = "hero-mc-chg mono " + (c >= 0 ? "text-up" : "text-down");
+      } else {
+        chgEl.textContent = "—";
+      }
+
+      const sc = e.score != null ? Math.round(Number(e.score)) : null;
+      document.getElementById("kpiScore").textContent = sc != null ? `${sc}/100` : "—";
+      document.getElementById("whyScoreBadge").textContent = sc != null ? `Score ${sc}/100` : "Dossier";
+      document.getElementById("kpiLiq").textContent = usdShort(e.liquidity_usd);
+      document.getElementById("kpiFdv").textContent = `FDV ${usdShort(e.fdv || e.market_cap)}`;
+      document.getElementById("kpiVol").textContent = usdShort(e.volume_24h);
+      document.getElementById("kpiPrice").textContent = e.price_usd ? `$${Number(e.price_usd).toPrecision(4)}` : "—";
+      const holders = e.holders || e.traction?.holders || ((e.pillars?.tokenomics?.facts || {}).holders);
+      document.getElementById("kpiHolders").textContent = holders ? Number(holders).toLocaleString("it-IT") : "—";
+      if (e.launched_at) {
+        const days = Math.max(1, Math.round((Date.now() / 1000 - Number(e.launched_at)) / 86400));
+        document.getElementById("kpiAge").textContent = `Età ${days}g`;
+      }
+
+      // Summary & Pillars
+      const summary = e.summary || e.pillars?.site?.facts?.summary || data.deep?.reason || "Progetto indicizzato e monitorato dal motore on-chain di DegenView.";
+      document.getElementById("whySummary").textContent = summary;
+
+      const pBox = document.getElementById("pillarsBox");
+      const pDefs = [
+        ["site", "Sito Web & Prodotto", e.pillars?.site],
+        ["github", "GitHub & Architettura Codice", e.pillars?.github],
+        ["tokenomics", "Tokenomics & Sicurezza LP", e.pillars?.tokenomics],
+      ];
+      pBox.innerHTML = pDefs.map(([k, label, p]) => {
+        const pScore = p?.score != null ? Math.round(Number(p.score)) : null;
+        const flags = (p?.flags || []).map((f) => `<div style="font-size:11.5px;color:var(--amber);margin-top:3px">⚠️ ${esc(f)}</div>`).join("");
+        return `<div class="pillar-row">
+          <div class="pillar-head">
+            <span>${esc(label)}</span>
+            <span class="mono">${pScore != null ? pScore + "/100" : "—"}</span>
+          </div>
+          <div class="pillar-bar"><div class="pillar-fill" style="width:${pScore != null ? Math.min(100, Math.max(4, pScore)) : 0}%"></div></div>
+          ${flags}
+        </div>`;
+      }).join("");
+
+      // Judge & Deep recheck
+      const j = e.judge;
+      const d = data.deep;
+      const jChip = document.getElementById("judgeVerdictChip");
+      const jBody = document.getElementById("judgeBody");
+      if (j || d) {
+        const v = (j?.verdict || (d?.keep ? "keep" : d?.verdict) || "analizzato").toUpperCase();
+        const jSc = j?.score ?? d?.score;
+        jChip.textContent = jSc != null ? `${v} · ${jSc}/100` : v;
+        jChip.className = "chip " + (v === "GEM" || v === "KEEP" ? "chip-sage" : "chip-amber");
+        const strengths = (j?.strengths || []).map((s) => `<li style="color:var(--up);margin-left:16px;margin-bottom:3px">✓ ${esc(s)}</li>`).join("");
+        const problems = (j?.problems || []).map((p) => `<li style="color:var(--down);margin-left:16px;margin-bottom:3px">✗ ${esc(p)}</li>`).join("");
+        const deepReason = d?.reason ? `<p style="margin-top:8px;padding:10px;border-radius:10px;background:var(--pill);color:var(--text)"><strong>Deep Re-check:</strong> ${esc(d.reason)}</p>` : "";
+        jBody.innerHTML = `
+          ${j?.admit_reason ? `<p style="margin-bottom:8px;color:var(--text)">${esc(j.admit_reason)}</p>` : ""}
+          ${strengths ? `<ul style="margin-bottom:6px">${strengths}</ul>` : ""}
+          ${problems ? `<ul style="margin-bottom:6px">${problems}</ul>` : ""}
+          ${deepReason}
+        `;
+      }
+
+      // Code review
+      const c = e.code;
+      if (c && (c.summary || c.complexity != null)) {
+        document.getElementById("codeCard").classList.remove("hidden");
+        document.getElementById("codeComplexityChip").textContent = `Complessità ${c.complexity ?? "—"} · Innovazione ${c.innovation ?? "—"}`;
+        document.getElementById("codeBody").innerHTML = `<p style="color:var(--text)">${esc(c.summary || "")}</p>`;
+      }
+
+      // Info & Links
+      const links = [];
+      links.push(["DexScreener", dexUrl]);
+      if (e.website) links.push(["Sito Ufficiale", e.website]);
+      if (e.github) links.push(["GitHub", e.github.startsWith("http") ? e.github : `https://github.com/${e.github}`]);
+      if (e.judge?.x) links.push(["X (Twitter)", e.judge.x]);
+      if (e.judge?.tg) links.push(["Telegram", e.judge.tg]);
+      document.getElementById("infoLinksBox").innerHTML = links.map(([lbl, u]) => `
+        <a href="${esc(u)}" target="_blank" rel="noopener" class="cluster-item" style="text-decoration:none">
+          <strong>${esc(lbl)}</strong>
+          <span class="mono" style="color:var(--sage);font-size:12px">${esc(u.replace(/^https?:\/\//, "").slice(0, 38))} ↗</span>
+        </a>
+      `).join("");
+
+      // Clusters
+      renderClusters(data.clusters);
+
+      // Chart
+      const candles = data.candles || [];
+      const lastClose = candles.length ? Number(candles[candles.length - 1].close || 0) : 0;
+      const kMult = e.market_cap && lastClose > 0 ? Number(e.market_cap) / lastClose : 1;
+      renderChart(candles, kMult);
+
+      // DREGG Pulse
+      if (data.dregg_pulse) {
+        const btnDregg = document.getElementById("tabBtnDregg");
+        btnDregg.classList.remove("hidden");
+        renderDregg(data.dregg_pulse);
+        setTab("dregg");
+      }
+    }
+
+    async function loadShare() {
+      try {
+        const r = await fetch(`/api/public/share/${encodeURIComponent(CHAIN)}/${encodeURIComponent(TOKEN)}`);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const data = await r.json();
+        renderDossier(data);
+      } catch (err) {
+        document.getElementById("noticeText").textContent = "Impossibile caricare il dossier in questo momento.";
+      }
+    }
+
+    document.getElementById("tfGroup").addEventListener("click", async (ev) => {
+      const btn = ev.target.closest("[data-tf]");
+      if (!btn || !dossierData) return;
+      document.querySelectorAll("#tfGroup .tf-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      const tf = btn.dataset.tf;
+      const e = dossierData.entry || {};
+      const pool = e.pair_address || "";
+      const sym = e.symbol || "TOKEN";
+      try {
+        const r = await fetch(`/api/public/share/${encodeURIComponent(CHAIN)}/${encodeURIComponent(TOKEN)}/chart?interval=${encodeURIComponent(tf)}&pool=${encodeURIComponent(pool)}&symbol=${encodeURIComponent(sym)}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        const candles = d.candles || [];
+        const lastClose = candles.length ? Number(candles[candles.length - 1].close || 0) : 0;
+        const kMult = e.market_cap && lastClose > 0 ? Number(e.market_cap) / lastClose : 1;
+        renderChart(candles, kMult);
+      } catch {}
+    });
+
+    loadShare();
+  </script>
+</body>
+</html>

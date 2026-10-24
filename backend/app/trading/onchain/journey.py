@@ -28,7 +28,7 @@ MAX_STEPS = 400
 # Same node ids as frontend/static/onchain/agent-map-model.js.
 _KIND_NODE = {"scan": "scan", "scanner": "scan", "manual": "scan", "study": "study", "research": "research",
               "judge": "research", "review": "research", "code": "code", "narratives": "narratives",
-              "consistency": "consistency", "backtest": "backtest"}
+              "consistency": "consistency", "backtest": "backtest", "clusters": "clusters"}
 _PURPOSE_NODE = {"code": "code", "site": "research", "site_legit": "research", "research": "research",
                  "judge": "research", "consistency": "consistency", "alert_manual": "scan",
                  "alert_batch": "scan", "recheck": "research"}
@@ -64,6 +64,11 @@ def resolve(q: str, limit: int = 8) -> list[dict]:
     for a in deepseek_desk.log(limit=deepseek_desk.ACTIVITY_KEEP):
         if a.get("token") == q or (a.get("symbol") or "").lower() == q.lower():
             add(a.get("chain"), a.get("token"), a.get("symbol"))
+    if not found:
+        from app.trading.onchain import leaderboard
+        for e in leaderboard._entries.values():
+            if e.get("token_address") == q or (e.get("symbol") or "").lower() == q.lower():
+                add(e.get("chain"), e.get("token_address"), e.get("symbol"), "ranked" if e.get("rank") else "board")
     return list(found.values())
 
 
@@ -145,6 +150,33 @@ def _records(chain: str, token: str) -> list[tuple[float, str, str, dict]]:
         if ak.endswith(":" + k) and al.get("at"):
             out.append((al["at"], "scan", "alert_track", {"id": ak, **_pick(al, (
                 "at", "kind", "score", "cap0", "liq0", "entry", "entry_at", "returns", "max_ret", "min_ret", "closed"))}))
+    try:
+        from app.trading.onchain import sync_sells, wallet_clusters
+        wc_file = wallet_clusters._dir() / f"{wallet_clusters._key(chain, token)}.json"
+        if wc_file.exists():
+            wc_data = json.loads(wc_file.read_text(encoding="utf-8"))
+            if wc_data.get("built_at"):
+                out.append((wc_data["built_at"], "clusters", "wallet_clusters", {
+                    "key": k,
+                    "built_at": wc_data["built_at"],
+                    "clusters": len(wc_data.get("clusters") or []),
+                    "holders": wc_data.get("holders"),
+                    "transfers": wc_data.get("transfers"),
+                    "partial": wc_data.get("partial"),
+                }))
+        cs_file = sync_sells.report_path(chain, token)
+        if cs_file.exists():
+            cs_data = json.loads(cs_file.read_text(encoding="utf-8"))
+            if cs_data.get("updated_at"):
+                out.append((cs_data["updated_at"], "clusters", "coordinated_sells", {
+                    "key": k,
+                    "updated_at": cs_data["updated_at"],
+                    "risk_score": (cs_data.get("risk") or {}).get("score"),
+                    "clusters": len([c for c in (cs_data.get("clusters") or []) if c.get("id") != "top"]),
+                    "events": len(cs_data.get("events") or []),
+                }))
+    except Exception:
+        pass
     # The append-only history keeps every re-evaluation; a latest-value row that
     # the history already holds is not shown twice.
     logged = history.of(k)
@@ -211,6 +243,10 @@ def _text(source: str, r: dict) -> str:
         return f"Alert raised ({r.get('kind')})"
     if source == "strategy_lab":
         return "Backtest stored" if r.get("has_backtests") else f"Backtest not run: {r.get('error') or 'no result'}"
+    if source == "wallet_clusters":
+        return f"Wallet clusters built: {r.get('clusters', 0)} clusters across {r.get('holders') or 0} top holders ({r.get('transfers') or 0} transfers)"
+    if source == "coordinated_sells":
+        return f"Coordinated sells report: risk {r.get('risk_score') if r.get('risk_score') is not None else '—'}/100 · {r.get('clusters', 0)} clusters · {r.get('events', 0)} sell waves"
     return ""
 
 

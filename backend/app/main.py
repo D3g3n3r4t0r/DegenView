@@ -1795,7 +1795,7 @@ _PUBLIC_PATHS = frozenset({
     "/api/composites/snapshot",
 })
 
-_PUBLIC_PREFIXES = ("/static/", "/api/deepseek/studies/")
+_PUBLIC_PREFIXES = ("/static/", "/api/deepseek/studies/", "/share/", "/api/public/share/")
 
 
 @app.middleware("http")
@@ -4874,6 +4874,301 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
             "deep_progress": onchain_deep_recheck.progress(chain, token)}
 
 
+def _lookup_public_entry(chain: str, token: str) -> dict | None:
+    chain_l = (chain or "").strip().lower()
+    tok_s = (token or "").strip()
+    tok_l = tok_s.lower()
+    entry = next(
+        (
+            e
+            for e in onchain_leaderboard.board().get("entries") or []
+            if (e.get("chain") or "").lower() == chain_l
+            and (e.get("token_address") or "").lower() == tok_l
+        ),
+        None,
+    )
+    if entry is not None:
+        entry = {**entry, "on_board": True}
+        _kobra_score(entry)
+        _with_fdv([entry])
+    else:
+        p = onchain_projects_db.get(chain_l, tok_s) or (
+            onchain_projects_db.get(chain_l, tok_l) if tok_l != tok_s else None
+        )
+        if p is not None:
+            actual_tok = p.get("token") or tok_s
+            entry = onchain_leaderboard.db_entry(p)
+            j = onchain_judge.get(chain_l, actual_tok)
+            if chain_l != onchain_layers.CHAIN:
+                entry["score"] = onchain_leaderboard.final_score(
+                    {**entry, "global_cap": p.get("cg_mcap"), "judge": j},
+                    kobra=True,
+                )
+            c = onchain_code_review.get(onchain_code_review.repo_of(entry))
+            entry["judge"] = (
+                {k: j.get(k) for k in ("score", "verdict", "problems", "strengths", "admit_reason", "x", "tg")}
+                if j
+                else None
+            )
+            entry["code"] = (
+                {k: c.get(k) for k in ("complexity", "innovation", "fork_of", "summary", "strengths", "concerns")}
+                if c
+                else None
+            )
+            _with_fdv([entry])
+    if entry is not None:
+        top = _top_entries(ARENA_POOL, full=True)
+        entry["top_rank"] = next(
+            (
+                i
+                for i, t in enumerate(_gem_view(top), 1)
+                if (t.get("chain") or "").lower() == chain_l
+                and (t.get("token_address") or "").lower() == tok_l
+            ),
+            None,
+        )
+    return entry
+
+
+def _public_clusters_summary(chain: str, token: str) -> dict | None:
+    from app.trading.onchain import sync_sells, wallet_clusters
+    chain_l = (chain or "").strip().lower()
+    tok_s = (token or "").strip()
+
+    def _mask(addr: str) -> str:
+        s = str(addr or "")
+        return f"{s[:6]}…{s[-4:]}" if len(s) > 12 else s
+
+    rep_path = sync_sells.report_path(chain_l, tok_s)
+    if rep_path.exists():
+        try:
+            rep = json.loads(rep_path.read_text(encoding="utf-8"))
+            return {
+                "chain": chain_l,
+                "token": tok_s,
+                "updated_at": rep.get("updated_at"),
+                "risk": rep.get("risk"),
+                "clusters": [
+                    {
+                        "id": c.get("id"),
+                        "share": c.get("share"),
+                        "links": c.get("links") or [],
+                        "risk": c.get("risk"),
+                        "wallets": [
+                            {"address": _mask(w.get("address")), "share": w.get("share")}
+                            for w in (c.get("wallets") or [])[:40]
+                        ],
+                    }
+                    for c in (rep.get("clusters") or [])
+                ],
+                "events": [
+                    {
+                        "id": ev.get("id"),
+                        "cluster": ev.get("cluster"),
+                        "ts": ev.get("ts"),
+                        "window_s": ev.get("window_s"),
+                        "wallets": ev.get("wallets"),
+                        "share_sold": ev.get("share_sold"),
+                    }
+                    for ev in (rep.get("events") or [])[:20]
+                ],
+            }
+        except Exception:  # noqa: BLE001
+            pass
+    wc_path = wallet_clusters._dir() / f"{wallet_clusters._key(chain_l, sync_sells._addr(tok_s))}.json"
+    if wc_path.exists():
+        try:
+            wc = json.loads(wc_path.read_text(encoding="utf-8"))
+            shares = wc.get("shares") or {}
+            clusters = [
+                {
+                    "id": c.get("id", f"a{idx+1}"),
+                    "share": c.get("share"),
+                    "links": c.get("links") or [],
+                    "wallets": [
+                        {"address": _mask(w), "share": shares.get(w, 0.0)}
+                        for w in (c.get("wallets") or [])[:40]
+                    ],
+                }
+                for idx, c in enumerate(wc.get("clusters") or [])
+            ]
+            held = sum(float(c.get("share") or 0.0) for c in clusters)
+            return {
+                "chain": chain_l,
+                "token": tok_s,
+                "updated_at": wc.get("built_at"),
+                "risk": {"score": round(min(100.0, (held / 0.20) * 100.0)), "reasons": []},
+                "clusters": clusters,
+                "events": [],
+            }
+        except Exception:  # noqa: BLE001
+            pass
+    return None
+
+
+@app.get("/api/public/share/{chain}/{token}")
+async def public_share_dossier(chain: str, token: str) -> dict:
+    """Public read-only dossier for any shared project (/share/{chain}/{token}),
+    accessible without login."""
+    chain_l = (chain or "").strip().lower()[:32]
+    tok_s = (token or "").strip()[:128]
+    entry = _lookup_public_entry(chain_l, tok_s)
+
+    # Enrich with live DexScreener quote or build fallback entry when not in DB yet
+    if chain_l != "layer" and len(tok_s) >= 20:
+        try:
+            async with httpx.AsyncClient(timeout=3.5, headers={"accept": "application/json"}) as client:
+                r_ds = await client.get(f"https://api.dexscreener.com/latest/dex/tokens/{tok_s}")
+                if r_ds.status_code == 200:
+                    pairs = (r_ds.json() or {}).get("pairs") or []
+                    if isinstance(pairs, list) and pairs:
+                        chain_pairs = [p for p in pairs if str(p.get("chainId") or "").lower() == chain_l] or pairs
+                        best = max(
+                            chain_pairs,
+                            key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0),
+                        )
+                        base_tok = best.get("baseToken") or {}
+                        cap = best.get("marketCap") or best.get("fdv")
+                        liq = float((best.get("liquidity") or {}).get("usd") or 0)
+                        vol = float((best.get("volume") or {}).get("h24") or 0)
+                        chg = (best.get("priceChange") or {}).get("h24")
+                        if entry is None:
+                            entry = {
+                                "chain": str(best.get("chainId") or chain_l).lower(),
+                                "token_address": str(base_tok.get("address") or tok_s),
+                                "symbol": str(base_tok.get("symbol") or tok_s[:6]).upper(),
+                                "name": str(base_tok.get("name") or base_tok.get("symbol") or tok_s[:8]),
+                                "pair_address": best.get("pairAddress") or "",
+                                "pair_url": best.get("url") or "",
+                                "market_cap": float(cap) if cap else None,
+                                "fdv": float(best.get("fdv")) if best.get("fdv") else None,
+                                "liquidity_usd": liq,
+                                "volume_24h": vol,
+                                "change_24h": float(chg) if chg is not None else None,
+                                "price_usd": best.get("priceUsd"),
+                                "image": (best.get("info") or {}).get("imageUrl"),
+                                "launched_at": (best.get("pairCreatedAt") or 0) / 1000 or None,
+                            }
+                        else:
+                            if cap:
+                                entry["market_cap"] = float(cap)
+                            if best.get("fdv"):
+                                entry["fdv"] = float(best["fdv"])
+                            if liq > 0:
+                                entry["liquidity_usd"] = liq
+                            if vol > 0:
+                                entry["volume_24h"] = vol
+                            if chg is not None:
+                                entry["change_24h"] = float(chg)
+                            if best.get("priceUsd"):
+                                entry["price_usd"] = best.get("priceUsd")
+                            if not entry.get("pair_address") and best.get("pairAddress"):
+                                entry["pair_address"] = best.get("pairAddress")
+                            if not entry.get("pair_url") and best.get("url"):
+                                entry["pair_url"] = best.get("url")
+                            if not entry.get("image") and (best.get("info") or {}).get("imageUrl"):
+                                entry["image"] = (best.get("info") or {}).get("imageUrl")
+        except Exception:  # noqa: BLE001
+            pass
+
+    if entry is None:
+        entry = {
+            "chain": chain_l,
+            "token_address": tok_s,
+            "symbol": tok_s[:6].upper(),
+            "name": tok_s[:10].upper(),
+        }
+
+    deep = onchain_deep_recheck.get(chain_l, tok_s) or onchain_deep_recheck.get(chain_l, tok_s.lower())
+    clusters = _public_clusters_summary(chain_l, entry.get("token_address") or tok_s)
+
+    dregg_data = None
+    if tok_s == "XkeTXo1125vz5H9svJpGiw4JvLbN8VmMu9cmMvspump" or (entry.get("symbol") or "").upper() == "DREGG":
+        from app.trading.onchain import dregg_pulse
+        try:
+            dregg_data = await dregg_pulse.get_dregg_pulse()
+        except Exception:  # noqa: BLE001
+            dregg_data = None
+
+    candles: list[dict] = []
+    pool = str(entry.get("pair_address") or "").strip()
+    if pool and chain_l in onchain_legit.CHAIN_LABEL:
+        for iv in ("4h", "1h", "1d"):
+            try:
+                peeked = onchain_radar.chart_peek(chain_l, pool, iv)
+                if peeked and peeked.get("candles"):
+                    candles = peeked["candles"]
+                    break
+            except Exception:  # noqa: BLE001
+                pass
+        if not candles:
+            try:
+                res_c = await onchain_radar.chart_candles(chain_l, pool, str(entry.get("symbol") or "TOKEN"), "4h")
+                candles = (res_c or {}).get("candles") or []
+            except Exception:  # noqa: BLE001
+                candles = []
+
+    return {
+        "entry": entry,
+        "deep": deep,
+        "clusters": clusters,
+        "dregg_pulse": dregg_data,
+        "candles": candles,
+    }
+
+
+@app.get("/api/public/share/{chain}/{token}/chart")
+async def public_share_chart(
+    chain: str,
+    token: str,
+    interval: Literal["15m", "1h", "4h", "1d"] = "4h",
+    pool: str = "",
+    symbol: str = "",
+) -> dict:
+    """Public chart candles endpoint for the dynamic share page."""
+    chain_l = (chain or "").strip().lower()
+    if chain_l not in onchain_legit.CHAIN_LABEL:
+        return {"candles": []}
+    if not pool:
+        entry = _lookup_public_entry(chain_l, token)
+        pool = str((entry or {}).get("pair_address") or "").strip()
+    if not pool:
+        return {"candles": []}
+    try:
+        return await onchain_radar.chart_candles(chain_l, pool, (symbol or "TOKEN")[:24], interval)
+    except Exception:  # noqa: BLE001
+        return {"candles": []}
+
+
+@app.get("/share/{chain}/{token}", response_class=HTMLResponse)
+async def public_share_page(chain: str, token: str) -> HTMLResponse:
+    """Dynamic public share page accessible to anyone without login."""
+    import html as _html
+    chain_clean = re.sub(r"[^a-zA-Z0-9._:-]", "", (chain or "").strip().lower())[:32] or "solana"
+    token_clean = re.sub(r"[^a-zA-Z0-9._:-]", "", (token or "").strip())[:128]
+    entry = _lookup_public_entry(chain_clean, token_clean)
+    sym = (entry or {}).get("symbol") or token_clean[:6].upper()
+    name = (entry or {}).get("name") or sym
+    score = (entry or {}).get("score")
+    score_txt = f" · Score {round(float(score))}/100" if isinstance(score, (int, float)) else ""
+    og_title = _html.escape(f"{sym} ({name}) on {chain_clean.upper()}{score_txt} · DegenView", quote=True)
+    summary = (
+        (entry or {}).get("summary")
+        or (((entry or {}).get("pillars") or {}).get("site") or {}).get("facts", {}).get("summary")
+        or f"Dossier pubblico interattivo per {name} ({sym}) su {chain_clean.upper()}: grafico, pilastri, cluster wallet e analisi AI."
+    )
+    og_desc = _html.escape(str(summary)[:220], quote=True)
+    share_file = STATIC_DIR / "share.html"
+    tpl = share_file.read_text(encoding="utf-8")
+    html_out = (
+        tpl.replace("__OG_TITLE__", og_title)
+        .replace("__OG_DESC__", og_desc)
+        .replace("__CHAIN__", _html.escape(chain_clean, quote=True))
+        .replace("__TOKEN__", _html.escape(token_clean, quote=True))
+    )
+    return HTMLResponse(content=html_out, headers={"Cache-Control": "public, max-age=30"})
+
+
 class BackgroundOpts(BaseModel):
     """A long task the app runs as a job (jobs.py): `view` is where the app was
     (the URL fragment the notification reopens), `label` names it there."""
@@ -6028,8 +6323,15 @@ async def onchain_manual_add(req: ScanAddRequest, user: User = Depends(auth.get_
     return manual_scan.add(req.chain[:20], req.token[:80])
 
 
+_AGENT_PROGRESS_CACHE: dict[str, object] = {"ts": 0.0, "rows": None}
+
+
 def _agent_progress() -> list[dict]:
     """Quanto lavoro e' fatto e quanto ne resta: una riga per coda."""
+    now_m = time.monotonic()
+    cached_rows = _AGENT_PROGRESS_CACHE.get("rows")
+    if isinstance(cached_rows, list) and (now_m - float(_AGENT_PROGRESS_CACHE.get("ts") or 0.0)) < 5.0:
+        return cached_rows
     from app.trading.onchain import backtest_lab, discovery, listings
     rows: list[dict] = []
     try:
@@ -6067,6 +6369,15 @@ def _agent_progress() -> list[dict]:
         rows.append({"key": "narratives", "label": "Narratives mapped", "done": m["mapped"], "total": m["total"]})
     except Exception:
         pass
+    try:
+        from app.trading.onchain import wallet_clusters
+        wc = wallet_clusters.status()
+        if (wc.get("built") or 0) + (wc.get("queue") or 0) > 0:
+            rows.append({"key": "clusters", "label": "Wallet clusters", "done": wc.get("built", 0), "total": wc.get("built", 0) + wc.get("queue", 0)})
+    except Exception:
+        pass
+    _AGENT_PROGRESS_CACHE["ts"] = now_m
+    _AGENT_PROGRESS_CACHE["rows"] = rows
     return rows
 
 
@@ -9187,6 +9498,12 @@ def _render_onchain_app(user: User | None) -> str:
     # (data-view del Pilota) bastava a far fallire il replace in silenzio.
     if _next_for(user):
         html = html.replace("<head>", "<head>" + (_TO_NEXT_ALL if settings.onchain_next_desktop else _TO_NEXT), 1)
+    elif user is None:
+        _share_redir = (
+            '<script>(function(){var m=(location.hash+" "+location.search).match(/(?:^|[#?&])token=([^:&]+)(?::|%3A)([^&# ]+)/i);'
+            'if(m)location.replace("/share/"+encodeURIComponent(decodeURIComponent(m[1]))+"/"+encodeURIComponent(decodeURIComponent(m[2])))})()</script>'
+        )
+        html = html.replace("<head>", "<head>" + _share_redir, 1)
     target = "app-shell" if user else "login-screen"
     html = re.sub(rf'(<[^>]*\bid="{target}"[^>]*?) hidden>', r"\1>", html, count=1)
     return _with_guest_banner(html, user)

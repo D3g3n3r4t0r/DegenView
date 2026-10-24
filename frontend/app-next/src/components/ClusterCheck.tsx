@@ -38,6 +38,7 @@ const CHAIN_LABELS: Record<string, string> = {
   base: "Base",
   bsc: "BSC",
   robinhood: "Robinhood Chain",
+  arc: "Arc",
   solana: "Solana",
   arbitrum: "Arbitrum",
   optimism: "Optimism",

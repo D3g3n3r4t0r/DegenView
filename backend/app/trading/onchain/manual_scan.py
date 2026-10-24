@@ -418,7 +418,7 @@ async def _scan(query: str, emit=None, kobra: bool = False) -> dict:
         pair = pick(pairs, query)
         if not pair:
             step("pool", "fail", "no pool on our chains")
-            return {"error": f"No pool for \"{query}\" on Solana, Robinhood, BSC, Base or Ethereum."}
+            return {"error": f"No pool for \"{query}\" on Solana, Robinhood, BSC, Base, Arc or Ethereum."}
         item = item_of(pair)
         # A deep look at a token queues its wallet clusters first in line.
         from app.trading.onchain import wallet_clusters

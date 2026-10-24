@@ -26,7 +26,7 @@ from app.trading.onchain import storage, sync_sells
 
 logger = logging.getLogger(__name__)
 
-CHAINS = ("robinhood", "ethereum", "base", "bsc", "solana", "layer")
+CHAINS = ("robinhood", "ethereum", "base", "bsc", "arc", "solana", "layer")
 MAX_WALLETS = 500
 RUN_EVERY_S = 6 * 3600
 # A first run without "from_block" reads this far back (~3 days at the

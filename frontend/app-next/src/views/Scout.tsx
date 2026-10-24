@@ -11,7 +11,7 @@ import { locale, t as tr } from "../lib/i18n";
 const POLL_MS = 10_000;
 const LIVE_S = 180;
 const PLURAL: Record<string, string> = { backtest: "backtests", study: "projects studied", research: "deep reads", scanner: "token checks",
-  judge: "board reviews", chat: "chats", scan: "scans" };
+  judge: "board reviews", chat: "chats", scan: "scans", clusters: "cluster checks", manual: "manual scans" };
 const compact = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n));
 const ago = (t: number) => { const s = Math.max(0, Date.now() / 1000 - t); return s < 60 ? tr("now") : s < 3600 ? `${Math.round(s / 60)}m` : `${Math.round(s / 3600)}h`; };
 const agoLong = (s: number) => (s < 60 ? tr("{n}s ago", { n: s }) : s < 3600 ? tr("{n}m ago", { n: Math.round(s / 60) }) : tr("{n}h ago", { n: Math.round(s / 3600) }));
@@ -32,17 +32,23 @@ export const ScoutCube = ({ state, className = "" }: { state: "idle" | "working"
 /** Two things never merged: AI calls (tokens spent) and work done; with the research AI off, how the research runs. */
 function todayLine(d: AgentInfo | null) {
   const calls = Object.values(d?.today ?? {}).reduce((a, n) => a + n, 0);
-  const cap = d?.cap_usd ? ` · ${tr("{a} of {b}", { a: `$${(d.spent_usd ?? 0).toFixed(2)}`, b: `$${d.cap_usd.toFixed(2)}` })}` : "";
+  const cap = d?.cap_usd ? ` · ${tr("{a} of {b}", { a: `${(d.spent_usd ?? 0).toFixed(2)}`, b: `${d.cap_usd.toFixed(2)}` })}` : "";
   const r = d?.research;
-  const ai = r && !r.ai
-    ? [r.running ? tr("Research running now, no AI") : tr("Research without AI"),
-       r.last_run ? `${tr("last run {t}", { t: hm(r.last_run) })}${r.examined != null ? tr(": {n} examined, {m} new on the board", { n: r.examined, m: r.entered ?? 0 }) : ""}` : "",
-       r.next_run && !r.running ? tr("next {t}", { t: hm(r.next_run) }) : ""].filter(Boolean).join(" · ")
-    : calls ? `${tr("AI: {n} calls · {m} tokens", { n: calls, m: compact(d?.tokens ?? 0) })}${cap}` : "";
+  const wc = r?.wallet_clusters;
+  const clusterPart = wc && (wc.built_today || wc.built)
+    ? `${wc.built_today ?? 0} cluster checks today (${wc.built ?? 0} total${wc.queue ? `, ${wc.queue} queued` : ""})`
+    : "";
+  const ai = calls
+    ? `${tr("AI: {n} calls · {m} tokens", { n: calls, m: compact(d?.tokens ?? 0) })}${cap}`
+    : r && !r.ai
+      ? [r.running ? tr("Research running now") : tr("Autonomous engine active"),
+         r.last_run ? `${tr("last run {t}", { t: hm(r.last_run) })}${r.examined != null ? tr(": {n} examined, {m} new on the board", { n: r.examined, m: r.entered ?? 0 }) : ""}` : "",
+         r.next_run && !r.running ? tr("next {t}", { t: hm(r.next_run) }) : ""].filter(Boolean).join(" · ")
+      : "";
   const distinct = d?.distinct ?? {};
   const work = Object.entries(d?.done ?? {}).map(([k, n]) => [k, distinct[k] ?? n] as const).filter(([, n]) => n > 0)
     .sort((a, b) => b[1] - a[1]).map(([k, n]) => `${compact(n)} ${PLURAL[k] ? tr(PLURAL[k]) : k}`).join(" · ");
-  return [ai, work].filter(Boolean).join(" — ") || tr("Nothing yet today");
+  return [ai, clusterPart, work].filter(Boolean).join(" — ") || tr("Nothing yet today");
 }
 
 export function Scout({ sells, onSells }: { sells?: { risk: number | null } | null; onSells: () => void }) {
@@ -61,10 +67,12 @@ export function Scout({ sells, onSells }: { sells?: { risk: number | null } | nu
       if (busy || document.visibilityState !== "visible") return;
       busy = true;
       try {
-        const [i, log] = await Promise.all([api.getAgent(), api.getAgentLog()]);
+        const [i, log] = first.current
+          ? await Promise.all([api.getAgent(), api.getAgentLog()])
+          : [await api.getAgent(), null];
         setInfo(i);
         setAt(Date.now());
-        const got = log.items ?? [];
+        const got = (log ? log.items : i.items) ?? [];
         setItems((old) => {
           if (first.current) return got;
           const add = got.filter((a) => !old.some((b) => b.t === a.t));

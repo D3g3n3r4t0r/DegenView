@@ -6,7 +6,11 @@ export type AgentInfo = {
   active?: boolean; working?: boolean; items?: AgentItem[]; watching?: number; today?: Record<string, number>; tokens?: number;
   spent_usd?: number; cap_usd?: number; done?: Record<string, number>; distinct?: Record<string, number>;
   progress?: { key: string; label: string; done?: number; total?: number }[];
-  research?: { ai?: boolean; running?: boolean; last_run?: number; next_run?: number; examined?: number; entered?: number };
+  research?: {
+    ai?: boolean; running?: boolean; last_run?: number; next_run?: number; examined?: number; entered?: number;
+    free_ai?: Record<string, unknown>;
+    wallet_clusters?: { queue?: number; built_today?: number; max_per_day?: number; built?: number; busy?: boolean };
+  };
 };
 export type JourneyStep = { node: string; t: number; source: string; text?: string; record: string; id: string; link: string };
 export type Journey = { symbol?: string; chain: string; token: string; genesis: string; head: string; steps: JourneyStep[]; limits?: string };
@@ -15,7 +19,7 @@ export type JourneyAnswer = { journey?: Journey | null; matches?: { chain: strin
 export const NODE_LABEL: Record<string, string> = {
   scan: "Discovery", study: "Project study", research: "Research / judge", code: "Code review", narratives: "Narratives",
   consistency: "Consistency", memory: "Evidence / reuse", decision: "Decision", backtest: "Backtests", outcomes: "Observed outcomes",
-  agent: "Agent objectives", other: "Other activity",
+  clusters: "Wallet clusters", agent: "Agent objectives", other: "Other activity",
 };
 export const SOURCE: Record<string, string> = {
   "projects_db.first_seen": "Project database", "projects_db.verdict": "Project database", "projects_db.standing": "Project database",
@@ -24,6 +28,7 @@ export const SOURCE: Record<string, string> = {
   "leaderboard.rank": "Ranking", judge: "Judge cache", "research.dossier": "Research cache", "research.reading": "Research cache",
   code_review: "Code review cache", "gem_track.entry": "Top tracker", "gem_track.return": "Top tracker",
   "outcomes.journal": "Outcome journal", "outcomes.archive": "Outcome archive", alert_track: "Alert tracker",
+  wallet_clusters: "Cluster engine", coordinated_sells: "Coordinated sells",
 };
 
 type Event = AgentItem & { key: string | null };

@@ -35,7 +35,7 @@ export function toggleWatch(id: string) {
   return w.has(id);
 }
 // The same link the Telegram alerts use: whoever opens it signed in lands on this token.
-export const tokenLink = (e: Gem) => `${location.origin}/onchain-app.html#gems&token=${encodeURIComponent(e.chain)}:${encodeURIComponent(e.token_address)}`;
+export const tokenLink = (e: Gem) => `${location.origin}/share/${encodeURIComponent(e.chain)}/${encodeURIComponent(e.token_address)}`;
 
 async function copy(text: string) {
   try { await navigator.clipboard.writeText(text); return true; } catch {
