@@ -207,6 +207,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0431l", "Migliore strategia a 1 ora dalle fonti pubbliche di GitHub e TradingView, solo long, provata su 2021 e 2022",
+     "Lorenzo, 24/10: 'vorrei che tu facessi il massimo sforzo possibile per andare a analizzare sia sulle fonti pubbliche di GitHub sia sulle fonti pubbliche di TradingView i parametri per la creazione della miglior strategia sul time frame un'ora [...] testarla in anni decisivi [...] 2021, fortissimo rialzo [...] e 2022 fase di grandi ribassi', poi 'Crea un ambiente di test sul nostro GitHub', 'L'obiettivo pero' era quello di trovare nuove fonti [...] sui GitHub pubblici degli utenti e sulle strategie pubbliche di TradingView', 'puoi modificare le strategie degli utenti [...] evitare l'overfitting' e 'la strategia deve essere solo long piu' uscita, quindi reversal'.",
+     "alta"),
     ("seed-0429l", "Ripristino della velocita' e reattivita' su /app, DegenView classico e backend API (code-splitting, SWR, deduplica chiamate e cache arena pool)",
      "Lorenzo, 24/10: 'ora che abbiamo appesantito un bel po anche l'app , trova metodi per ripristinare la velocità e reattività'.",
      "alta"),

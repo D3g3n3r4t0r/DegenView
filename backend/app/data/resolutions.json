@@ -1,4 +1,10 @@
 {
+  "seed-0431l": {
+    "status": "risolto",
+    "at": 1792847606,
+    "summary": "Nuova strategia 'AlphaTrend 1H (long only)' nel Lab del sito classico: la migliore di 18 strategie di trend pubbliche (TradingView e GitHub) provate nel nuovo ambiente di test a 1 ora. Valori scelti sul 2023 e oltre, 2021 e 2022 mai visti: mediana di 20 coppie 2021 +135%, 2022 -5% (buy & hold +285% / -72%), 2023-25 +12% / +39% / +18%; su 10 coppie mai usate nella scelta 2021 +64%, 2022 -12%.",
+    "detail": "Ambiente di test su GitHub: .github/workflows/strategy-1h.yml (solo a richiesta), candele 1h dall'archivio pubblico di Binance dal 2020, motore e costi del sito. scripts/research_1h.py: prime famiglie (SuperTrend+ADX, Donchian+Chandelier, incrocio EMA, Lorenzo). scripts/public_1h.py: 18 strategie pubbliche riprodotte con regole e valori dei loro autori - da TradingView AlphaTrend, OTT, PMax, Chandelier Exit+ZLSMA, Hull Suite, Turtles di Noro, UT Bot, Range Filter, Twin Range Filter, Crunchster, Dual-Supertrend+MACD; da GitHub freqtrade Supertrend, SuperTrendADX, FAdxSma, crossover EMA e MACD di paulcpk, Turtle Rules di jesse, EMA ribbon. Ognuna con i valori dell'autore e due soli fattori di scala (lunghezze, bande), solo long o long/short, senza filtro o con filtro BTC. Scelta su valori comuni a tutte le coppie e zone stabili della griglia (scripts/research_1h_summary.py). In solo long vincono AlphaTrend e OTT, le uniche positive anche nel 2025; AlphaTrend periodo 17, moltiplicatore 0,4, filtro BTC settimanale con uscita: tutta la zona periodo 14-21 / moltiplicatore 0,3-0,6 da' risultati simili. I valori dell'autore (14 / 1,0) facevano lo stesso 2021 ma -21% nel 2025. Sul sito: strategies.compute_alphatrend_signals (identica alla versione del test, segnale per segnale), campi nel Lab con RSI al posto del money flow come opzione, filtro BTC e uscita accesi di default, ottimizzazione a griglia (336 celle) e casuale, test in tests/test_alphatrend.py."
+  },
   "seed-0429l": {
     "status": "risolto",
     "at": 1792834900,

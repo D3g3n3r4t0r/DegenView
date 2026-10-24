@@ -186,6 +186,16 @@ _EXHAUSTION_DIMS = [
 ]
 
 
+def _alphatrend(u: np.ndarray) -> dict:
+    return {
+        "at_period": _i(u[0], 7, 30),
+        "at_coeff": _f(u[1], 0.2, 1.5),
+    }
+
+
+_ALPHATREND_DIMS = ["at_period", "at_coeff"]
+
+
 @dataclass(frozen=True)
 class ParamSpace:
     dims: tuple[str, ...]
@@ -207,6 +217,7 @@ PARAM_SPACES: dict[str, ParamSpace] = {
     "Claudio 1D": ParamSpace(tuple(_CLAUDIO_1D_DIMS), _claudio_1d),
     "Lorenzo HF (minuti on-chain)": ParamSpace(tuple(_LORENZO_HF_DIMS), _lorenzo_hf),
     "Accumulo / Distribuzione (long-term)": ParamSpace(tuple(_EXHAUSTION_DIMS), _exhaustion),
+    "AlphaTrend 1H (long only)": ParamSpace(tuple(_ALPHATREND_DIMS), _alphatrend),
 }
 
 

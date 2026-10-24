@@ -45,6 +45,7 @@ STRATEGY_FAMILY: dict[str, str] = {
     "Claudio Trend 4H": FAMILY_TREND,
     "Claudio 1D": FAMILY_TREND,
     "Lorenzo HF (minuti on-chain)": FAMILY_TREND,
+    "AlphaTrend 1H (long only)": FAMILY_TREND,
     "Accumulo / Distribuzione (long-term)": FAMILY_REVERSION,
 }
 

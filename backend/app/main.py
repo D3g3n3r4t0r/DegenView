@@ -2059,6 +2059,12 @@ class StrategyParamsQuery(BaseModel):
     cl_ema_len: int = 200
     cl_time_stop: int = 30
 
+    # AlphaTrend 1H (see strategies.ALPHATREND_DEFAULT_PARAMS). The page turns
+    # the BTC filter and its exit on for it; a bare API call keeps them off.
+    at_period: int = 17
+    at_coeff: float = 0.4
+    at_use_rsi: bool = False
+
     # Lorenzo HF (minuti on-chain). Shares len/slopeFlen/slopeSlen/slope_* with
     # Lorenzo, whose defaults win here: the page always sends the whole field
     # set of the active strategy, so they only apply to a bare API call.
