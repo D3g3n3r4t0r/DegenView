@@ -12,6 +12,18 @@ on:
         description: 'JSON list of pairs (empty = the 20 of the 1H basket)'
         required: false
         default: ''
+      gridset:
+        description: 'empty = first grids, v2 = grids past the first edges'
+        required: false
+        default: ''
+      regimes:
+        description: 'comma-separated: none, d200, btc, w21; "x" suffix = also exit when it turns'
+        required: false
+        default: 'none,d200,btc'
+      modes:
+        description: 'L, LS or L,LS'
+        required: false
+        default: 'L,LS'
 
 permissions:
   contents: read
@@ -39,7 +51,7 @@ jobs:
           cd backend; rc=0
           for PAIR in $(python -c "import json,os; print(' '.join(json.loads(os.environ['PAIRS'])[${{ matrix.chunk }}::10]))"); do
             echo "::group::$PAIR"
-            PAIR=$PAIR SAVE_CANDLES=1 PYTHONPATH=. python ../scripts/research_1h.py || { echo "::error::$PAIR failed"; rc=1; }
+            PAIR=$PAIR GRIDSET=${{ inputs.gridset }} REGIMES=${{ inputs.regimes }} MODES=${{ inputs.modes }} PYTHONPATH=. python ../scripts/research_1h.py || { echo "::error::$PAIR failed"; rc=1; }
             echo "::endgroup::"
           done
           exit $rc
@@ -47,9 +59,7 @@ jobs:
         if: always()
         with:
           name: r1h-${{ matrix.chunk }}
-          path: |
-            backend/r1h-*.json.gz
-            backend/candles/
+          path: backend/r1h-*.json.gz
           if-no-files-found: ignore
 
   summary:

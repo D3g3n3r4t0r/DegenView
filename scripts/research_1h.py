@@ -63,8 +63,27 @@ GRIDS = {
            ("slopeFlen", [3, 7, 11, 15]),
            ("slopeSlen", [15, 27, 45, 75])),
 }
-MODES = ("L", "LS")
-REGIMES = ("none", "d200", "btc")
+# GRIDSET=v2 (24/10, after the first run: most picks sat on an edge of the
+# grids above — EMA 8/89, Lorenzo 300/15/75, trailing 8 ATR): the grids
+# moved past those edges, and two more BTC regimes — the site's own weekly
+# EMA 21 (btc_regime.py) — each also with "x": the position is closed when
+# the regime turns against it.
+if os.environ.get("GRIDSET") == "v2":
+    GRIDS = {
+        "ST": (("atr_len", [7, 14, 21, 30]),
+               ("mult", [3.0, 4.0, 5.0, 6.0, 8.0, 10.0]),
+               ("adx_min", [0, 20, 30, 35, 40])),
+        "DC": (("n", [120, 240, 336, 480, 720]),
+               ("k", [6.0, 8.0, 10.0, 12.0, 16.0])),
+        "EX": (("fast", [3, 5, 8, 13, 21]),
+               ("slow", [34, 55, 89, 144, 200]),
+               ("k", [0.0, 6.0, 8.0, 12.0, 16.0])),
+        "LZ": (("len", [200, 300, 400, 500, 700]),
+               ("slopeFlen", [11, 15, 21, 30]),
+               ("slopeSlen", [45, 75, 100, 150])),
+    }
+MODES = tuple(os.environ.get("MODES", "L,LS").split(","))
+REGIMES = tuple(os.environ.get("REGIMES", "none,d200,btc").split(","))
 
 
 # ── candles ─────────────────────────────────────────────────────────────────
@@ -103,6 +122,16 @@ def daily_up(df: pd.DataFrame, idx: pd.DatetimeIndex) -> np.ndarray:
     day = df["close"].resample("1D").last().dropna()
     ema = day.ewm(span=200, adjust=False, min_periods=200).mean()
     side = np.sign(day - ema).where(ema.notna(), 0.0).shift(1, freq="D")
+    return side.reindex(idx, method="ffill").fillna(0.0).to_numpy()
+
+
+def weekly_up(btc: pd.DataFrame, idx: pd.DatetimeIndex) -> np.ndarray:
+    """The site's BTC filter (btc_regime.py): last CLOSED weekly close vs its
+    EMA 21, from the Monday after the Sunday close. 1 / -1, 0 warming up."""
+    day = btc["close"].resample("1D").last().dropna()
+    week = day.resample("W-SUN").last().dropna()
+    ema = week.ewm(span=21, adjust=False, min_periods=21).mean()
+    side = np.sign(week - ema).where(ema.notna(), 0.0).shift(1, freq="D")
     return side.reindex(idx, method="ffill").fillna(0.0).to_numpy()
 
 
@@ -167,7 +196,12 @@ def _allowed(reg, i, side):
     return reg is None or reg[i] == side
 
 
-def want_st(P, p, ls, reg):
+def _against(rx, reg, i, pos):
+    """'x' regimes: the regime no longer on the position's side."""
+    return rx and pos != 0 and reg[i] != pos
+
+
+def want_st(P, p, ls, reg, rx=False):
     d = P.get(("st", p["atr_len"], p["mult"]), lambda: supertrend_dir(P.df, p["atr_len"], p["mult"]))
     ax = P.get(("adx", 14), lambda: adx(P.df, 14).to_numpy())
     floor = p["adx_min"]
@@ -179,6 +213,8 @@ def want_st(P, p, ls, reg):
             pos = 0
         elif pos == -1 and d[i] == 1:
             pos = 0
+        if _against(rx, reg, i, pos):
+            pos = 0
         if pos == 0 and ax[i] >= floor:
             if d[i] == 1 and _allowed(reg, i, 1) and not (i > 0 and w[i - 1] == 1):
                 pos = 1
@@ -188,7 +224,7 @@ def want_st(P, p, ls, reg):
     return w
 
 
-def want_dc(P, p, ls, reg):
+def want_dc(P, p, ls, reg, rx=False):
     n_, k = p["n"], p["k"]
     hh = P.get(("hh", n_), lambda: P.df["high"].rolling(n_).max().shift(1).to_numpy())
     ll = P.get(("ll", n_), lambda: P.df["low"].rolling(n_).min().shift(1).to_numpy())
@@ -205,6 +241,8 @@ def want_dc(P, p, ls, reg):
             ext = min(ext, lo[i])
             if c[i] > ext + k * a[i]:
                 pos = 0
+        if _against(rx, reg, i, pos):
+            pos = 0
         if pos == 0:
             if c[i] > hh[i] and _allowed(reg, i, 1):
                 pos, ext = 1, h[i]
@@ -214,7 +252,7 @@ def want_dc(P, p, ls, reg):
     return w
 
 
-def want_ex(P, p, ls, reg):
+def want_ex(P, p, ls, reg, rx=False):
     f = P.get(("ema", p["fast"]), lambda: P.df["close"].ewm(span=p["fast"], adjust=False).mean().to_numpy())
     s = P.get(("ema", p["slow"]), lambda: P.df["close"].ewm(span=p["slow"], adjust=False).mean().to_numpy())
     a = P.get(("atr", 22), lambda: atr(P.df, 22).to_numpy())
@@ -236,6 +274,8 @@ def want_ex(P, p, ls, reg):
             ext = min(ext, lo[i])
             if c[i] > ext + k * a[i]:
                 pos = 0
+        if _against(rx, reg, i, pos):
+            pos = 0
         if pos == 0 and armed:
             if armed == 1 and _allowed(reg, i, 1):
                 pos, ext, armed = 1, h[i], 0
@@ -245,7 +285,7 @@ def want_ex(P, p, ls, reg):
     return w
 
 
-def want_lz(P, p, ls, reg):
+def want_lz(P, p, ls, reg, rx=False):
     params = {**DEFAULT_PARAMS, **p}
     sig = STRATEGY_REGISTRY[LORENZO](P.df, params)
     el, es = sig["entry_long"].to_numpy(bool), sig["entry_short"].to_numpy(bool)
@@ -253,7 +293,12 @@ def want_lz(P, p, ls, reg):
     w = np.full(len(el), np.nan)
     w[0] = 0
     pos = 0
-    for i in np.flatnonzero(el | es | xl | xs):
+    flips = np.zeros(len(el), dtype=bool)
+    if rx:
+        flips[1:] = reg[1:] != reg[:-1]
+    for i in np.flatnonzero(el | es | xl | xs | flips):
+        if _against(rx, reg, i, pos):
+            pos = 0
         if pos == 1 and (xl[i] or es[i]):
             pos = 0
         elif pos == -1 and (xs[i] or el[i]):
@@ -302,7 +347,8 @@ def by_year(bt, years):
 
 def run_pair(symbol: str, df: pd.DataFrame, btc: pd.DataFrame) -> dict:
     idx = df.index
-    regimes = {"none": None, "d200": daily_up(df, idx), "btc": daily_up(btc, idx)}
+    regimes = {"none": None, "d200": daily_up(df, idx), "btc": daily_up(btc, idx),
+               "w21": weekly_up(btc, idx)}
     P = Pair(df, regimes)
     years = list(range(max(START_YEAR + 1, idx[0].year), idx[-1].year + 1))
     hold = {}
@@ -320,7 +366,8 @@ def run_pair(symbol: str, df: pd.DataFrame, btc: pd.DataFrame) -> dict:
                 continue
             for mode in MODES:
                 for rg in REGIMES:
-                    w = WANT[fam](P, p, mode == "LS", regimes[rg])
+                    x = rg.endswith("x")
+                    w = WANT[fam](P, p, mode == "LS", regimes[rg[:-1] if x else rg], x)
                     bt = run_backtest(df, p, BP, signals=signals_from(w, idx), strategy_name=LORENZO)
                     key = f"{fam}|{mode}|{rg}|" + ",".join(str(v) for v in combo)
                     res["cells"][key] = by_year(bt, years)
