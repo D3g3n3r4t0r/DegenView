@@ -52,7 +52,7 @@ export function Scan({ query, onOpen }: { query: string; onOpen: (e: Gem) => voi
   if (run === "idle") return (
     <button type="button" onClick={go} className="flex w-full items-center gap-3 rounded-[16px] bg-card px-4 py-3 text-left active:bg-pill">
       <span className="flex-1 text-[14px]">{tr("Scan “{q}” as a ticker or address", { q: query })}</span>
-      <span className="rounded-full bg-ink px-3 py-1 text-[13px] font-semibold text-on-ink">{tr("Scan")}</span>
+      <span className="rounded-full bg-sage px-3 py-1 text-[13px] font-semibold text-on-sage">{tr("Scan")}</span>
     </button>
   );
 
@@ -96,7 +96,7 @@ export function Scan({ query, onOpen }: { query: string; onOpen: (e: Gem) => voi
           {status && <p className={`mt-3 text-[14px] font-medium ${tone(status[0])}`}>{status[1]}</p>}
           {d.ai ? (
             <p className="mt-2 flex items-center gap-2 text-[13px]">
-              <b className={`num rounded-md px-1.5 font-mono ${d.ai.risk >= 60 ? "bg-down text-on-ink" : d.ai.risk >= 30 ? "bg-amber text-on-ink" : "bg-sage text-on-sage"}`}>{d.ai.risk}</b>
+              <b className={`num rounded-md px-1.5 py-0.5 font-mono ${d.ai.risk >= 60 ? "border border-down/35 bg-down/20 text-down" : d.ai.risk >= 30 ? "border border-amber/35 bg-amber/20 text-amber" : "border border-up/35 bg-up/20 text-up"}`}>{d.ai.risk}</b>
               <span>{tr("Scout rug risk")} · {[d.ai.theme, ...(d.ai.flags ?? [])].filter(Boolean).join(" · ") || tr("no red flags")}</span>
             </p>
           ) : <p className="mt-2 text-[13px] text-text-3">{tr("Scout's AI assessment is unavailable right now.")}</p>}
@@ -119,7 +119,7 @@ export function Scan({ query, onOpen }: { query: string; onOpen: (e: Gem) => voi
             )}
             <button type="button" onClick={() => onOpen({ chain: t.chain, token_address: t.token_address, symbol: t.symbol, name: t.name, image: t.image, pair_address: t.pair_address,
               pair_url: t.pair_url, market_cap: t.market_cap, change_24h: t.change_24h, liquidity_usd: t.liquidity_usd })}
-              className="h-10 rounded-full bg-ink px-4 text-[14px] font-semibold text-on-ink">{tr("Full token page")}</button>
+              className="h-10 rounded-full bg-sage px-4 text-[14px] font-semibold text-on-sage">{tr("Full token page")}</button>
             <button type="button" onClick={go} className="h-10 rounded-full px-3 text-[14px] text-text-2">{tr("Scan again")}</button>
           </div>
         </>

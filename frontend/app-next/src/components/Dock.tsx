@@ -31,7 +31,7 @@ export function Dock({ view, onView }: { view: View; onView: (v: View) => void }
         const on = v === view;
         return (
           <button key={v} type="button" onClick={() => onView(v)} aria-label={t(LABEL[v])} aria-current={on || undefined}
-            className={`relative flex h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full transition-colors duration-200 ${on ? "font-semibold text-ink" : "font-medium text-[#aeb7a9]"}`}>
+            className={`relative flex h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full transition-colors duration-200 ${on ? "font-semibold text-on-sage" : "font-medium text-[#aeb7a9]"}`}>
             {on && <motion.span layoutId="dock-pill" className="absolute inset-0 rounded-full bg-sage" transition={{ type: "spring", stiffness: 520, damping: 42 }} />}
             <svg viewBox="0 0 24 24" className="relative h-5 w-5" fill="none" stroke="currentColor" strokeWidth={on ? 2.1 : 1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONS[v]}</svg>
             <span className="relative text-[11.5px] leading-none">{t(LABEL[v])}</span>

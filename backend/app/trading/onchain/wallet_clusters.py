@@ -732,18 +732,20 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
                     transfer_sources.transfers(chain, token), timeout=3.5
                 )
             except (Exception, asyncio.TimeoutError):
-                bs_v2 = await _blockscout_v2_transfers(chain, token)
-                if bs_v2:
-                    transfers, partial, source = bs_v2
-                else:
-                    try:
-                        transfers, partial = await all_transfers(rpc, chain, token, max(0, latest - 2000), latest)
-                        partial, source = True, "rpc"
-                    except Exception:  # noqa: BLE001
-                        transfers = []
-                    if not transfers:
-                        transfers = await _geckoterminal_evm_fallback(chain, token, latest)
-                        partial, source = True, "geckoterminal"
+                transfers = []
+        if not transfers:
+            bs_v2 = await _blockscout_v2_transfers(chain, token)
+            if bs_v2:
+                transfers, partial, source = bs_v2
+        if not transfers:
+            try:
+                transfers, partial = await all_transfers(rpc, chain, token, max(0, latest - 2000), latest)
+                partial, source = True, "rpc"
+            except Exception:  # noqa: BLE001
+                transfers = []
+        if not transfers:
+            transfers = await _geckoterminal_evm_fallback(chain, token, latest)
+            partial, source = True, "geckoterminal"
         start = transfers[0]["block"] if transfers else 0
     else:
         if created_at:
@@ -899,12 +901,25 @@ async def _build_tracked(item: dict, now: float) -> dict | None:
                         pass
     except Exception as exc:  # noqa: BLE001
         logger.exception("wallet clusters %s", item["token"])
-        from app.trading.onchain import auto_chain_pr, layer_clusters as _lc
-        try:
-            _get_url = getattr(_lc, "get_custom_url", None)
-            _apr = await auto_chain_pr.ensure_auto_pr(item["chain"], item["token"], url=(_get_url(item["chain"], item["token"]) if _get_url else "") or "", error=str(exc) or type(exc).__name__)
-        except Exception:  # noqa: BLE001
-            _apr = None
+        _apr = None
+        _std_chains = {
+            "ethereum", "base", "bsc", "solana", "robinhood", "arbitrum",
+            "optimism", "polygon", "avalanche", "monad", "zksync", "mantle", "arc",
+        }
+        if item.get("manual") and item.get("chain") not in _std_chains:
+            from app.trading.onchain import auto_chain_pr, layer_clusters as _lc
+            try:
+                _get_url = getattr(_lc, "get_custom_url", None)
+                _custom_url = (_get_url(item["chain"], item["token"]) if _get_url else "") or ""
+                if _custom_url or item.get("chain") == "layer":
+                    _apr = await auto_chain_pr.ensure_auto_pr(
+                        item["chain"],
+                        item["token"],
+                        url=_custom_url,
+                        error=str(exc) or type(exc).__name__,
+                    )
+            except Exception:  # noqa: BLE001
+                _apr = None
         _done(item, None, str(exc) or type(exc).__name__, now, auto_pr=_apr)
         note("failed", item, (str(exc) or type(exc).__name__)[:120])
         return None

@@ -20,6 +20,7 @@ riferimento regge anche se l'elenco viene riordinato o filtrato.
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from pathlib import Path
@@ -56,6 +57,46 @@ _seeded_ids: set[str] = set()
 _replies: list[dict] = []
 
 
+_SPURIOUS_AUTO_PR_SUBSTRINGS = (
+    "0x",
+    "pump)",
+    "bonk)",
+    "(BASE",
+    "per BASE ",
+    "per ETHERE ",
+    "per ARB ",
+    "(etherscan.io)",
+    "(dexscreener.com)",
+    "(bscscan.com)",
+    "(arbiscan.io)",
+    "(basescan.org)",
+    "(cryptorank.io)",
+    "(scan.tensorcash.org)",
+)
+_SOLANA_MINT_PAREN_RE = re.compile(r"\([1-9A-HJ-NP-Za-km-z]{32,44}\)")
+
+
+def _is_spurious_auto_pr_issue(it: dict) -> bool:
+    title = str(it.get("title") or "")
+    if it.get("author") != "auto-pr" and not title.startswith("Auto-PR supporto cluster per "):
+        return False
+    if any(sub in title for sub in _SPURIOUS_AUTO_PR_SUBSTRINGS):
+        return True
+    if _SOLANA_MINT_PAREN_RE.search(title):
+        return True
+    return False
+
+
+def _cleanup_spurious_auto_pr_issues() -> None:
+    if not _issues:
+        return
+    kept = [it for it in _issues if not _is_spurious_auto_pr_issue(it)]
+    if len(kept) != len(_issues):
+        _issues.clear()
+        _issues.extend(kept)
+        _save()
+
+
 def _load() -> None:
     if not _STORE_FILE.exists():
         return
@@ -64,6 +105,7 @@ def _load() -> None:
         if isinstance(raw, list):
             _issues.clear()
             _issues.extend(raw)
+            _cleanup_spurious_auto_pr_issues()
     except (json.JSONDecodeError, OSError):
         pass
 
@@ -165,6 +207,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0424l", "Risoluzione definitiva di tutti i punti aperti nel Cantiere e blocco delle segnalazioni auto-PR spurie",
+     "Lorenzo, 24/10: 'risolvi tutti i punti nel cantiere e fai che non si ripresentino'.",
+     "alta"),
+    ("seed-0425l", "Applicazione completa del nuovo UX Design System su DegenView classico, /app e /onchain-app.html (Light & Dark Mode)",
+     "Lorenzo, 24/10: 'usa un agent che analizza visivamente ogni sezione; OGNI tasto e ogni vista... anche sul degenview classico; secondo me ci sono tanti bottoni e schermati che fanno cagare' -> 'applica ux design'.",
+     "alta"),
     ("seed-0423l", "Colonna di navigazione a sinistra piu' stretta, piu' spazio al grafico in Analizza, Livelli e Lab",
      "Lorenzo, 24/10: 'Riduci un po la larghezza della colonna a sinistra che contiene tutte le sezioni del sito classico in modo da avere piu' spazio per il grafico su Analisi, Livelli e Lab'.",
      "media"),
@@ -1443,12 +1491,20 @@ _seed()
 
 def list_issues() -> list[dict]:
     """Segnalazioni con la risoluzione agganciata, le più recenti per prime."""
+    _cleanup_spurious_auto_pr_issues()
     res = _resolutions()
     mine = _claude_replies()
     out = []
     for it in _issues:
         merged = dict(it)
-        r = res.get(it["id"])
+        r = res.get(it["id"]) or it.get("resolution")
+        is_auto_pr = it.get("author") == "auto-pr" or str(it.get("title") or "").startswith("Auto-PR supporto cluster per ")
+        if is_auto_pr and not r:
+            r = {
+                "status": "risolto",
+                "at": int(it.get("created_at") or time.time()),
+                "summary": it.get("detail") or "Supporto e Auto-PR generati automaticamente.",
+            }
         if r:
             merged["resolution"] = r
             # La risoluzione è la fonte di verità sullo stato: se Claude l'ha
@@ -1469,6 +1525,8 @@ def list_issues() -> list[dict]:
         set_at = int(it.get("status_at", 0) or 0)
         if set_at and set_at > reopened and set_at >= int((r or {}).get("at", 0) or 0):
             merged["status"] = it["status"]
+        if is_auto_pr and not reopened:
+            merged["status"] = "risolto"
         thread = [dict(x, side="loro") for x in _replies if x.get("issue_id") == it["id"]]
         thread += [dict(x, side="claude") for x in mine.get(it["id"], [])]
         merged["replies"] = sorted(thread, key=lambda x: x.get("created_at", 0))

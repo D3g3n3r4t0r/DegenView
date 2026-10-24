@@ -435,7 +435,7 @@
 
         <div id="pine-editor-wrap">
           <input type="text" id="pine-script-name" placeholder="Script name" autocomplete="off" />
-          <input type="file" id="pine-file-input" accept=".pine,.txt" />
+          <input type="file" id="pine-file-input" class="pine-file-input" accept=".pine,.txt" />
           <div id="pine-editor" class="pine-editor"><textarea id="pine-source"></textarea></div>
           <div class="pine-actions">
             <button type="button" id="pine-analyze-btn">Analyze and save</button>
@@ -993,8 +993,8 @@
       </div>
 
       <div class="tab-content" data-tab-content="trading">
-        <details class="panel opera-advanced" open>
-          <summary>Trading <span class="risk-badge">real money</span></summary>
+        <details class="panel opera-advanced trading-group subtab-details-flat" open>
+          <summary>Exchange keys, positions, log, manual order <span class="risk-badge">real money</span></summary>
           <p class="panel-hint">Auto-trading asks for a key from Alert when one is missing. Use this for existing keys, open positions or a manual order.</p>
 
           <div id="opera-login-prompt" class="alert-login-prompt hidden">
@@ -1012,17 +1012,17 @@
             <!-- 23/10, layout B ("Applica B per entrambe"): the sections are
                  sub-tabs, one open at a time and full width (static/subtabs.js);
                  the CSS columns that reshuffled them on opening are gone. -->
-            <div class="subtabs" role="tablist" aria-label="Trading sections" data-subtabs="trading">
-              <button type="button" role="tab" data-subtab-target="positions">Positions</button>
-              <button type="button" role="tab" data-subtab-target="manual">Manual order</button>
-              <button type="button" role="tab" data-subtab-target="bots">Bots &amp; keys</button>
-              <button type="button" role="tab" data-subtab-target="futures">Futures</button>
-              <button type="button" role="tab" data-subtab-target="copy">Copy trading</button>
-              <button type="button" role="tab" data-subtab-target="wallet">On-chain wallet</button>
+            <div class="subtabs trading-subtabs" role="tablist" aria-label="Trading sections" data-subtabs="trading">
+              <button type="button" role="tab" class="trading-subtab" data-subtab-target="positions">Positions</button>
+              <button type="button" role="tab" class="trading-subtab" data-subtab-target="manual">Manual order</button>
+              <button type="button" role="tab" class="trading-subtab" data-subtab-target="bots">Bots &amp; keys</button>
+              <button type="button" role="tab" class="trading-subtab" data-subtab-target="futures">Futures</button>
+              <button type="button" role="tab" class="trading-subtab" data-subtab-target="copy">Copy trading</button>
+              <button type="button" role="tab" class="trading-subtab" data-subtab-target="wallet">On-chain wallet</button>
             </div>
             <!-- ── Posizioni aperte ── -->
-            <details class="opera-sub subtab-panel" data-subtab="positions">
-              <summary>Open positions <span id="positions-count" class="section-count"></span></summary>
+            <details class="opera-sub subtab-panel trading-group subtab-details-flat" data-subtab="positions" open>
+              <summary class="trading-group-summary subtab-summary-hidden">Open positions <span id="positions-count" class="section-count"></span></summary>
               <div class="opera-sub-body">
                 <div class="section-title-row">
                   <button type="button" id="positions-refresh-btn" class="section-action-btn">Refresh</button>
@@ -1038,8 +1038,8 @@
             </details>
 
             <!-- ── Futures ── -->
-            <details class="opera-sub subtab-panel" data-subtab="futures">
-              <summary>Futures order <span class="trading-auto-badge futures-badge">⚠️ Leverage — real money</span></summary>
+            <details class="opera-sub subtab-panel trading-group subtab-details-flat" data-subtab="futures" open hidden>
+              <summary class="trading-group-summary subtab-summary-hidden">Futures order <span class="trading-auto-badge futures-badge">⚠️ Leverage — real money</span></summary>
               <div class="trading-auto-section futures-section">
               <p class="panel-hint">Isolated margin, closes always <code>reduceOnly</code>. The server rejects the order without explicit confirmation, re-checks the leverage cap and verifies margin against the real balance: the checkbox below is the first of three gates, not the only one.</p>
 
@@ -1151,8 +1151,8 @@
             </details>
 
             <!-- Trading Automatico -->
-            <details class="opera-sub subtab-panel" data-subtab="bots">
-              <summary>Auto-trading <span class="trading-auto-badge">⚠️ Real money</span></summary>
+            <details class="opera-sub subtab-panel trading-group subtab-details-flat" data-subtab="bots" open hidden>
+              <summary class="trading-group-summary subtab-summary-hidden">Auto-trading <span class="trading-auto-badge">⚠️ Real money</span></summary>
               <div class="trading-auto-section">
               <p class="panel-hint trading-auto-hint">Set up API keys with trading permissions (not withdrawal) here. Which strategy can use them is decided in the Alert tab, ticker by ticker: "Alerts only" or "Auto-trading".</p>
               <div id="trading-credentials-list" class="trading-cred-list"></div>
@@ -1171,8 +1171,8 @@
             <!-- Copy trading (22/10): follow a Solana wallet and copy its
                  swaps seconds later. Engine: app/trading/onchain/copytrade.py;
                  page: static/copytrade.js, loaded at the first opening. -->
-            <details class="opera-sub subtab-panel" data-subtab="copy" id="copytrade-details">
-              <summary>Copy trading · Solana + EVM <span class="trading-auto-badge">⚠️ Real money</span></summary>
+            <details class="opera-sub subtab-panel trading-group subtab-details-flat" data-subtab="copy" id="copytrade-details" hidden>
+              <summary class="trading-group-summary subtab-summary-hidden">Copy trading · Solana + EVM <span class="trading-auto-badge">⚠️ Real money</span></summary>
               <div class="trading-auto-section ct">
                 <p class="panel-hint">Paste a Solana wallet or an EVM one (0x…): its buys and sells are copied a few seconds later. Start in Simulated: real quotes, nothing sent. EVM wallets are copied in Simulated only for now.</p>
                 <div class="ct-status" id="ct-status"></div>
@@ -1287,8 +1287,8 @@
                  farebbe fetch/poll on-chain anche senza aprire mai questa
                  sezione. onchain-app.html resta intatta e raggiungibile
                  (link diretto, QR salvati) per chi ci arriva da fuori. -->
-            <details class="opera-sub subtab-panel" data-subtab="wallet" id="onchain-embed-details">
-              <summary>On-chain wallet <span class="trading-auto-badge">⚠️ Real money</span></summary>
+            <details class="opera-sub subtab-panel trading-group subtab-details-flat" data-subtab="wallet" id="onchain-embed-details" hidden>
+              <summary class="trading-group-summary subtab-summary-hidden">On-chain wallet <span class="trading-auto-badge">⚠️ Real money</span></summary>
               <div class="opera-sub-body">
                 <p class="panel-hint">DEX swaps on Solana and Robinhood Chain — key generated on the server, never imported. Same "real money" rules as the sections above. <a href="/onchain-app.html" target="_blank" rel="noopener">Open as a standalone page</a> (handy for the key-reveal QR, which needs your phone anyway).</p>
                 <div id="onchain-embed">
@@ -1425,8 +1425,8 @@
             </details>
 
             <!-- Ordine manuale -->
-            <details class="opera-sub subtab-panel" data-subtab="manual">
-              <summary>Manual order <span class="trading-auto-badge">⚠️ Real money</span></summary>
+            <details class="opera-sub subtab-panel trading-group subtab-details-flat" data-subtab="manual" open hidden>
+              <summary class="trading-group-summary subtab-summary-hidden">Manual order <span class="trading-auto-badge">⚠️ Real money</span></summary>
               <div class="trading-auto-section">
               <div class="manual-order-form">
                 <!-- Exchange + Pair -->

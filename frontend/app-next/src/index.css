@@ -10,7 +10,8 @@
   color-scheme: light;
   --c-bg: #efeae0; --c-card: #f8f5ef; --c-pill: #e4dfd3; --c-press: #d9d3c5; --c-line: #e0d9cb;
   --c-text: #2f3a32; --c-text-2: #4f5a4f; --c-text-3: #687264; --c-text-4: #bdb8aa;
-  --c-ink: #2f3a32; --c-on-ink: #f3efe6; --c-sage: #c9d4c0; --c-on-sage: #2f3a32;
+  --c-fg: #2f3a32;
+  --c-ink: #2f3a32; --c-on-ink: #f3efe6; --c-sage: #c9d4c0; --c-on-sage: #152019;
   --c-up: #2f7a4a; --c-down: #b4472f; --c-amber: #8f6417;
   --c-float: #2f3a32; --c-float-line: #2f3a32; --c-float-shadow: 0 8px 24px rgb(47 58 50 / .18);
 }
@@ -18,9 +19,24 @@
   color-scheme: dark;
   --c-bg: #111513; --c-card: #1a1f1c; --c-pill: #252b27; --c-press: #2f3631; --c-line: #29302b;
   --c-text: #e8ebe4; --c-text-2: #bcc3b8; --c-text-3: #8f998c; --c-text-4: #59625a;
-  --c-ink: #46604e; --c-on-ink: #f1f4ee; --c-sage: #c9d4c0; --c-on-sage: #1d2620;
+  --c-fg: #eef1ec;
+  --c-ink: #1f2b24; --c-on-ink: #eef1ec; --c-sage: #c9d4c0; --c-on-sage: #152019;
   --c-up: #63c48b; --c-down: #ec8468; --c-amber: #d9a94f;
   --c-float: #1f2a23; --c-float-line: #2d3a31; --c-float-shadow: 0 8px 24px rgb(0 0 0 / .45);
+}
+
+:root[data-theme="dark"] .text-ink {
+  color: var(--c-fg);
+}
+:root[data-theme="dark"] .bg-sage.text-ink,
+:root[data-theme="dark"] .bg-sage .text-ink,
+:root[data-theme="dark"] .bg-amber.text-ink,
+:root[data-theme="dark"] .bg-on-ink.text-ink,
+:root[data-theme="dark"] .bg-on-ink .text-ink,
+:root[data-theme="dark"] .bg-up.text-on-ink,
+:root[data-theme="dark"] .bg-down.text-on-ink,
+:root[data-theme="dark"] .bg-amber.text-on-ink {
+  color: var(--c-on-sage);
 }
 
 @theme inline {
@@ -51,7 +67,7 @@ body { margin: 0; font-family: var(--font-sans); -webkit-font-smoothing: antiali
 .num { font-variant-numeric: tabular-nums; }
 
 /* The token tile (direction A): the picture, or a rounded square with the initial. */
-.tile { position: relative; display: grid; place-items: center; inline-size: 100%; block-size: 100%; overflow: hidden; border-radius: 14px;
+.tile { position: relative; display: grid; place-items: center; inline-size: 100%; block-size: 100%; overflow: hidden; border-radius: 14px; container-type: inline-size;
   background: radial-gradient(120% 90% at 20% 15%, hsl(var(--h1) 75% 62%), hsl(var(--h2) 60% 26%) 70%); }
 .tile img { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; object-fit: cover; background: var(--c-bg); }
 
@@ -84,6 +100,4 @@ body { margin: 0; font-family: var(--font-sans); -webkit-font-smoothing: antiali
 /* Direction A (Lorenzo 22/10, the PDF): rows grouped on one card, tiles as small rounded squares with the initial. */
 ol:has(> li.trow) { background: var(--c-card); border-radius: 16px; padding: 6px; }
 li.trow.has-foot { border-bottom: 1px solid var(--c-line); } li.trow.has-foot:last-child { border-bottom: 0; }
-.tile { border-radius: 30%; background: hsl(var(--h1) 32% 42%); }
 .tile .letter { color: #fff; font-weight: 700; font-size: 42cqi; line-height: 1; }
-.tile { container-type: inline-size; }

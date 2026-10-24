@@ -223,7 +223,7 @@ export function ClusterCheck({
             type="button"
             disabled={busy}
             onClick={() => runTarget(q.raw, "url" in q ? q.url : undefined)}
-            className="h-7 rounded-full bg-pill px-2.5 text-[12px] font-medium text-text-2 transition-colors hover:bg-ink hover:text-on-ink active:scale-[0.98] disabled:opacity-40"
+            className="h-7 rounded-full border border-line bg-pill px-2.5 text-[12px] font-medium text-text-2 transition-colors hover:border-sage hover:bg-sage hover:text-on-sage active:scale-[0.98] disabled:opacity-40"
           >
             {q.label}
           </button>
@@ -239,7 +239,7 @@ export function ClusterCheck({
               role="radio"
               aria-checked={pick === k}
               onClick={() => setPick(k)}
-              className={`h-8 rounded-full px-3 text-[13px] ${pick === k ? "bg-pill font-semibold text-ink shadow-[inset_0_0_0_1.5px_var(--c-ink)]" : "bg-pill text-text-2"}`}
+              className={`h-8 rounded-full px-3 text-[13px] transition-colors ${pick === k ? "bg-sage font-semibold text-on-sage" : "bg-pill text-text-2"}`}
             >
               {label}
             </button>
@@ -250,7 +250,7 @@ export function ClusterCheck({
         type="button"
         disabled={!ok || busy}
         onClick={go}
-        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-ink text-[15.5px] font-semibold text-on-ink transition-opacity disabled:opacity-40"
+        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-sage text-[15.5px] font-semibold text-on-sage transition-opacity disabled:opacity-40"
       >
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <circle cx="7" cy="8" r="3" />

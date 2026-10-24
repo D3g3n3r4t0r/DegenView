@@ -165,7 +165,7 @@ export function Clusters({ onToken, inApp }: { onToken: (e: Gem) => void; inApp?
                 type="button"
                 onClick={() => setScope(k)}
                 aria-pressed={scope === k}
-                className={`num rounded-full px-2.5 py-1 text-[12px] ${scope === k ? "bg-ink font-semibold text-on-ink" : "bg-pill text-text-2"}`}
+                className={`num rounded-full px-2.5 py-1 text-[12px] transition-colors ${scope === k ? "bg-sage font-semibold text-on-sage" : "bg-pill text-text-2"}`}
               >
                 {label}
               </button>
@@ -187,7 +187,7 @@ export function Clusters({ onToken, inApp }: { onToken: (e: Gem) => void; inApp?
                 onClick={() => setSortBy(k)}
                 aria-pressed={sortBy === k}
                 className={`rounded-full px-2.5 py-1 text-[11.5px] transition-colors ${
-                  sortBy === k ? "bg-ink font-semibold text-on-ink" : "bg-pill text-text-2"
+                  sortBy === k ? "bg-sage font-semibold text-on-sage" : "bg-pill text-text-2"
                 }`}
               >
                 {label}
@@ -203,7 +203,7 @@ export function Clusters({ onToken, inApp }: { onToken: (e: Gem) => void; inApp?
                   type="button"
                   onClick={() => setChain(c)}
                   aria-pressed={chain === c}
-                  className={`rounded-full px-2.5 py-1 text-[11.5px] capitalize ${chain === c ? "bg-ink font-semibold text-on-ink" : "bg-pill text-text-2"}`}
+                  className={`rounded-full px-2.5 py-1 text-[11.5px] capitalize transition-colors ${chain === c ? "bg-sage font-semibold text-on-sage" : "bg-pill text-text-2"}`}
                 >
                   {c === "all" ? t("All") : c}
                 </button>
@@ -256,7 +256,7 @@ export function Clusters({ onToken, inApp }: { onToken: (e: Gem) => void; inApp?
                       <span className="mt-1.5 block h-1 w-28 overflow-hidden rounded-full bg-pill" aria-hidden="true">
                         <i
                           className={`block h-full rounded-full ${
-                            clusterShare >= 0.35 ? "bg-down" : clusterShare >= 0.15 ? "bg-amber" : "bg-ink"
+                            clusterShare >= 0.35 ? "bg-down" : clusterShare >= 0.15 ? "bg-amber" : "bg-up"
                           }`}
                           style={{ width: `${sharePctWidth}%` }}
                         />
@@ -365,7 +365,7 @@ function LiveCheck({
               {chain} · {short(token)}
             </small>
           </span>
-          <button type="button" onClick={onOpen} className="rounded-full bg-ink px-3.5 py-2 text-[13px] font-semibold text-on-ink">
+          <button type="button" onClick={onOpen} className="rounded-full bg-sage px-3.5 py-2 text-[13px] font-semibold text-on-sage">
             {t("Token page")}
           </button>
         </header>

@@ -115,7 +115,7 @@ export function CheckProgress({ check, title, chain, token, onStarted }: { check
       </p>
 
       {(check as any)?.auto_pr && (
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-[12px] bg-amber/10 px-3 py-2 text-[12.5px] text-ink shadow-[inset_0_0_0_1px_rgba(245,158,11,0.28)]">
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-[12px] bg-amber/10 px-3 py-2 text-[12.5px] text-text shadow-[inset_0_0_0_1px_rgba(245,158,11,0.28)]">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 font-semibold text-amber">
               <span className="h-2 w-2 rounded-full bg-amber" aria-hidden="true" />
@@ -136,7 +136,7 @@ export function CheckProgress({ check, title, chain, token, onStarted }: { check
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="flex-none rounded-full bg-ink px-3 py-1 text-[11.5px] font-semibold text-on-ink hover:opacity-90"
+              className="flex-none rounded-full bg-sage px-3 py-1 text-[11.5px] font-semibold text-on-sage hover:opacity-90"
             >
               {(check as any).auto_pr.pr_number ? `PR #${(check as any).auto_pr.pr_number} ↗` : t("View PR ↗")}
             </a>
@@ -153,9 +153,9 @@ export function CheckProgress({ check, title, chain, token, onStarted }: { check
           <input value={url} onChange={(e) => setUrl(e.target.value)}
             placeholder={t("Paste an explorer, Blockscout, or DexScreener link (https://…)")}
             aria-label={t("Explorer or DexScreener link")}
-            className="h-10 min-w-0 flex-1 rounded-full bg-pill px-3.5 text-[13.5px] text-ink outline-none placeholder:text-text-3" />
+            className="h-10 min-w-0 flex-1 rounded-full border border-line bg-pill px-3.5 text-[13.5px] text-text outline-none placeholder:text-text-3 focus:border-sage" />
           <button type="button" disabled={!validUrl || sending} onClick={submitUrl}
-            className="h-10 flex-none rounded-full bg-ink px-4 text-[13.5px] font-semibold text-on-ink transition-opacity disabled:opacity-40">
+            className="h-10 flex-none rounded-full bg-sage px-4 text-[13.5px] font-semibold text-on-sage transition-opacity disabled:opacity-40">
             {sending ? t("Starting…") : t("Analyze link")}
           </button>
         </div>
@@ -165,7 +165,7 @@ export function CheckProgress({ check, title, chain, token, onStarted }: { check
       {busy && (
         <>
           <div className="relative mt-3 h-2 overflow-hidden rounded-full bg-pill">
-            <i className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-ink transition-transform duration-500" style={{ transform: `scaleX(${fill})` }} aria-hidden="true" />
+            <i className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-sage transition-transform duration-500" style={{ transform: `scaleX(${fill})` }} aria-hidden="true" />
             {part == null && step < STEPS.length
               ? <i className="cp-slide absolute inset-y-0 left-0 w-1/3 rounded-full bg-amber/80" aria-hidden="true" />
               : null}
@@ -180,9 +180,9 @@ export function CheckProgress({ check, title, chain, token, onStarted }: { check
                   key={k}
                   className={`flex items-center justify-center gap-1 rounded-full px-2 py-1 text-center transition-colors ${
                     doneStep
-                      ? "bg-up/15 font-medium text-up"
+                      ? "bg-sage font-semibold text-on-sage"
                       : activeStep
-                        ? "bg-ink font-semibold text-on-ink"
+                        ? "border border-sage bg-pill font-semibold text-text"
                         : "bg-pill text-text-3"
                   }`}
                 >
@@ -197,7 +197,7 @@ export function CheckProgress({ check, title, chain, token, onStarted }: { check
             {([["holders", "holders"], ["transfers", "transfers"], ["clusters", "clusters"], ["waves", "waves"]] as const).map(([k, label]) => (
               <div key={k} className="rounded-[12px] bg-pill px-2.5 py-2">
                 <dt className="truncate text-[10.5px] font-medium uppercase tracking-[0.04em] text-text-3">{t(label)}</dt>
-                <dd className="num mt-0.5 text-[16px] font-semibold leading-tight text-ink">{check?.live?.counts?.[k] ?? "—"}</dd>
+                <dd className="num mt-0.5 text-[16px] font-semibold leading-tight text-text">{check?.live?.counts?.[k] ?? "—"}</dd>
               </div>
             ))}
           </dl>

@@ -154,15 +154,13 @@ export function App() {
       <Sidebar view={view} sub={sub} quality={quality} initial={initial} onGo={(p) => { if (p.sub) setSub(p.sub); setView(p.v); }} />
       <main className="mx-auto max-w-xl px-4 pb-[calc(128px+env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+18px)] desk:ml-[238px] desk:mr-0 desk:max-w-none desk:px-10 desk:pb-16 desk:pt-9" style={split ? { width: LIST_W, paddingInline: 20 } : undefined}>
        <div className="desk:mx-auto desk:max-w-[1240px]">
-        {(view !== "search" || desk) && (
-          <header className="mb-3 flex items-center justify-between gap-3 desk:mb-5">
-            <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.03em] desk:text-[34px]">{t(view === "gems" && desk ? (sub === "database" ? "Database" : "Arenas") : LABEL[view])}</h1>
-            <span className="ml-auto flex items-center gap-1.5"><ThemeSwitch /><span className="desk:hidden"><LangSwitch /></span></span>
-            <button type="button" onClick={() => setMore(true)} aria-label={t("Profile and more")}
-              className="grid h-9 w-9 flex-none place-items-center rounded-full bg-ink text-[14px] font-semibold text-on-ink desk:hidden">{initial}</button>
-            {inGems && desk && !split && <div className="w-[min(520px,50%)]"><Top3 list={podium} onOpen={openWith((e) => `Top 25 · ${t("score {n}", { n: sc(e) })}`)} /></div>}
-          </header>
-        )}
+        <header className="mb-3 flex items-center justify-between gap-3 desk:mb-5">
+          <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.03em] desk:text-[34px]">{t(view === "gems" && desk ? (sub === "database" ? "Database" : "Arenas") : LABEL[view])}</h1>
+          <span className="ml-auto flex items-center gap-1.5"><ThemeSwitch /><span className="desk:hidden"><LangSwitch /></span></span>
+          <button type="button" onClick={() => setMore(true)} aria-label={t("Profile and more")}
+            className="grid h-9 w-9 flex-none place-items-center rounded-full bg-ink text-[14px] font-semibold text-on-ink desk:hidden">{initial}</button>
+          {inGems && desk && !split && <div className="w-[min(520px,50%)]"><Top3 list={podium} onOpen={openWith((e) => `Top 25 · ${t("score {n}", { n: sc(e) })}`)} /></div>}
+        </header>
         {inGems && !desk && <Top3 list={podium} onOpen={openWith((e) => `Top 25 · ${t("score {n}", { n: sc(e) })}`)} />}
         {err && !data && <p className="rounded-2xl bg-card p-4 text-[14px] text-down">{t("Could not load the gems: {err}", { err })}</p>}
         <AnimatePresence mode="wait">

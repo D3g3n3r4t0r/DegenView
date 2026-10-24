@@ -642,7 +642,60 @@ def get_auto_pr(chain: str, token: str = "") -> dict | None:
     return None
 
 
+_SOLANA_MINT_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
+_STANDARD_CHAINS = {
+    "ethereum", "base", "bsc", "solana", "robinhood", "arbitrum",
+    "optimism", "polygon", "avalanche", "monad", "zksync", "mantle", "arc",
+}
+_SPURIOUS_HOST_SUFFIXES = (
+    "etherscan.io",
+    "bscscan.com",
+    "basescan.org",
+    "arbiscan.io",
+    "polygonscan.com",
+    "snowtrace.io",
+    "dexscreener.com",
+    "geckoterminal.com",
+    "cryptorank.io",
+    "coingecko.com",
+    "coinmarketcap.com",
+    "solscan.io",
+    "solana.fm",
+)
+_SPURIOUS_SLUGS = {
+    "ethereum", "ethere", "base", "bsc", "solana", "arb", "arb-arbitrum",
+    "ethers", "dexscr", "bscsca", "arbisc", "basesc", "crypto", "tensor",
+}
+
+
+def _is_spurious_auto_pr_target(chain: str, token: str, host: str, slug: str) -> bool:
+    tok = (token or "").strip()
+    tok_low = tok.lower()
+    ch_low = (chain or "").strip().lower()
+    host_low = (host or "").strip().lower()
+    slug_low = (slug or "").strip().lower()
+
+    if tok_low.startswith("0x") and len(tok) == 42:
+        return True
+    if _SOLANA_MINT_RE.match(tok) or tok_low.endswith(("pump", "bonk")):
+        return True
+    if ch_low in _STANDARD_CHAINS and not host_low:
+        return True
+    if host_low and host_low.endswith(_SPURIOUS_HOST_SUFFIXES):
+        return True
+    if slug_low in _SPURIOUS_SLUGS:
+        return True
+    return False
+
+
 def _ensure_bacheca_issue(spec: dict, host: str, token: str, record: dict) -> str:
+    if _is_spurious_auto_pr_target(
+        str(spec.get("chain") or ""),
+        token,
+        host,
+        str(spec.get("slug") or ""),
+    ):
+        return ""
     issue_title = f"Auto-PR supporto cluster per {spec['symbol']} ({host or token or spec['slug']})"
     for existing in issues.list_issues():
         if existing.get("title") == issue_title:
@@ -666,6 +719,15 @@ def _ensure_bacheca_issue(spec: dict, host: str, token: str, record: dict) -> st
         priority="alta",
         author="auto-pr",
     )
+    now_ts = int(time.time())
+    issues.update_issue(created["id"], status="risolto")
+    created["resolution"] = {
+        "status": "risolto",
+        "at": now_ts,
+        "summary": f"Generato automaticamente adapter self-healing ({spec.get('adapter')}) e branch PR {record.get('branch')} per {spec.get('symbol')}.",
+    }
+    created["progress"] = 100
+    issues._save()
     return str(created.get("id") or "")
 
 

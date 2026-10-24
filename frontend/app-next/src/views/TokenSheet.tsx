@@ -48,8 +48,8 @@ export function TokenSheet({ open, onClose, onFull }: { open: Opened | null; onC
           </div>
           <div className="flex items-center gap-3 rounded-[16px] bg-sage p-3 text-on-sage">
             <svg viewBox="0 0 44 44" className="h-12 w-12 flex-none" aria-hidden="true">
-              <circle cx="22" cy="22" r="18" fill="none" stroke="var(--c-card)" strokeWidth="5" />
-              <circle cx="22" cy="22" r="18" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeDasharray={`${((score ?? 0) / 100) * 113} 113`} transform="rotate(-90 22 22)" />
+              <circle cx="22" cy="22" r="18" fill="none" stroke="currentColor" strokeOpacity={0.18} strokeWidth="5" />
+              <circle cx="22" cy="22" r="18" fill="none" stroke="var(--c-on-sage)" strokeWidth="5" strokeLinecap="round" strokeDasharray={`${((score ?? 0) / 100) * 113} 113`} transform="rotate(-90 22 22)" />
               <text x="22" y="26.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="currentColor">{score ?? "—"}</text>
             </svg>
             <span className="min-w-0 flex-1">

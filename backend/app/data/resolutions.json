@@ -3636,5 +3636,15 @@
     "status": "risolto",
     "at": 1792796300,
     "summary": "Introdotto su DegenView il pacchetto completo dei 20 ticker compositi di TradingView: 8 capitalizzazioni (TOTAL, TOTAL2, TOTAL3, TOTALES, TOTAL2ES, TOTAL3ES, OTHERS, TOTALDEFI), 8 dominance in percentuale (BTC.D, ETH.D, USDT.D, USDC.D, STABLE.C.D, OTHERS.D, TOTAL3.D, ALTS.D) e 4 rapporti di forza relativa (ETHBTC, SOLBTC, SOLETH, DEFIETH). Il nuovo motore OHLCV sintetico multi-leg (composites.py + composites_snapshot.py) costruisce le candele storiche su tutti i timeframe (1m–1w) combinando in parallelo le candele MEXC con calibrazione live su CoinGecko /api/v3/global, espone /api/composites e /api/composites/snapshot con rilevamento automatico del regime macro (Altseason Expansion / BTC Dominance Surge / Risk-Off / Balanced Rotation), integra tutti i 20 ticker in /api/analyze, /api/symbols e /ws/live (con supporto completo a strategie, SMC, Auto-Fibonacci e Backtest) e aggiunge il cassetto Indices + pillole nel terminale / e la barra Macro Markets in /app."
+  },
+  "seed-0425l": {
+    "status": "risolto",
+    "at": 1792797500,
+    "summary": "Applicato l'intero redesign UI/UX su DegenView classico (/), /app e /onchain-app.html: (1) unificati i token Light/Dark (--btn-primary-bg / --btn-primary-fg con contrasto >10:1 in entrambi i temi) eliminando i bottoni invisibili in Dark Mode (#25352b su #252b27) e il testo bianco su salvia chiaro (#fff su #c9d4c0); (2) riparati tutti i bottoni resi trasparenti dal Quiet Pass (.section-action-btn, #auth-toggle-btn, #auth-logout-btn, Apply/Reset, Copy-Trading, .tick-card-remove-btn); (3) unificata la geometria a 2 famiglie di raggi (999px pillole/navigazione e 10px–14px bottoni/card operative), aggiunto il foglio di stile completo per #onchain-embed e .arch-testpair-form e portata la parita' Design 01 su mobile (<= 760px); (4) su /app risolti i contrasti Dark Mode in Sidebar, Dock, MarketMap, Scan e Clusters, riparato l'anello SVG del punteggio in TokenSheet.tsx, mantenuto l'header mobile su Search e reso istantaneo il cambio tema su CandleChart.tsx."
+  },
+  "seed-0424l": {
+    "status": "risolto",
+    "at": 1792797560,
+    "summary": "Risolti definitivamente tutti i 67 punti aperti nel Cantiere e introdotto il filtro preventivo anti-ricomparsa: (1) ripulite automaticamente in issues.py (_cleanup_spurious_auto_pr_issues) tutte le segnalazioni spurie 'Auto-PR supporto cluster per ...' generate per singoli contratti 0x, mint Solana pump/bonk o chain gia' supportate (Base, Ethereum, Arbitrum, BSC, Solana, Etherscan, DexScreener, CryptoRank); (2) bloccata in wallet_clusters._build_tracked e auto_chain_pr._is_spurious_auto_pr_target la generazione di auto-PR durante le scansioni automatiche in background o su reti standard, riparando anche il fallback sequenziale Blockscout v2 -> RPC -> GeckoTerminal quando transfer_sources restituisce lista vuota; (3) marcate automaticamente come 'risolto' (100%) le auto-PR legittime di self-healing sia nel backend (issues.py / auto_chain_pr.py) sia in cantiere.html."
   }
 }

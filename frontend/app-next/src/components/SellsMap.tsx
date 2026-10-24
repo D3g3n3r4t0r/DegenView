@@ -129,7 +129,7 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
         <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-[14px] bg-card px-3.5 py-2.5 shadow-[inset_0_0_0_1px_var(--c-line)]">
           {pick.label ? (
             <div className="min-w-0 flex-1">
-              <b className="block text-[13.5px] font-semibold text-ink">
+              <b className="block text-[13.5px] font-semibold text-text">
                 {t("{n} smaller holders, no link found", { n: pick.others ?? 0 })}
               </b>
               <small className="text-[12px] text-text-3">
@@ -140,7 +140,7 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
             <>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <b className="font-mono text-[13.5px] font-semibold text-ink">{short(pick.address)}</b>
+                  <b className="font-mono text-[13.5px] font-semibold text-text">{short(pick.address)}</b>
                   <span className="rounded-full bg-pill px-2 py-0.5 text-[11px] font-medium text-text-2">
                     {pick.cluster.id === "top" ? t("top holder, no link found") : name(pick.cluster.id)}
                   </span>
@@ -156,7 +156,7 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
                 <button
                   type="button"
                   onClick={() => copyAddr(pick.address)}
-                  className="rounded-full bg-pill px-2.5 py-1 text-[11.5px] font-medium text-ink transition-colors hover:bg-ink hover:text-on-ink"
+                  className="rounded-full bg-sage px-2.5 py-1 text-[11.5px] font-semibold text-on-sage transition-opacity hover:opacity-90"
                 >
                   {copied ? t("Copied ✓") : t("Copy address")}
                 </button>
@@ -185,7 +185,7 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
                 aria-pressed={lit === i}
                 className={`flex w-full items-baseline gap-3 rounded-[14px] bg-card px-3.5 py-2.5 text-left transition-all ${
                   lit === i
-                    ? "shadow-[inset_0_0_0_1.5px_var(--c-ink)]"
+                    ? "shadow-[inset_0_0_0_1.5px_var(--c-sage)]"
                     : lit != null
                       ? "opacity-45"
                       : "hover:bg-pill/60"

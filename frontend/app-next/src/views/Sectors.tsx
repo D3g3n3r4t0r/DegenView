@@ -55,10 +55,10 @@ function Champions({ list, fresh, onOpen }: { list: Sector[]; fresh: Set<string>
         const champ = s.top[0], isNew = fresh.has(s.label), isOpen = open === s.key, wide = i === 0 || isOpen || isNew;
         return (
           <motion.section key={s.key} layout="position" className={`min-w-0 rounded-[20px] bg-card p-3 ${i === 0 || isOpen || isNew ? "col-span-2" : ""} ${isOpen ? "desk:col-span-4" : ""} ${isNew ? "ring-[1.5px] ring-up" : ""}`}>
-            <button type="button" onClick={() => setOpen(isOpen ? null : s.key)} aria-expanded={isOpen} className="flex w-full items-center gap-2 text-left">
+            <button type="button" onClick={() => setOpen(isOpen ? null : s.key)} aria-expanded={isOpen} className="flex w-full items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-pill/60 transition-colors text-left">
               <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">{s.label}</span>
               {isNew && <span className="text-[10px] font-bold tracking-wide text-up">{t("NEW CHAMPION")}</span>}
-              <span className="num text-[12px] text-text-3">{s.size} ›</span>
+              <span className="num flex items-center gap-1 text-[12px] text-text-3">{s.size} <i className={`inline-block not-italic transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} aria-hidden="true">›</i></span>
             </button>
             <button type="button" onClick={() => onOpen(champ)} className="mt-2 flex w-full min-w-0 items-center gap-2.5 text-left">
               <Logo size={40} symbol={champ.symbol} image={champ.image} chain={champ.chain} token={champ.token_address} />
@@ -102,12 +102,12 @@ type Paint = "24h" | "score";
 function tone(e: Gem, paint: Paint) {
   if (paint === "score") {
     const s = e.score ?? 0;
-    return s >= 80 ? "bg-up text-white" : s >= 70 ? "bg-up/75 text-white" : s >= 60 ? "bg-up/45 text-text" : s >= 50 ? "bg-press text-text" : "bg-down/40 text-text";
+    return s >= 80 ? "bg-up/24 text-up border border-up/45" : s >= 70 ? "bg-up/18 text-up border border-up/35" : s >= 60 ? "bg-up/10 text-up border border-up/20" : s >= 50 ? "bg-press text-text border border-line" : "bg-down/18 text-down border border-down/35";
   }
   const c = e.change_24h;
-  if (c == null) return "bg-press text-text";
-  return c >= 5 ? "bg-up text-white" : c >= 1.5 ? "bg-up/70 text-white" : c > 0.3 ? "bg-up/35 text-text"
-    : c > -0.3 ? "bg-press text-text" : c > -1.5 ? "bg-down/35 text-text" : c > -5 ? "bg-down/70 text-white" : "bg-down text-white";
+  if (c == null) return "bg-press text-text border border-line";
+  return c >= 5 ? "bg-up/24 text-up border border-up/45" : c >= 1.5 ? "bg-up/18 text-up border border-up/35" : c > 0.3 ? "bg-up/10 text-up border border-up/20"
+    : c > -0.3 ? "bg-press text-text border border-line" : c > -1.5 ? "bg-down/10 text-down border border-down/20" : c > -5 ? "bg-down/18 text-down border border-down/35" : "bg-down/24 text-down border border-down/45";
 }
 
 function MarketMap({ list, onOpen }: { list: Sector[]; onOpen: (e: Gem) => void }) {
@@ -121,7 +121,7 @@ function MarketMap({ list, onOpen }: { list: Sector[]; onOpen: (e: Gem) => void 
       <div className="mb-2 flex items-center gap-1.5">
         {(["24h", "score"] as Paint[]).map((p) => (
           <button key={p} type="button" aria-pressed={paint === p} onClick={() => setPaint(p)}
-            className={`h-7 rounded-full px-3 text-[12px] font-medium ${paint === p ? "bg-ink text-on-ink" : "bg-pill text-text-2"}`}>{p === "24h" ? t("Colour: 24h") : t("Colour: score")}</button>
+            className={`h-7 rounded-full px-3 text-[12px] font-medium transition-colors ${paint === p ? "bg-sage font-semibold text-on-sage" : "bg-pill text-text-2"}`}>{p === "24h" ? t("Colour: 24h") : t("Colour: score")}</button>
         ))}
       </div>
       <div className="flex flex-wrap gap-1">
@@ -152,8 +152,8 @@ function MarketMap({ list, onOpen }: { list: Sector[]; onOpen: (e: Gem) => void 
       </div>
       <p className="mt-2 flex items-center gap-1.5 text-[11px] text-text-3">
         {paint === "24h"
-          ? <><i className="h-2 w-4 rounded-sm bg-down" />−5% <i className="h-2 w-4 rounded-sm bg-press" />0 <i className="h-2 w-4 rounded-sm bg-up" />+5%</>
-          : <><i className="h-2 w-4 rounded-sm bg-down/40" />{t("under 50")} <i className="h-2 w-4 rounded-sm bg-up/45" />60 <i className="h-2 w-4 rounded-sm bg-up" />80+</>}
+          ? <><i className="h-2 w-4 rounded-sm border border-down/35 bg-down/18" />−5% <i className="h-2 w-4 rounded-sm border border-line bg-press" />0 <i className="h-2 w-4 rounded-sm border border-up/35 bg-up/18" />+5%</>
+          : <><i className="h-2 w-4 rounded-sm border border-down/35 bg-down/18" />{t("under 50")} <i className="h-2 w-4 rounded-sm border border-up/20 bg-up/10" />60 <i className="h-2 w-4 rounded-sm border border-up/35 bg-up/18" />80+</>}
         <span className="ml-auto">{t("tap a square to open it")}</span>
       </p>
     </>

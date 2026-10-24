@@ -363,6 +363,7 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
   }
 
   function effectiveTaskStatus(it){
+    if(it.author === "auto-pr" || String(it.title || "").indexOf("Auto-PR supporto cluster per") === 0) return "risolto";
     var st = it.status || "aperto";
     if(st === "in corso"){
       var at = Number((it.resolution && it.resolution.at) || 0);

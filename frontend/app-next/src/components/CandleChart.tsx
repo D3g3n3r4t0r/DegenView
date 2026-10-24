@@ -74,7 +74,14 @@ export function CandleChart({ candles, k, onFail }: { candles: Candle[]; k: numb
     });
     const mo = new MutationObserver(repaint);
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => { dead = true; mo.disconnect(); try { lw.current?.chart.remove(); } catch { /* gone */ } lw.current = null; };
+    window.addEventListener("lae:theme-change", repaint);
+    return () => {
+      dead = true;
+      mo.disconnect();
+      window.removeEventListener("lae:theme-change", repaint);
+      try { lw.current?.chart.remove(); } catch { /* gone */ }
+      lw.current = null;
+    };
   }, []);
 
   function draw() {

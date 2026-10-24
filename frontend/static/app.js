@@ -3821,7 +3821,7 @@ const COLORS_LIGHT = {
 
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
-      removeBtn.className = "wl-remove";
+      removeBtn.className = "section-action-btn tick-card-remove-btn";
       removeBtn.textContent = "✕ Remove ticker";
       removeBtn.style.marginTop = "4px";
       removeBtn.addEventListener("click", async (e) => {
@@ -7809,9 +7809,9 @@ const COLORS_LIGHT = {
   };
 
   function scoreColor(s) {
-    if (s >= 8) return "#00d68f";
-    if (s >= 6) return "#f2a93b";
-    return "#4fd8a8";
+    if (s >= 8) return "var(--bull)";
+    if (s >= 6) return "var(--warn)";
+    return "var(--ink-dim)";
   }
 
   function showMarkerPopup(marker, px, py) {
@@ -8228,7 +8228,7 @@ const COLORS_LIGHT = {
       "LATERALE":       impAngle.compressing ? `Post-impulse compression (${impAngle.impulseDir === "bear" ? "bearish" : "bullish"})` : "Sideways structure",
     };
 
-    const scoreColor  = setupScore >= 75 ? "#00d68f" : setupScore >= 50 ? "#f2a93b" : "#8899aa";
+    const scoreColor  = setupScore >= 75 ? "var(--bull)" : setupScore >= 50 ? "var(--warn)" : "var(--ink-dim)";
     const timeWindow  = phase === "PIVOT" ? "Entry confirmed" :
                         phase === "ESAURIMENTO" ? "1-3 candles to the pivot" :
                         phase === "RITRACCIAMENTO" ? "Wait for exhaustion signals" :
@@ -8265,23 +8265,23 @@ const COLORS_LIGHT = {
     }
 
     const dirLabel = res.direction === "bull" ? "▲ LONG" : res.direction === "bear" ? "▼ SHORT" : "→ NEUTRAL";
-    const dirColor = res.direction === "bull" ? "#00d68f" : res.direction === "bear" ? "#ff4560" : "#8899aa";
-    const phaseColors = { "IMPULSO": "#8899aa", "RITRACCIAMENTO": "#f2a93b", "ESAURIMENTO": "#ffb347", "PIVOT": "#00d68f", "LATERALE": "#667788" };
-    const phaseColor = phaseColors[res.phase] || "#8899aa";
+    const dirColor = res.direction === "bull" ? "var(--bull)" : res.direction === "bear" ? "var(--bear)" : "var(--ink-dim)";
+    const phaseColors = { "IMPULSO": "var(--ink-dim)", "RITRACCIAMENTO": "var(--warn)", "ESAURIMENTO": "var(--warn)", "PIVOT": "var(--bull)", "LATERALE": "var(--ink-dim)" };
+    const phaseColor = phaseColors[res.phase] || "var(--ink-dim)";
 
     const mtfRows = res.mtfContext.map(m => {
       const icon = m.dir === "bull" ? "▲" : m.dir === "bear" ? "▼" : "→";
-      const col  = m.dir === "bull" ? "#00d68f" : m.dir === "bear" ? "#ff4560" : "#8899aa";
+      const col  = m.dir === "bull" ? "var(--bull)" : m.dir === "bear" ? "var(--bear)" : "var(--ink-dim)";
       return `<div class="bp-mtf-row"><span class="bp-mtf-tf">${m.role === "macro" ? "MACRO" : "CONTEXT"} ${m.tf.toUpperCase()}</span><span class="bp-mtf-dir" style="color:${col}">${icon} ${m.dir.toUpperCase()}</span><span class="bp-mtf-detail">${m.detail}</span></div>`;
     }).join("");
 
     const factorRows = res.factors.map(f => {
-      const col = f.present ? (res.direction === "bull" ? "#00d68f" : "#ff4560") : "#445566";
+      const col = f.present ? (res.direction === "bull" ? "var(--bull)" : "var(--bear)") : "var(--ink-dim)";
       return `<div class="bp-factor"><span class="bp-factor-icon" style="color:${col}">${f.present ? "✓" : "·"}</span><span class="bp-factor-label" style="opacity:${f.present ? "1" : "0.5"}">${f.label}</span></div>`;
     }).join("");
 
     const keyLevelHtml = res.keyLevel
-      ? `<div class="bp-factor" style="margin-top:4px"><span class="bp-factor-icon" style="color:#8899aa">⊙</span><span class="bp-factor-label">${res.keyLevel.price.toLocaleString(undefined, {maximumFractionDigits:6})} — ${res.keyLevel.desc}</span></div>`
+      ? `<div class="bp-factor" style="margin-top:4px"><span class="bp-factor-icon" style="color:var(--ink-dim)">⊙</span><span class="bp-factor-label">${res.keyLevel.price.toLocaleString(undefined, {maximumFractionDigits:6})} — ${res.keyLevel.desc}</span></div>`
       : "";
 
     const retrStr = res.retracePct > 0 ? ` · retr. ${(res.retracePct * 100).toFixed(0)}%` : "";
@@ -8304,11 +8304,11 @@ const COLORS_LIGHT = {
         <span class="bp-conf-num" style="color:${res.scoreColor}">${res.setupScore}/100</span>
       </div>
       <div style="font-size:10px;color:var(--ink-dim);margin-bottom:8px">⏱ ${res.timeWindow}</div>
-      ` : `<div style="font-size:11px;color:#8899aa;margin-bottom:8px">⏳ ${res.timeWindow}</div>`}
+      ` : `<div style="font-size:11px;color:var(--ink-dim);margin-bottom:8px">⏳ ${res.timeWindow}</div>`}
       ${mtfRows ? `<div class="bp-mtf" style="margin-bottom:6px">${mtfRows}</div>` : ""}
       <div class="bp-section-label">${res.setupValid ? "QUALITY FACTORS" : "STRUCTURE"}</div>
       <div class="bp-factors">${factorRows}${keyLevelHtml}</div>
-      ${res.setupValid ? `<div style="font-size:10px;color:#8899aa;margin-top:4px">⚠ ${res.mainRisk}</div>` : ""}
+      ${res.setupValid ? `<div style="font-size:10px;color:var(--ink-dim);margin-top:4px">⚠ ${res.mainRisk}</div>` : ""}
       <div class="bp-footer">${res.candleCount} candles${velStr}${retrStr}</div>
     `;
     popup.classList.remove("hidden");

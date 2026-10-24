@@ -178,9 +178,9 @@ function FilterBody({ stats, total, query, narratives, narr, setStatus, setKind,
           </div>
         </>
       )}
-      <footer className="sticky bottom-0 mt-5 grid grid-cols-2 gap-2 bg-card pt-2">
+      <footer className="sticky bottom-0 mt-5 grid grid-cols-2 gap-2 border-t border-line bg-card pt-3 pb-safe">
         <button type="button" onClick={onReset} className="h-12 rounded-full bg-pill text-[15px] font-medium">{t("Reset")}</button>
-        <button type="button" onClick={onDone} className="h-12 rounded-full bg-ink text-[15px] font-medium text-on-ink">{t("Show {n}", { n: num(total) })}</button>
+        <button type="button" onClick={onDone} className="h-12 rounded-full bg-sage text-[15px] font-semibold text-on-sage">{t("Show {n}", { n: num(total) })}</button>
       </footer>
     </div>
   );

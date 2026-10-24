@@ -84,7 +84,7 @@
         <div class="diag-panel">
           <div class="diag-head">
             <h2>Diagnostics <span class="risk-badge">real money</span></h2>
-            <button type="button" class="diag-close" id="diag-close-btn" title="Close">✕</button>
+            <button type="button" class="diag-close section-action-btn" id="diag-close-btn" title="Close">✕</button>
           </div>
           <p class="panel-hint">Test a key before you trust it: this only reads the balance and never places an order unless you explicitly press "Execute" below. Saved keys stay the ones in Trading — this section never creates new ones.</p>
 
@@ -107,7 +107,7 @@
               <input type="password" id="diag-api-secret" class="mo-input" placeholder="API Secret (optional)" autocomplete="off" />
             </div>
             ${needsPass ? `<div class="mo-row"><input type="password" id="diag-passphrase" class="mo-input" placeholder="Passphrase" autocomplete="off" /></div>` : ""}
-            <button type="button" class="wl-activate-btn" id="diag-test-btn">Test connection</button>
+            <button type="button" class="wl-activate-btn section-action-btn diag-btn" id="diag-test-btn">Test connection</button>
             <div id="diag-test-result"></div>
           </div>
 
@@ -177,8 +177,8 @@
             : `<p class="panel-hint">No ${esc(sv.name)} key yet.</p>`;
           return `${now}<p class="panel-hint">${esc(sv.hint)}</p>
             <div class="mo-row"><input type="password" id="diag-sk-${sv.id}" class="mo-input" placeholder="${esc(sv.name)} API key" autocomplete="off" /></div>
-            <button type="button" class="wl-activate-btn" data-sk-save="${sv.id}">Check and save</button>
-            ${x.set && x.source === "site" ? `<button type="button" class="btn-quiet" data-sk-clear="${sv.id}">Remove</button>` : ""}`;
+            <button type="button" class="wl-activate-btn section-action-btn diag-btn" data-sk-save="${sv.id}">Check and save</button>
+            ${x.set && x.source === "site" ? `<button type="button" class="btn-quiet section-action-btn diag-btn" data-sk-clear="${sv.id}">Remove</button>` : ""}`;
         }).join("")}
         <div id="diag-sk-result">${message || ""}</div>
       </div>`;

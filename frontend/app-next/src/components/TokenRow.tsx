@@ -20,7 +20,7 @@ export function TokenRow({ e, name, badge, onOpen, i = 0, dim = false, footer }:
     <motion.li layout="position" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.26, ease: [0.25, 0.1, 0.25, 1], delay: Math.min(i, 8) * 0.025 }} className={`trow @container ${footer ? "has-foot" : ""}`}>
       <button type="button" onClick={() => onOpen(e)}
-        className="flex w-full items-center gap-3 rounded-[12px] px-2 py-2 text-left transition-colors duration-150 active:bg-pill">
+        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors duration-150 hover:bg-pill/60 active:bg-pill">
         <Logo size={38} symbol={e.symbol} image={e.image} chain={e.chain} token={e.token_address} />
         <span className="min-w-0 flex-1">
           <b className={`block truncate text-[15px] font-semibold leading-tight ${dim ? "text-text-2" : ""}`}>

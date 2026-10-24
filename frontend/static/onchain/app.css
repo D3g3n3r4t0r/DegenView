@@ -1594,7 +1594,10 @@ html.detail-open .ask-fab, :root:has(#app-shell[data-view="entry"]) .ask-fab { d
 .gem-sort { display: flex; gap: 6px; margin-block: 6px 10px; }
 .gem-sort button { padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 12px; cursor: pointer;
   border: 1px solid var(--c-line, rgb(127 127 127 / .25)); background: none; color: inherit; }
-.gem-sort button[aria-pressed="true"] { background: var(--c-ink, var(--engn-mint, #2de2b0)); color: var(--c-on-ink, #07110c); border-color: transparent; }
+.gem-sort button[aria-pressed="true"] { background: var(--c-sage, var(--engn-mint, #2de2b0)); color: var(--c-on-sage, #07110c); border-color: transparent; font-weight: 600; }
+:root[data-theme="dark"] { --c-sage: #c9d4c0; --c-on-sage: #152019; }
+html:root[data-theme="dark"] { --c-sage: #c9d4c0; --c-on-sage: #152019; }
+html:root[data-theme="dark"] :is(#app-shell, body) :is(.btn-primary, .pf-save, .dt-cta > a, .dt-cta > button, .us-go, .ag-go, .am-go, form button[type="submit"], .tabs button[aria-current], .seg button:is([aria-pressed="true"], [aria-selected="true"], [aria-current]), .dt-tabs button[aria-current], .dt-chips button:is([aria-current], [aria-pressed="true"]), .pf-seg button[aria-pressed="true"], .pf-wallet button:is([aria-pressed="true"], [aria-current], [aria-selected="true"]), .pf-range button:is([aria-pressed="true"], [aria-current], [aria-selected="true"]), .auto-modes button[aria-checked="true"], .gem-sort button[aria-pressed="true"], .agent-map .am-chip[data-selected="true"], .ar-tile[aria-pressed="true"]) { background: var(--c-sage) !important; color: var(--c-on-sage) !important; border-color: transparent !important; }
 
 /* Dark mode is the phone skin's (classic.css, theme.js): the desktop is dark already. */
 @media (min-width: 1100px) { .pf-theme { display: none !important; } }
