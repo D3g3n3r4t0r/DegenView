@@ -172,16 +172,27 @@ def main(folder):
                 f"{y} {d[y]:+.0f}% ({d['pos' + y]}+, {d['tr' + y]:.0f}tr)" for y in tests)
         return out
 
+    # SHOW_MODES=L: only the long-only rows (Lorenzo, 24/10: "la strategia
+    # deve essere solo long piu' uscita, quindi reversal")
+    show = set(os.environ.get("SHOW_MODES", "L,LS").split(","))
+    rows = [r for r in rows if r["var"].split("|")[1] in show]
+    shown = []
     for fam in sorted({r["var"].split("|")[0] for r in rows}):
         fam_rows = [fmt(r) for r in rows if r["var"].startswith(fam + "|")]
         lines += [f"## {fam}", ""] + [f"- {x}" for x in fam_rows] + [""]
-        print(f"::notice title=1h {fam}::" + " ‖ ".join(fam_rows))
-    # both test years at once: the worse of the two medians, common values
+        shown += fam_rows
+    # GitHub keeps 10 notices per step: every row in at most 7 of them
+    per = max(1, -(-len(shown) // 7))
+    for k in range(0, len(shown), per):
+        print(f"::notice title=1h rows {k // per + 1}::" + " ‖ ".join(shown[k:k + per]))
+    # every year at once: the worst yearly median of the common values
+    full = [y for y in years if y != years[-1]]
     ranked = sorted((r for r in rows if r.get("common")),
-                    key=lambda r: min(r["common"][y] for y in tests), reverse=True)
-    top = [f"{r['var']} [{r['common']['vals']}] " + " ".join(f"{y} {r['common'][y]:+.0f}%" for y in tests)
-           + f" train {r['common']['train']:+.0f}%/y" for r in ranked[:8]]
-    lines += ["## Ranking (worse of the never-seen years)", ""] + [f"- {x}" for x in top]
+                    key=lambda r: (min(r["common"][y] for y in full), sum(r["common"][y] for y in full)),
+                    reverse=True)
+    top = [f"{r['var']} [{r['common']['vals']}] " + " ".join(f"{y} {r['common'][y]:+.0f}" for y in full)
+           for r in ranked[:12]]
+    lines += ["## Ranking (worst yearly median, every full year)", ""] + [f"- {x}" for x in top]
     print("::notice title=1h ranking::" + " ‖ ".join(top))
     print("::notice title=1h buy&hold::" + lines[2])
     with open("results-1h.md", "w") as fh:
